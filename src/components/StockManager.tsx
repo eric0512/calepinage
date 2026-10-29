@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { StockPanel } from '@/types/cutting';
 import { Layers, Plus, Trash2, Copy, Box, X } from 'lucide-react';
 
@@ -22,6 +23,13 @@ export const StockManager: React.FC<StockManagerProps> = ({
   onChange,
   availableMaterials,
 }) => {
+  // État de montage pour createPortal
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // État de la fenêtre modale
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -239,149 +247,152 @@ export const StockManager: React.FC<StockManagerProps> = ({
         </div>
       )}
 
-      {/* FENÊTRE MODALE D'AJOUT DE PANNEAU */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl text-slate-200">
-            {/* Header du modal */}
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
-                  <Layers className="w-5 h-5" />
+      {/* FENÊTRE MODALE D'AJOUT DE PANNEAU (Téléportée sur document.body avec z-[9999] pour toujours être au premier plan) */}
+      {showAddModal &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl text-slate-200">
+              {/* Header du modal */}
+              <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-base font-bold text-white">
+                    Ajout d&apos;un Panneau en Stock
+                  </h3>
                 </div>
-                <h3 className="text-base font-bold text-white">
-                  Ajout d&apos;un Panneau en Stock
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Raccourcis formats courants */}
-            <div className="mb-4">
-              <span className="text-[11px] text-slate-400 block mb-1.5">
-                Formats standards :
-              </span>
-              <div className="grid grid-cols-2 gap-1.5">
-                {COMMON_PANEL_SIZES.map((sz, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => applyPresetSize(sz.l, sz.w)}
-                    className="text-[11px] bg-slate-800 hover:bg-slate-700 text-blue-300 py-1 px-2 rounded-lg transition-colors text-left"
-                  >
-                    {sz.label} mm
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Formulaire Modal avec Matière, Longueur, Largeur, Qté et bouton Ajouter */}
-            <form onSubmit={handleAdd} className="space-y-3.5 text-xs">
-              {/* Champ Matière */}
-              <div>
-                <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                  Matière
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: MDF 19mm, Contreplaqué 15mm..."
-                  list="modal-stock-materials-list"
-                  value={material}
-                  onChange={(e) => setMaterial(e.target.value)}
-                  className="w-full bg-slate-950 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
-                />
-                <datalist id="modal-stock-materials-list">
-                  {availableMaterials.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                  <option value="MDF 19mm" />
-                  <option value="Contreplaqué Bouleau 15mm" />
-                  <option value="Contreplaqué 5mm" />
-                  <option value="Mélaminé Blanc 18mm" />
-                  <option value="Chêne Massif 20mm" />
-                  <option value="OSB 3 18mm" />
-                </datalist>
-              </div>
-
-              {/* Champs Longueur, Largeur et Quantité */}
-              <div className="grid grid-cols-3 gap-2">
-                {/* Longueur */}
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
-                    Longueur (mm)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="100"
-                    max="6000"
-                    value={length || ''}
-                    onChange={(e) => setLength(parseInt(e.target.value) || 0)}
-                    className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
-                  />
-                </div>
-
-                {/* Largeur */}
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
-                    Largeur (mm)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="100"
-                    max="4000"
-                    value={width || ''}
-                    onChange={(e) => setWidth(parseInt(e.target.value) || 0)}
-                    className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
-                  />
-                </div>
-
-                {/* Quantité */}
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate text-center">
-                    Qté
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    max="999"
-                    value={quantity || ''}
-                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                    className="w-full bg-slate-950 text-blue-400 font-mono font-bold px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
-                  />
-                </div>
-              </div>
-
-              {/* Bouton Ajouter */}
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white transition-colors"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                 >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors shadow-sm flex items-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Ajouter</span>
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+              {/* Raccourcis formats courants */}
+              <div className="mb-4">
+                <span className="text-[11px] text-slate-400 block mb-1.5">
+                  Formats standards :
+                </span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {COMMON_PANEL_SIZES.map((sz, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => applyPresetSize(sz.l, sz.w)}
+                      className="text-[11px] bg-slate-800 hover:bg-slate-700 text-blue-300 py-1 px-2 rounded-lg transition-colors text-left"
+                    >
+                      {sz.label} mm
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Formulaire Modal avec Matière, Longueur, Largeur, Qté et bouton Ajouter */}
+              <form onSubmit={handleAdd} className="space-y-3.5 text-xs">
+                {/* Champ Matière */}
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
+                    Matière
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: MDF 19mm, Contreplaqué 15mm..."
+                    list="modal-stock-materials-list"
+                    value={material}
+                    onChange={(e) => setMaterial(e.target.value)}
+                    className="w-full bg-slate-950 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+                  />
+                  <datalist id="modal-stock-materials-list">
+                    {availableMaterials.map((m) => (
+                      <option key={m} value={m} />
+                    ))}
+                    <option value="MDF 19mm" />
+                    <option value="Contreplaqué Bouleau 15mm" />
+                    <option value="Contreplaqué 5mm" />
+                    <option value="Mélaminé Blanc 18mm" />
+                    <option value="Chêne Massif 20mm" />
+                    <option value="OSB 3 18mm" />
+                  </datalist>
+                </div>
+
+                {/* Champs Longueur, Largeur et Quantité */}
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Longueur */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
+                      Longueur (mm)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="100"
+                      max="6000"
+                      value={length || ''}
+                      onChange={(e) => setLength(parseInt(e.target.value) || 0)}
+                      className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                    />
+                  </div>
+
+                  {/* Largeur */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
+                      Largeur (mm)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="100"
+                      max="4000"
+                      value={width || ''}
+                      onChange={(e) => setWidth(parseInt(e.target.value) || 0)}
+                      className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                    />
+                  </div>
+
+                  {/* Quantité */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate text-center">
+                      Qté
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      max="999"
+                      value={quantity || ''}
+                      onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                      className="w-full bg-slate-950 text-blue-400 font-mono font-bold px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                    />
+                  </div>
+                </div>
+
+                {/* Bouton Ajouter */}
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white transition-colors"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors shadow-sm flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Ajouter</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
