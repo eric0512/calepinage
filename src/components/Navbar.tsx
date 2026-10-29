@@ -20,6 +20,7 @@ interface NavbarProps {
   onReset: () => void;
   onPrint: () => void;
   isSaved?: boolean;
+  isCloudConnected?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,6 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onReset,
   onPrint,
   isSaved = false,
+  isCloudConnected = false,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white shadow-md print:hidden">
@@ -54,6 +56,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                     Menuiserie 2D
                   </span>
+                  {isCloudConnected ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Supabase Cloud
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                      Stockage Local
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium">
                   <span className="truncate max-w-[130px] sm:max-w-[200px] text-amber-400">

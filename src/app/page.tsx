@@ -11,6 +11,12 @@ import {
 } from '@/types/cutting';
 import { DEFAULT_SETTINGS, PRESETS, ProjectPreset } from '@/lib/presets';
 import { optimizeCutting } from '@/lib/optimizer/guillotine';
+import {
+  isSupabaseConfigured,
+  getProjects,
+  saveProjectToCloud,
+  deleteProjectFromCloud,
+} from '@/lib/supabase';
 import { Navbar } from '@/components/Navbar';
 import { SettingsBar } from '@/components/SettingsBar';
 import { StockManager } from '@/components/StockManager';
@@ -40,16 +46,18 @@ export default function Home() {
   // Liste des projets sauvegardés
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [isSaved, setIsSaved] = useState<boolean>(false);
+  const [cloudConnected, setCloudConnected] = useState<boolean>(false);
 
   // Onglet mobile
   const [mobileTab, setMobileTab] = useState<'input' | 'results'>('input');
 
-  // Initialisation des projets sauvegardés depuis localStorage ou Presets
+  // Initialisation des projets depuis Supabase ou Cache local
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('calepinage_saved_projects');
-      if (stored) {
-        setSavedProjects(JSON.parse(stored));
+    setCloudConnected(isSupabaseConfigured());
+
+    getProjects().then(({ projects }) => {
+      if (projects && projects.length > 0) {
+        setSavedProjects(projects);
       } else {
         // Initialiser avec les presets d'atelier pour la première visite
         const initialPresets: SavedProject[] = PRESETS.map((p) => ({
@@ -62,14 +70,8 @@ export default function Home() {
           cutItems: p.cutItems,
         }));
         setSavedProjects(initialPresets);
-        localStorage.setItem(
-          'calepinage_saved_projects',
-          JSON.stringify(initialPresets)
-        );
       }
-    } catch {
-      // Ignorer erreurs localStorage
-    }
+    });
   }, []);
 
   // Création d'un NOUVEAU PROJET VIERGE (aucun champ rempli)
@@ -120,8 +122,8 @@ export default function Home() {
     setMobileTab('input');
   };
 
-  // Sauvegarder le projet actuel
-  const handleSaveProject = () => {
+  // Sauvegarder le projet actuel dans Supabase & local
+  const handleSaveProject = async () => {
     const projectToSave: SavedProject = {
       id: currentProjectId || `project-${Date.now()}`,
       name: projectName,
@@ -133,36 +135,18 @@ export default function Home() {
 
     setSavedProjects((prev) => {
       const filtered = prev.filter((p) => p.id !== projectToSave.id);
-      const updated = [projectToSave, ...filtered];
-      try {
-        localStorage.setItem(
-          'calepinage_saved_projects',
-          JSON.stringify(updated)
-        );
-      } catch {
-        // Ignorer
-      }
-      return updated;
+      return [projectToSave, ...filtered];
     });
 
+    await saveProjectToCloud(projectToSave);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2500);
   };
 
   // Supprimer un projet existant
-  const handleDeleteProject = (projectId: string) => {
-    setSavedProjects((prev) => {
-      const updated = prev.filter((p) => p.id !== projectId);
-      try {
-        localStorage.setItem(
-          'calepinage_saved_projects',
-          JSON.stringify(updated)
-        );
-      } catch {
-        // Ignorer
-      }
-      return updated;
-    });
+  const handleDeleteProject = async (projectId: string) => {
+    setSavedProjects((prev) => prev.filter((p) => p.id !== projectId));
+    await deleteProjectFromCloud(projectId);
   };
 
   // Recalcul de l'optimisation
@@ -241,6 +225,7 @@ export default function Home() {
         onOpenProject={handleOpenProject}
         onCreateNewProject={handleCreateNewProject}
         onDeleteProject={handleDeleteProject}
+        isCloudConnected={cloudConnected}
       />
     );
   }
@@ -248,7 +233,7 @@ export default function Home() {
   // SI LA VUE ACTIVE EST L'ATELIER (ÉDITEUR)
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Barre de navigation avec nom du projet et bouton Accueil */}
+      {/* Barre de navigation avec nom du projet, badge Supabase et bouton Accueil */}
       <Navbar
         projectName={projectName}
         onOpenHub={() => setCurrentView('hub')}
@@ -257,6 +242,7 @@ export default function Home() {
         onReset={handleReset}
         onPrint={handlePrint}
         isSaved={isSaved}
+        isCloudConnected={cloudConnected}
       />
 
       {/* Impression Atelier (visible uniquement lors du print) */}

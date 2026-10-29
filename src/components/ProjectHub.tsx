@@ -19,6 +19,7 @@ interface ProjectHubProps {
   onOpenProject: (project: SavedProject) => void;
   onCreateNewProject: (projectName: string) => void;
   onDeleteProject: (projectId: string) => void;
+  isCloudConnected?: boolean;
 }
 
 export const ProjectHub: React.FC<ProjectHubProps> = ({
@@ -26,6 +27,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   onOpenProject,
   onCreateNewProject,
   onDeleteProject,
+  isCloudConnected = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'hub' | 'existing'>('hub');
   const [newProjectName, setNewProjectName] = useState('');
@@ -54,10 +56,18 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
             Calepinage<span className="text-amber-500">Pro</span>
           </h1>
-          <p className="text-sm text-slate-400 mt-2 max-w-md mx-auto">
-            Optimisation de découpe 2D &amp; calepinage de panneaux pour la
-            menuiserie et l&apos;agencement.
-          </p>
+          <div className="flex items-center justify-center gap-2 mt-3">
+            {isCloudConnected ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Connecté à Supabase Cloud (roadtrip-vercel)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full bg-slate-900 text-slate-400 border border-slate-800">
+                Mode Local (Supabase prêt à lier)
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Vue Principale : Choix Nouveau ou Existant */}
