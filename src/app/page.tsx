@@ -7,6 +7,7 @@ import {
   OptimizationResult,
   StockPanel,
   OffcutArea,
+  SavedProject,
 } from '@/types/cutting';
 import { DEFAULT_SETTINGS, PRESETS, ProjectPreset } from '@/lib/presets';
 import { optimizeCutting } from '@/lib/optimizer/guillotine';
@@ -18,63 +19,164 @@ import { StatsSummary } from '@/components/StatsSummary';
 import { CuttingVisualizer } from '@/components/CuttingVisualizer';
 import { OffcutsList } from '@/components/OffcutsList';
 import { PrintDossier } from '@/components/PrintDossier';
+import { ProjectHub } from '@/components/ProjectHub';
 import { Play, Layers, ListPlus } from 'lucide-react';
 
 export default function Home() {
-  // États de l'application (initialisés avec le preset 1 par défaut)
-  const [settings, setSettings] = useState<CutSettings>(DEFAULT_SETTINGS);
-  const [stockPanels, setStockPanels] = useState<StockPanel[]>(
-    PRESETS[0].stockPanels
-  );
-  const [cutItems, setCutItems] = useState<CutItem[]>(PRESETS[0].cutItems);
+  // Vue active : 'hub' (écran d'accueil nouveau/existant) ou 'editor' (l'atelier de coupe)
+  const [currentView, setCurrentView] = useState<'hub' | 'editor'>('hub');
 
-  // État du résultat d'optimisation
+  // Projet en cours
+  const [currentProjectId, setCurrentProjectId] = useState<string>('');
+  const [projectName, setProjectName] = useState<string>('Nouveau Projet');
+
+  // Données du calepinage
+  const [settings, setSettings] = useState<CutSettings>(DEFAULT_SETTINGS);
+  const [stockPanels, setStockPanels] = useState<StockPanel[]>([]);
+  const [cutItems, setCutItems] = useState<CutItem[]>([]);
   const [optimizationResult, setOptimizationResult] =
     useState<OptimizationResult | null>(null);
+
+  // Liste des projets sauvegardés
+  const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
+  const [isSaved, setIsSaved] = useState<boolean>(false);
 
   // Onglet mobile
   const [mobileTab, setMobileTab] = useState<'input' | 'results'>('input');
 
-  // Chargement depuis localStorage au montage
+  // Initialisation des projets sauvegardés depuis localStorage ou Presets
   useEffect(() => {
     try {
-      const savedSettings = localStorage.getItem('calepinage_settings');
-      const savedStock = localStorage.getItem('calepinage_stock');
-      const savedCutItems = localStorage.getItem('calepinage_cutitems');
-
-      if (savedSettings) setSettings(JSON.parse(savedSettings));
-      if (savedStock) setStockPanels(JSON.parse(savedStock));
-      if (savedCutItems) setCutItems(JSON.parse(savedCutItems));
+      const stored = localStorage.getItem('calepinage_saved_projects');
+      if (stored) {
+        setSavedProjects(JSON.parse(stored));
+      } else {
+        // Initialiser avec les presets d'atelier pour la première visite
+        const initialPresets: SavedProject[] = PRESETS.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          updatedAt: new Date().toISOString(),
+          settings: p.settings,
+          stockPanels: p.stockPanels,
+          cutItems: p.cutItems,
+        }));
+        setSavedProjects(initialPresets);
+        localStorage.setItem(
+          'calepinage_saved_projects',
+          JSON.stringify(initialPresets)
+        );
+      }
     } catch {
-      // Ignorer les erreurs de parsing
+      // Ignorer erreurs localStorage
     }
   }, []);
 
-  // Sauvegarde dans localStorage à chaque modification
-  useEffect(() => {
-    try {
-      localStorage.setItem('calepinage_settings', JSON.stringify(settings));
-      localStorage.setItem('calepinage_stock', JSON.stringify(stockPanels));
-      localStorage.setItem('calepinage_cutitems', JSON.stringify(cutItems));
-    } catch {
-      // Ignorer les erreurs de quota localstorage
+  // Création d'un NOUVEAU PROJET VIERGE (aucun champ rempli)
+  const handleCreateNewProject = (name: string) => {
+    const newId = `project-${Date.now()}`;
+    setCurrentProjectId(newId);
+    setProjectName(name);
+
+    // Initialisation totalement vide selon la demande
+    setSettings(DEFAULT_SETTINGS);
+    setStockPanels([]);
+    setCutItems([]);
+    setOptimizationResult(null);
+    setIsSaved(false);
+
+    // Ouvrir directement l'atelier
+    setCurrentView('editor');
+    setMobileTab('input');
+  };
+
+  // Ouverture d'un PROJET EXISTANT
+  const handleOpenProject = (project: SavedProject) => {
+    setCurrentProjectId(project.id);
+    setProjectName(project.name);
+    setSettings(project.settings || DEFAULT_SETTINGS);
+    setStockPanels(project.stockPanels || []);
+    setCutItems(project.cutItems || []);
+    setIsSaved(true);
+
+    // Lancer automatiquement l'optimisation si des panneaux et pièces sont présents
+    if (
+      project.cutItems &&
+      project.cutItems.length > 0 &&
+      project.stockPanels &&
+      project.stockPanels.length > 0
+    ) {
+      const res = optimizeCutting(
+        project.stockPanels,
+        project.cutItems,
+        project.settings || DEFAULT_SETTINGS
+      );
+      setOptimizationResult(res);
+    } else {
+      setOptimizationResult(null);
     }
-  }, [settings, stockPanels, cutItems]);
+
+    setCurrentView('editor');
+    setMobileTab('input');
+  };
+
+  // Sauvegarder le projet actuel
+  const handleSaveProject = () => {
+    const projectToSave: SavedProject = {
+      id: currentProjectId || `project-${Date.now()}`,
+      name: projectName,
+      updatedAt: new Date().toISOString(),
+      settings,
+      stockPanels,
+      cutItems,
+    };
+
+    setSavedProjects((prev) => {
+      const filtered = prev.filter((p) => p.id !== projectToSave.id);
+      const updated = [projectToSave, ...filtered];
+      try {
+        localStorage.setItem(
+          'calepinage_saved_projects',
+          JSON.stringify(updated)
+        );
+      } catch {
+        // Ignorer
+      }
+      return updated;
+    });
+
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2500);
+  };
+
+  // Supprimer un projet existant
+  const handleDeleteProject = (projectId: string) => {
+    setSavedProjects((prev) => {
+      const updated = prev.filter((p) => p.id !== projectId);
+      try {
+        localStorage.setItem(
+          'calepinage_saved_projects',
+          JSON.stringify(updated)
+        );
+      } catch {
+        // Ignorer
+      }
+      return updated;
+    });
+  };
 
   // Recalcul de l'optimisation
   const handleOptimize = useCallback(() => {
+    if (cutItems.length === 0 || stockPanels.length === 0) {
+      alert(
+        'Veuillez ajouter au moins un panneau en stock et une pièce à découper.'
+      );
+      return;
+    }
     const res = optimizeCutting(stockPanels, cutItems, settings);
     setOptimizationResult(res);
     setMobileTab('results');
   }, [stockPanels, cutItems, settings]);
-
-  // Lancer un premier calcul dès que les données de base sont prêtes
-  useEffect(() => {
-    if (cutItems.length > 0 && stockPanels.length > 0) {
-      const res = optimizeCutting(stockPanels, cutItems, settings);
-      setOptimizationResult(res);
-    }
-  }, [settings, stockPanels, cutItems]);
 
   // Matières disponibles
   const availableMaterials = useMemo(() => {
@@ -84,8 +186,9 @@ export default function Home() {
     return Array.from(set).filter(Boolean);
   }, [stockPanels, cutItems]);
 
-  // Charger un projet preset
+  // Charger un preset depuis la barre d'outils
   const handleLoadPreset = (preset: ProjectPreset) => {
+    setProjectName(preset.name);
     setSettings(preset.settings);
     setStockPanels(preset.stockPanels);
     setCutItems(preset.cutItems);
@@ -98,11 +201,11 @@ export default function Home() {
     setOptimizationResult(res);
   };
 
-  // Réinitialiser à zéro
+  // Réinitialiser le projet actuel
   const handleReset = () => {
     if (
       window.confirm(
-        'Êtes-vous sûr de vouloir vider le stock et la liste de débit ?'
+        'Êtes-vous sûr de vouloir vider les panneaux et les pièces de ce projet ?'
       )
     ) {
       setStockPanels([]);
@@ -130,13 +233,30 @@ export default function Home() {
     setStockPanels((prev) => [...prev, newPanel]);
   };
 
+  // SI LA VUE ACTIVE EST LE HUB (ACCUEIL)
+  if (currentView === 'hub') {
+    return (
+      <ProjectHub
+        savedProjects={savedProjects}
+        onOpenProject={handleOpenProject}
+        onCreateNewProject={handleCreateNewProject}
+        onDeleteProject={handleDeleteProject}
+      />
+    );
+  }
+
+  // SI LA VUE ACTIVE EST L'ATELIER (ÉDITEUR)
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Barre de navigation */}
+      {/* Barre de navigation avec nom du projet et bouton Accueil */}
       <Navbar
+        projectName={projectName}
+        onOpenHub={() => setCurrentView('hub')}
+        onSaveProject={handleSaveProject}
         onLoadPreset={handleLoadPreset}
         onReset={handleReset}
         onPrint={handlePrint}
+        isSaved={isSaved}
       />
 
       {/* Impression Atelier (visible uniquement lors du print) */}
@@ -148,7 +268,7 @@ export default function Home() {
         />
       )}
 
-      {/* Contenu Principal */}
+      {/* Contenu Principal de l'Atelier */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 print:hidden">
         {/* 1. Configuration & Trait de scie (Kerf) */}
         <SettingsBar settings={settings} onChange={setSettings} />
@@ -183,7 +303,7 @@ export default function Home() {
 
         {/* Grille principale : Formulaires à gauche, Plans et Résultats à droite */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Colonne Gauche : Saisie Stock et Liste de débit (Largeur 5 colonnes sur desktop) */}
+          {/* Colonne Gauche : Saisie Stock et Liste de débit */}
           <div
             className={`lg:col-span-5 space-y-6 ${
               mobileTab === 'results' ? 'hidden lg:block' : 'block'
@@ -216,7 +336,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Colonne Droite : Visualisation graphique & Résultats (Largeur 7 colonnes sur desktop) */}
+          {/* Colonne Droite : Visualisation graphique & Résultats */}
           <div
             className={`lg:col-span-7 space-y-6 ${
               mobileTab === 'input' ? 'hidden lg:block' : 'block'
@@ -240,17 +360,18 @@ export default function Home() {
                 />
               </>
             ) : (
-              <div className="bg-slate-800/80 backdrop-blur border border-slate-700/80 rounded-2xl p-12 text-center text-slate-400">
-                <Layers className="w-16 h-16 mx-auto text-slate-600 mb-4 animate-pulse" />
+              <div className="bg-slate-800/80 backdrop-blur border border-slate-700/80 rounded-2xl p-10 text-center text-slate-400">
+                <Layers className="w-14 h-14 mx-auto text-slate-600 mb-4 animate-pulse" />
                 <h3 className="text-base font-bold text-white">
                   Prêt pour le calcul d&apos;optimisation
                 </h3>
                 <p className="text-xs text-slate-400 mt-2 max-w-sm mx-auto">
-                  Configurez vos panneaux et pièces requises puis cliquez sur{' '}
+                  Saisissez vos panneaux bruts en stock et vos pièces à débiter,
+                  puis cliquez sur{' '}
                   <strong className="text-amber-400">
                     « Calculer l&apos;optimisation des coupes »
-                  </strong>{' '}
-                  pour générer les plans d&apos;atelier.
+                  </strong>
+                  .
                 </p>
               </div>
             )}
@@ -262,7 +383,7 @@ export default function Home() {
       <footer className="mt-auto border-t border-slate-800 py-4 text-center text-xs text-slate-500 print:hidden">
         <p>
           CalepinagePro — Application d&apos;optimisation de découpe pour la
-          menuiserie et l&apos;agencement. Prêt pour Vercel.
+          menuiserie et l&apos;agencement.
         </p>
       </footer>
     </div>

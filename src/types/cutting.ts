@@ -1,3 +1,13 @@
+export interface SavedProject {
+  id: string;
+  name: string;
+  description?: string;
+  updatedAt: string;
+  settings: CutSettings;
+  stockPanels: StockPanel[];
+  cutItems: CutItem[];
+}
+
 export interface CutSettings {
   kerf: number; // Trait de scie en mm (ex: 3.2)
   minOffcutWidth: number; // Largeur min pour chute réutilisable en mm (ex: 200)
