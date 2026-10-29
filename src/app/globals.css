@@ -18,6 +18,18 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Suppression complète des flèches d'incrémentation/décrémentation des champs de saisie numériques */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 @media print {
   @page {
     size: A4 portrait;
