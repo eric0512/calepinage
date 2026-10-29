@@ -1,16 +1,48 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SavedProject, CutSettings, StockPanel, CutItem } from '@/types/cutting';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://iahzaogwukljmhjdxguv.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+export const SUPABASE_PROJECT_ID = 'iahzaogwukljmhjdxguv';
+export const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  `https://${SUPABASE_PROJECT_ID}.supabase.co`;
+
+export function getStoredSupabaseKey(): string {
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem('calepinage_supabase_anon_key');
+    if (local && local.trim().length > 10) return local.trim();
+  }
+  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+}
+
+export function setStoredSupabaseKey(key: string): void {
+  if (typeof window !== 'undefined') {
+    if (key && key.trim().length > 10) {
+      localStorage.setItem('calepinage_supabase_anon_key', key.trim());
+    } else {
+      localStorage.removeItem('calepinage_supabase_anon_key');
+    }
+  }
+}
 
 export const isSupabaseConfigured = (): boolean => {
-  return Boolean(supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 10);
+  const key = getStoredSupabaseKey();
+  return Boolean(SUPABASE_URL && key && key.length > 10);
 };
 
-export const supabase = isSupabaseConfigured()
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+let cachedClient: SupabaseClient | null = null;
+let lastUsedKey = '';
+
+export function getSupabase(): SupabaseClient | null {
+  const currentKey = getStoredSupabaseKey();
+  if (!currentKey || currentKey.length < 10) {
+    return null;
+  }
+  if (!cachedClient || lastUsedKey !== currentKey) {
+    cachedClient = createClient(SUPABASE_URL, currentKey);
+    lastUsedKey = currentKey;
+  }
+  return cachedClient;
+}
 
 export interface DbCuttingProject {
   id: string;
@@ -22,7 +54,6 @@ export interface DbCuttingProject {
   updated_at: string;
 }
 
-// Convertisseur DB -> Modèle App
 function mapDbToProject(row: DbCuttingProject): SavedProject {
   return {
     id: row.id,
@@ -35,7 +66,6 @@ function mapDbToProject(row: DbCuttingProject): SavedProject {
   };
 }
 
-// Convertisseur Modèle App -> DB
 function mapProjectToDb(p: SavedProject): DbCuttingProject {
   return {
     id: p.id,
@@ -55,16 +85,16 @@ export async function getProjects(): Promise<{
   projects: SavedProject[];
   source: 'supabase' | 'local';
 }> {
-  if (supabase) {
+  const client = getSupabase();
+  if (client) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('cutting_projects')
         .select('*')
         .order('updated_at', { ascending: false });
 
       if (!error && data) {
         const mapped = data.map(mapDbToProject);
-        // Mettre à jour le cache local
         if (typeof window !== 'undefined') {
           localStorage.setItem('calepinage_saved_projects', JSON.stringify(mapped));
         }
@@ -91,15 +121,16 @@ export async function getProjects(): Promise<{
 }
 
 /**
- * Sauvegarder ou mettre à jour un projet dans Supabase
+ * Sauvegarder ou mettre à jour un projet dans Supabase & local
  */
 export async function saveProjectToCloud(project: SavedProject): Promise<boolean> {
   let cloudSuccess = false;
+  const client = getSupabase();
 
-  if (supabase) {
+  if (client) {
     try {
       const dbPayload = mapProjectToDb(project);
-      const { error } = await supabase
+      const { error } = await client
         .from('cutting_projects')
         .upsert(dbPayload, { onConflict: 'id' });
 
@@ -131,10 +162,11 @@ export async function saveProjectToCloud(project: SavedProject): Promise<boolean
  */
 export async function deleteProjectFromCloud(projectId: string): Promise<boolean> {
   let cloudSuccess = false;
+  const client = getSupabase();
 
-  if (supabase) {
+  if (client) {
     try {
-      const { error } = await supabase
+      const { error } = await client
         .from('cutting_projects')
         .delete()
         .eq('id', projectId);
@@ -158,4 +190,3 @@ export async function deleteProjectFromCloud(projectId: string): Promise<boolean
 
   return cloudSuccess;
 }
-

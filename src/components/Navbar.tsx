@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Save,
   Check,
+  Database,
 } from 'lucide-react';
 import { PRESETS, ProjectPreset } from '@/lib/presets';
 
@@ -16,6 +17,7 @@ interface NavbarProps {
   projectName?: string;
   onOpenHub: () => void;
   onSaveProject: () => void;
+  onOpenSupabaseModal?: () => void;
   onLoadPreset: (preset: ProjectPreset) => void;
   onReset: () => void;
   onPrint: () => void;
@@ -27,6 +29,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   projectName = 'Mon Projet',
   onOpenHub,
   onSaveProject,
+  onOpenSupabaseModal,
   onLoadPreset,
   onReset,
   onPrint,
@@ -56,19 +59,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                     Menuiserie 2D
                   </span>
-                  {isCloudConnected ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Supabase Cloud
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                      Stockage Local
-                    </span>
-                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-slate-300 font-medium">
-                  <span className="truncate max-w-[130px] sm:max-w-[200px] text-amber-400">
+                  <span className="truncate max-w-[120px] sm:max-w-[200px] text-amber-400">
                     {projectName}
                   </span>
                   <span className="text-[10px] text-slate-500">•</span>
@@ -81,16 +74,37 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Actions & Presets */}
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-1.5 sm:space-x-3">
+            {/* Bouton Supabase Cloud */}
+            <button
+              type="button"
+              onClick={onOpenSupabaseModal}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors shadow-sm ${
+                isCloudConnected
+                  ? 'bg-emerald-950/70 border-emerald-500/30 text-emerald-300'
+                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
+              }`}
+              title="Configurer la liaison Supabase Cloud"
+            >
+              <Database
+                className={`w-3.5 h-3.5 ${
+                  isCloudConnected ? 'text-emerald-400' : 'text-slate-400'
+                }`}
+              />
+              <span className="hidden md:inline">
+                {isCloudConnected ? 'Cloud Actif' : 'Lier Cloud'}
+              </span>
+            </button>
+
             {/* Bouton Projets (Accueil) */}
             <button
               type="button"
               onClick={onOpenHub}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors shadow-sm"
               title="Ouvrir la liste de vos projets"
             >
               <FolderOpen className="w-3.5 h-3.5 text-blue-400" />
-              <span className="hidden md:inline">Mes Projets</span>
+              <span className="hidden sm:inline">Mes Projets</span>
             </button>
 
             {/* Bouton Sauvegarder Projet */}
@@ -107,18 +121,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               {isSaved ? (
                 <>
                   <Check className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Enregistré</span>
+                  <span>Enregistré</span>
                 </>
               ) : (
                 <>
                   <Save className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Sauvegarder</span>
+                  <span>Sauvegarder</span>
                 </>
               )}
             </button>
 
             {/* Presets Démo */}
-            <div className="relative group hidden sm:block">
+            <div className="relative group hidden lg:block">
               <button
                 type="button"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 transition-colors shadow-sm"
@@ -148,7 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Imprimer / Export dossier */}
             <button
               onClick={onPrint}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors shadow-sm"
               title="Imprimer le dossier de fabrication atelier"
             >
               <Printer className="w-3.5 h-3.5 text-slate-300" />
@@ -158,7 +172,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Réinitialiser */}
             <button
               onClick={onReset}
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-950/30 border border-transparent transition-colors"
+              className="p-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-950/30 border border-transparent transition-colors"
               title="Vider et réinitialiser"
             >
               <RotateCcw className="w-3.5 h-3.5" />

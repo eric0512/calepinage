@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   CutItem,
   CutSettings,
@@ -26,6 +26,7 @@ import { CuttingVisualizer } from '@/components/CuttingVisualizer';
 import { OffcutsList } from '@/components/OffcutsList';
 import { PrintDossier } from '@/components/PrintDossier';
 import { ProjectHub } from '@/components/ProjectHub';
+import { SupabaseConfigModal } from '@/components/SupabaseConfigModal';
 import { Play, Layers, ListPlus } from 'lucide-react';
 
 export default function Home() {
@@ -47,19 +48,22 @@ export default function Home() {
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [cloudConnected, setCloudConnected] = useState<boolean>(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
 
   // Onglet mobile
   const [mobileTab, setMobileTab] = useState<'input' | 'results'>('input');
 
-  // Initialisation des projets depuis Supabase ou Cache local
-  useEffect(() => {
+  // Ref pour éviter l'auto-save au tout premier rendu
+  const isInitialMount = useRef(true);
+
+  // Charger les projets depuis Supabase ou Cache local
+  const refreshProjectsList = useCallback(() => {
     setCloudConnected(isSupabaseConfigured());
 
     getProjects().then(({ projects }) => {
       if (projects && projects.length > 0) {
         setSavedProjects(projects);
       } else {
-        // Initialiser avec les presets d'atelier pour la première visite
         const initialPresets: SavedProject[] = PRESETS.map((p) => ({
           id: p.id,
           name: p.name,
@@ -73,6 +77,55 @@ export default function Home() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    refreshProjectsList();
+  }, [refreshProjectsList]);
+
+  // Sauvegarder un projet
+  const persistProject = useCallback(
+    async (silent: boolean = false) => {
+      if (!currentProjectId && currentView !== 'editor') return;
+
+      const projectToSave: SavedProject = {
+        id: currentProjectId || `project-${Date.now()}`,
+        name: projectName,
+        updatedAt: new Date().toISOString(),
+        settings,
+        stockPanels,
+        cutItems,
+      };
+
+      setSavedProjects((prev) => {
+        const filtered = prev.filter((p) => p.id !== projectToSave.id);
+        return [projectToSave, ...filtered];
+      });
+
+      await saveProjectToCloud(projectToSave);
+
+      if (!silent) {
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
+      }
+    },
+    [currentProjectId, currentView, projectName, settings, stockPanels, cutItems]
+  );
+
+  // Auto-Save avec debounce quand on est dans l'éditeur
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    if (currentView === 'editor' && currentProjectId) {
+      const timer = setTimeout(() => {
+        persistProject(true);
+      }, 1200);
+
+      return () => clearTimeout(timer);
+    }
+  }, [stockPanels, cutItems, settings, projectName, currentView, currentProjectId, persistProject]);
 
   // Création d'un NOUVEAU PROJET VIERGE (aucun champ rempli)
   const handleCreateNewProject = (name: string) => {
@@ -122,25 +175,9 @@ export default function Home() {
     setMobileTab('input');
   };
 
-  // Sauvegarder le projet actuel dans Supabase & local
-  const handleSaveProject = async () => {
-    const projectToSave: SavedProject = {
-      id: currentProjectId || `project-${Date.now()}`,
-      name: projectName,
-      updatedAt: new Date().toISOString(),
-      settings,
-      stockPanels,
-      cutItems,
-    };
-
-    setSavedProjects((prev) => {
-      const filtered = prev.filter((p) => p.id !== projectToSave.id);
-      return [projectToSave, ...filtered];
-    });
-
-    await saveProjectToCloud(projectToSave);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2500);
+  // Sauvegarder manuellement
+  const handleManualSave = () => {
+    persistProject(false);
   };
 
   // Supprimer un projet existant
@@ -220,13 +257,20 @@ export default function Home() {
   // SI LA VUE ACTIVE EST LE HUB (ACCUEIL)
   if (currentView === 'hub') {
     return (
-      <ProjectHub
-        savedProjects={savedProjects}
-        onOpenProject={handleOpenProject}
-        onCreateNewProject={handleCreateNewProject}
-        onDeleteProject={handleDeleteProject}
-        isCloudConnected={cloudConnected}
-      />
+      <>
+        <ProjectHub
+          savedProjects={savedProjects}
+          onOpenProject={handleOpenProject}
+          onCreateNewProject={handleCreateNewProject}
+          onDeleteProject={handleDeleteProject}
+          isCloudConnected={cloudConnected}
+        />
+        <SupabaseConfigModal
+          isOpen={isSupabaseModalOpen}
+          onClose={() => setIsSupabaseModalOpen(false)}
+          onConfigSaved={refreshProjectsList}
+        />
+      </>
     );
   }
 
@@ -237,12 +281,20 @@ export default function Home() {
       <Navbar
         projectName={projectName}
         onOpenHub={() => setCurrentView('hub')}
-        onSaveProject={handleSaveProject}
+        onSaveProject={handleManualSave}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onLoadPreset={handleLoadPreset}
         onReset={handleReset}
         onPrint={handlePrint}
         isSaved={isSaved}
         isCloudConnected={cloudConnected}
+      />
+
+      {/* Modal de configuration Supabase Cloud */}
+      <SupabaseConfigModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
+        onConfigSaved={refreshProjectsList}
       />
 
       {/* Impression Atelier (visible uniquement lors du print) */}
