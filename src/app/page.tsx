@@ -352,6 +352,7 @@ export default function Home() {
               panels={stockPanels}
               onChange={setStockPanels}
               availableMaterials={availableMaterials}
+              workshopOffcuts={optimizationResult?.reusableOffcuts || []}
             />
 
             {/* Saisie de la liste de débit */}
