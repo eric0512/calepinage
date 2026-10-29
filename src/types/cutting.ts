@@ -17,7 +17,8 @@ export interface CutSettings {
 export interface StockPanel {
   id: string;
   name?: string;
-  material: string; // Ex: "MDF 19mm", "Contreplaqué Bouleau 15mm"
+  material: string; // Ex: "MDF", "Contreplaqué Bouleau"
+  thickness?: number; // Épaisseur en mm (ex: 19)
   length: number; // en mm
   width: number; // en mm
   quantity: number; // Quantité disponible
@@ -27,6 +28,7 @@ export interface CutItem {
   id: string;
   name: string; // Étiquette / Nom de la pièce
   material: string; // Matière correspondante
+  thickness?: number; // Épaisseur en mm (ex: 19)
   length: number; // en mm
   width: number; // en mm
   quantity: number; // Quantité requise

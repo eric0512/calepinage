@@ -420,7 +420,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-800 py-4 text-center text-xs text-slate-500 print:hidden">
         <p>
-          CalepinagePro — Application d&apos;optimisation de découpe pour la
+          Calepinage — Application d&apos;optimisation de découpe pour la
           menuiserie et l&apos;agencement.
         </p>
       </footer>

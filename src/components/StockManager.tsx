@@ -2,13 +2,7 @@
 
 import React, { useState } from 'react';
 import { StockPanel } from '@/types/cutting';
-import {
-  Layers,
-  Plus,
-  Trash2,
-  Copy,
-  Box,
-} from 'lucide-react';
+import { Layers, Plus, Trash2, Copy, Box } from 'lucide-react';
 
 interface StockManagerProps {
   panels: StockPanel[];
@@ -28,8 +22,9 @@ export const StockManager: React.FC<StockManagerProps> = ({
   onChange,
   availableMaterials,
 }) => {
-  // État local pour le formulaire d'ajout
-  const [material, setMaterial] = useState('MDF 19mm');
+  // États locaux pour le formulaire d'ajout avec Matière et Épaisseur séparées
+  const [material, setMaterial] = useState('MDF');
+  const [thickness, setThickness] = useState<number>(19);
   const [length, setLength] = useState<number>(2800);
   const [width, setWidth] = useState<number>(2070);
   const [quantity, setQuantity] = useState<number>(2);
@@ -38,9 +33,17 @@ export const StockManager: React.FC<StockManagerProps> = ({
     e.preventDefault();
     if (!material.trim() || length <= 0 || width <= 0 || quantity <= 0) return;
 
+    // Définition de la matière avec son épaisseur
+    const cleanMat = material.trim();
+    const formattedMaterial =
+      thickness > 0 && !cleanMat.toLowerCase().includes('mm')
+        ? `${cleanMat} ${thickness}mm`
+        : cleanMat;
+
     const newPanel: StockPanel = {
       id: `stock-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      material: material.trim(),
+      material: formattedMaterial,
+      thickness: thickness > 0 ? thickness : undefined,
       length: Math.max(length, width), // convention Longueur >= Largeur
       width: Math.min(length, width),
       quantity,
@@ -107,7 +110,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
         onSubmit={handleAdd}
         className="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3.5 mb-4 text-xs"
       >
-        <div className="text-[11px] font-semibold text-slate-400 mb-2.5 flex items-center justify-between">
+        <div className="text-[11px] font-semibold text-slate-400 mb-3 flex items-center justify-between">
           <span>Ajouter un panneau au stock</span>
           {/* Raccourcis dimensions standards */}
           <div className="hidden sm:flex items-center gap-1.5">
@@ -126,37 +129,57 @@ export const StockManager: React.FC<StockManagerProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
-          {/* Matière */}
-          <div className="sm:col-span-4">
-            <label className="block text-[11px] text-slate-400 mb-1">
-              Matière / Épaisseur
+        {/* 1. LIGNE 1 : Matière et Épaisseur séparées en 2 champs */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 mb-3">
+          {/* Champ Matière */}
+          <div className="sm:col-span-8">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1">
+              Matière
             </label>
             <input
               type="text"
               required
-              placeholder="Ex: MDF 19mm, Contreplaqué 15mm..."
+              placeholder="Ex: MDF, Contreplaqué Bouleau, Mélaminé Blanc..."
               list="stock-materials-list"
               value={material}
               onChange={(e) => setMaterial(e.target.value)}
-              className="w-full bg-slate-950 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full bg-slate-950 text-slate-100 px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
             />
             <datalist id="stock-materials-list">
               {availableMaterials.map((m) => (
                 <option key={m} value={m} />
               ))}
-              <option value="MDF 19mm" />
-              <option value="Contreplaqué Bouleau 15mm" />
-              <option value="Contreplaqué 5mm" />
-              <option value="Mélaminé Blanc 18mm" />
-              <option value="Chêne Massif Lamellé 20mm" />
-              <option value="OSB 3 18mm" />
+              <option value="MDF" />
+              <option value="Contreplaqué Bouleau" />
+              <option value="Contreplaqué Okoumé" />
+              <option value="Mélaminé Blanc" />
+              <option value="Chêne Massif Lamellé" />
+              <option value="OSB 3" />
             </datalist>
           </div>
 
+          {/* Champ Épaisseur */}
+          <div className="sm:col-span-4">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1">
+              Épaisseur (mm)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="150"
+              placeholder="Ex: 19"
+              value={thickness || ''}
+              onChange={(e) => setThickness(parseInt(e.target.value) || 0)}
+              className="w-full bg-slate-950 text-amber-400 font-mono font-bold px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-center"
+            />
+          </div>
+        </div>
+
+        {/* 2. LIGNE 2 : Longueur, Largeur et Quantité sur la même ligne avec bouton d'ajout */}
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
           {/* Longueur */}
-          <div className="sm:col-span-3">
-            <label className="block text-[11px] text-slate-400 mb-1">
+          <div className="sm:col-span-4">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1">
               Longueur (mm)
             </label>
             <input
@@ -166,13 +189,13 @@ export const StockManager: React.FC<StockManagerProps> = ({
               max="6000"
               value={length || ''}
               onChange={(e) => setLength(parseInt(e.target.value) || 0)}
-              className="w-full bg-slate-950 text-slate-100 font-mono px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full bg-slate-950 text-slate-100 font-mono px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
             />
           </div>
 
           {/* Largeur */}
-          <div className="sm:col-span-2">
-            <label className="block text-[11px] text-slate-400 mb-1">
+          <div className="sm:col-span-4">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1">
               Largeur (mm)
             </label>
             <input
@@ -182,14 +205,14 @@ export const StockManager: React.FC<StockManagerProps> = ({
               max="4000"
               value={width || ''}
               onChange={(e) => setWidth(parseInt(e.target.value) || 0)}
-              className="w-full bg-slate-950 text-slate-100 font-mono px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full bg-slate-950 text-slate-100 font-mono px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
             />
           </div>
 
-          {/* Quantité & Bouton Ajout */}
-          <div className="sm:col-span-3 flex items-end gap-2">
+          {/* Quantité & Bouton Ajout sur la même ligne */}
+          <div className="sm:col-span-4 flex items-end gap-2">
             <div className="flex-1">
-              <label className="block text-[11px] text-slate-400 mb-1">
+              <label className="block text-[11px] font-medium text-slate-300 mb-1">
                 Quantité
               </label>
               <input
@@ -199,12 +222,12 @@ export const StockManager: React.FC<StockManagerProps> = ({
                 max="999"
                 value={quantity || ''}
                 onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                className="w-full bg-slate-950 text-slate-100 font-mono font-semibold px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                className="w-full bg-slate-950 text-blue-400 font-mono font-bold px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-center"
               />
             </div>
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-3.5 py-2 rounded-lg transition-colors flex items-center justify-center shrink-0 shadow-sm"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-4 py-2 rounded-lg transition-colors flex items-center justify-center shrink-0 shadow-sm"
               title="Ajouter au stock"
             >
               <Plus className="w-4 h-4" />
@@ -226,6 +249,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
             <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
               <tr>
                 <th className="py-2.5 px-3">Matière</th>
+                <th className="py-2.5 px-3 text-center">Épaisseur</th>
                 <th className="py-2.5 px-3">Dimensions (L × l mm)</th>
                 <th className="py-2.5 px-3 text-center">Surface Unitaire</th>
                 <th className="py-2.5 px-3 text-center w-28">Quantité</th>
@@ -235,6 +259,10 @@ export const StockManager: React.FC<StockManagerProps> = ({
             <tbody className="divide-y divide-slate-700/60 text-slate-200">
               {panels.map((p) => {
                 const area = ((p.length * p.width) / 1_000_000).toFixed(2);
+                // Détecter l'épaisseur si stockée séparément ou dans le label
+                const matchEp = p.material.match(/(\d+(?:\.\d+)?)\s*mm/i);
+                const displayThickness = p.thickness || (matchEp ? matchEp[1] : '-');
+
                 return (
                   <tr
                     key={p.id}
@@ -249,6 +277,11 @@ export const StockManager: React.FC<StockManagerProps> = ({
                         }
                         className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full max-w-[180px]"
                       />
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      <span className="font-mono text-amber-400 font-semibold px-2 py-0.5 rounded bg-amber-400/10 border border-amber-400/20 text-[11px]">
+                        {displayThickness} {displayThickness !== '-' && 'mm'}
+                      </span>
                     </td>
                     <td className="py-2 px-3 font-mono">
                       <div className="flex items-center gap-1.5">

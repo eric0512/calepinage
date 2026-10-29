@@ -21,37 +21,29 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
     }
   };
 
-  const presetKerfs = [2.4, 3.2, 4.0];
+  const presetKerfs = [2.4, 3.0, 3.2, 4.0];
 
   return (
     <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-4 shadow-sm text-slate-200 print:hidden">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        {/* Titre & Explication */}
+        {/* Titre */}
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
             <Disc className="w-5 h-5 animate-spin-slow" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-white">
-                Paramètres de Coupe &amp; Lame de Scie
-              </span>
-              <span className="text-[11px] text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
-                Spécification Menuiserie
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">
-              L&apos;épaisseur de trait de scie (kerf) est automatiquement déduite entre chaque pièce adjacente.
-            </p>
+            <h2 className="text-sm font-semibold text-white">
+              Paramètres de Coupe &amp; Lame de Scie
+            </h2>
           </div>
         </div>
 
         {/* Inputs */}
         <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-          {/* Épaisseur Trait de scie (Kerf) */}
+          {/* Épaisseur Trait de scie */}
           <div className="flex items-center gap-3 bg-slate-900/80 px-3.5 py-2 rounded-xl border border-slate-700/80">
             <div className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-              <span>Trait de scie (Kerf) :</span>
+              <span>Trait de scie :</span>
             </div>
             <div className="flex items-center gap-1">
               <button

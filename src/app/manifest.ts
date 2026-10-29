@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Calepinage & Découpe de Panneaux Pro',
-    short_name: 'CalepinagePro',
+    name: 'Calepinage & Découpe de Panneaux',
+    short_name: 'Calepinage',
     description:
       'Application web d’optimisation de découpe de panneaux pour la menuiserie',
     start_url: '/',

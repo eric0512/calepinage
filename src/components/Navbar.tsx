@@ -54,7 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-base sm:text-lg font-bold tracking-tight text-white">
-                    Calepinage<span className="text-amber-500">Pro</span>
+                    Calepinage
                   </span>
                   <span className="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
                     Menuiserie 2D

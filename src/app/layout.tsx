@@ -10,14 +10,14 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Calepinage & Découpe de Panneaux Pro | Menuiserie',
+  title: 'Calepinage & Découpe de Panneaux | Menuiserie',
   description:
-    'Application web moderne d’optimisation de découpe et de calepinage 2D de panneaux pour la menuiserie avec prise en compte du trait de scie (kerf) et gestion des chutes.',
+    'Application web moderne d’optimisation de découpe et de calepinage 2D de panneaux pour la menuiserie.',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'CalepinagePro',
+    title: 'Calepinage',
   },
   icons: {
     icon: '/icon.svg',

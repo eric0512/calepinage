@@ -1,7 +1,7 @@
 import { CutItem, CutSettings, StockPanel } from '@/types/cutting';
 
 export const DEFAULT_SETTINGS: CutSettings = {
-  kerf: 3.2, // 3.2 mm classique pour lame scie circulaire / scie à format
+  kerf: 3.0, // 3 mm par défaut
   minOffcutWidth: 200, // 200 mm
   minOffcutLength: 200, // 200 mm
 };
@@ -21,7 +21,7 @@ export const PRESETS: ProjectPreset[] = [
     name: 'Caissons Meuble Cuisine (MDF & Contreplaqué)',
     description: 'Ensemble de caissons bas et étagères avec fond de meuble.',
     settings: {
-      kerf: 3.2,
+      kerf: 3.0,
       minOffcutWidth: 200,
       minOffcutLength: 200,
     },

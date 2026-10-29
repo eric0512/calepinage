@@ -54,7 +54,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
             <Scissors className="w-8 h-8 rotate-90" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            Calepinage<span className="text-amber-500">Pro</span>
+            Calepinage
           </h1>
           <div className="flex items-center justify-center gap-2 mt-3">
             {isCloudConnected ? (
