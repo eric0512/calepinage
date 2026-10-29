@@ -252,7 +252,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
         mounted &&
         createPortal(
           <div className="fixed inset-0 z-[9999] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl text-slate-200">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-5 sm:p-6 max-w-xl w-full shadow-2xl text-slate-200">
               {/* Header du modal */}
               <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
                 <div className="flex items-center gap-2.5">
@@ -277,85 +277,86 @@ export const StockManager: React.FC<StockManagerProps> = ({
                 <span className="text-[11px] text-slate-400 block mb-1.5">
                   Formats standards :
                 </span>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {COMMON_PANEL_SIZES.map((sz, i) => (
                     <button
                       key={i}
                       type="button"
                       onClick={() => applyPresetSize(sz.l, sz.w)}
-                      className="text-[11px] bg-slate-800 hover:bg-slate-700 text-blue-300 py-1 px-2 rounded-lg transition-colors text-left"
+                      className="text-[11px] bg-slate-800 hover:bg-slate-700 text-blue-300 py-1 px-2 rounded-lg transition-colors text-center font-mono"
                     >
-                      {sz.label} mm
+                      {sz.label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Formulaire Modal avec Matière, Longueur, Largeur, Qté et bouton Ajouter */}
-              <form onSubmit={handleAdd} className="space-y-3.5 text-xs">
-                {/* Champ Matière */}
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-300 mb-1">
-                    Matière
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: MDF 19mm, Contreplaqué 15mm..."
-                    list="modal-stock-materials-list"
-                    value={material}
-                    onChange={(e) => setMaterial(e.target.value)}
-                    className="w-full bg-slate-950 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
-                  />
-                  <datalist id="modal-stock-materials-list">
-                    {availableMaterials.map((m) => (
-                      <option key={m} value={m} />
-                    ))}
-                    <option value="MDF 19mm" />
-                    <option value="Contreplaqué Bouleau 15mm" />
-                    <option value="Contreplaqué 5mm" />
-                    <option value="Mélaminé Blanc 18mm" />
-                    <option value="Chêne Massif 20mm" />
-                    <option value="OSB 3 18mm" />
-                  </datalist>
-                </div>
-
-                {/* Champs Longueur, Largeur et Quantité */}
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Longueur */}
-                  <div>
+              {/* Formulaire Modal : Tous les 4 champs (Matière à Qté) alignés sur la même ligne */}
+              <form onSubmit={handleAdd} className="space-y-4 text-xs">
+                <div className="flex gap-2 items-end">
+                  {/* 1. Matière */}
+                  <div className="flex-[2] min-w-0">
                     <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
-                      Longueur (mm)
+                      Matière
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: MDF 19mm..."
+                      list="modal-stock-materials-list"
+                      value={material}
+                      onChange={(e) => setMaterial(e.target.value)}
+                      className="w-full bg-slate-950 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
+                    />
+                    <datalist id="modal-stock-materials-list">
+                      {availableMaterials.map((m) => (
+                        <option key={m} value={m} />
+                      ))}
+                      <option value="MDF 19mm" />
+                      <option value="Contreplaqué Bouleau 15mm" />
+                      <option value="Contreplaqué 5mm" />
+                      <option value="Mélaminé Blanc 18mm" />
+                      <option value="Chêne Massif 20mm" />
+                      <option value="OSB 3 18mm" />
+                    </datalist>
+                  </div>
+
+                  {/* 2. Longueur */}
+                  <div className="flex-1 min-w-[65px]">
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate text-center">
+                      Longueur
                     </label>
                     <input
                       type="number"
                       required
                       min="100"
                       max="6000"
+                      placeholder="2800"
                       value={length || ''}
                       onChange={(e) => setLength(parseInt(e.target.value) || 0)}
-                      className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                      className="w-full bg-slate-950 text-slate-100 font-mono px-1.5 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center text-xs"
                     />
                   </div>
 
-                  {/* Largeur */}
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
-                      Largeur (mm)
+                  {/* 3. Largeur */}
+                  <div className="flex-1 min-w-[65px]">
+                    <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate text-center">
+                      Largeur
                     </label>
                     <input
                       type="number"
                       required
                       min="100"
                       max="4000"
+                      placeholder="2070"
                       value={width || ''}
                       onChange={(e) => setWidth(parseInt(e.target.value) || 0)}
-                      className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                      className="w-full bg-slate-950 text-slate-100 font-mono px-1.5 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center text-xs"
                     />
                   </div>
 
-                  {/* Quantité */}
-                  <div>
+                  {/* 4. Quantité */}
+                  <div className="w-16 shrink-0">
                     <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate text-center">
                       Qté
                     </label>
@@ -364,15 +365,16 @@ export const StockManager: React.FC<StockManagerProps> = ({
                       required
                       min="1"
                       max="999"
+                      placeholder="2"
                       value={quantity || ''}
                       onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                      className="w-full bg-slate-950 text-blue-400 font-mono font-bold px-2 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                      className="w-full bg-slate-950 text-blue-400 font-mono font-bold px-1.5 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center text-xs"
                     />
                   </div>
                 </div>
 
                 {/* Bouton Ajouter */}
-                <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+                <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
