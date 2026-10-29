@@ -222,27 +222,24 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                         </span>
 
                         <div className="flex items-center gap-2">
-                          {/* Bouton supprimer (non disponible sur les modèles système) */}
-                          {!project.id.startsWith('cuisine-') &&
-                            !project.id.startsWith('dressing-') && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (
-                                    window.confirm(
-                                      `Supprimer le projet "${project.name}" ?`
-                                    )
-                                  ) {
-                                    onDeleteProject(project.id);
-                                  }
-                                }}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/40 transition-colors"
-                                title="Supprimer ce projet"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                          {/* Bouton supprimer */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (
+                                window.confirm(
+                                  `Supprimer le projet "${project.name}" ?`
+                                )
+                              ) {
+                                onDeleteProject(project.id);
+                              }
+                            }}
+                            className="p-2 sm:p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/40 transition-colors"
+                            title="Supprimer ce projet"
+                          >
+                            <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                          </button>
 
                           <button
                             type="button"

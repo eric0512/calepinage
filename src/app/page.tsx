@@ -199,9 +199,11 @@ export default function Home() {
     setCloudConnected(isSupabaseConfigured());
 
     getProjects().then(({ projects }) => {
-      if (projects && projects.length > 0) {
-        setSavedProjects(projects);
-      } else {
+      const isFirstLaunch =
+        typeof window !== 'undefined' &&
+        localStorage.getItem('calepinage_saved_projects') === null;
+
+      if (isFirstLaunch && (!projects || projects.length === 0)) {
         const initialPresets: SavedProject[] = PRESETS.map((p) => ({
           id: p.id,
           name: p.name,
@@ -212,6 +214,14 @@ export default function Home() {
           cutItems: p.cutItems,
         }));
         setSavedProjects(initialPresets);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(
+            'calepinage_saved_projects',
+            JSON.stringify(initialPresets)
+          );
+        }
+      } else {
+        setSavedProjects(projects || []);
       }
     });
   }, []);
