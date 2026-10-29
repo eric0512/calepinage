@@ -171,7 +171,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
           </div>
 
           {/* Largeur */}
-          <div className="sm:col-span-3">
+          <div className="sm:col-span-2">
             <label className="block text-[11px] text-slate-400 mb-1">
               Largeur (mm)
             </label>
@@ -187,24 +187,24 @@ export const StockManager: React.FC<StockManagerProps> = ({
           </div>
 
           {/* Quantité & Bouton Ajout */}
-          <div className="sm:col-span-2 flex items-end gap-1.5">
+          <div className="sm:col-span-3 flex items-end gap-2">
             <div className="flex-1">
               <label className="block text-[11px] text-slate-400 mb-1">
-                Qté
+                Quantité
               </label>
               <input
                 type="number"
                 required
                 min="1"
-                max="100"
+                max="999"
                 value={quantity || ''}
                 onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                className="w-full bg-slate-950 text-slate-100 font-mono font-semibold px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
               />
             </div>
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center justify-center shrink-0 shadow-sm"
+              className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-3.5 py-2 rounded-lg transition-colors flex items-center justify-center shrink-0 shadow-sm"
               title="Ajouter au stock"
             >
               <Plus className="w-4 h-4" />
@@ -287,7 +287,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                       <input
                         type="number"
                         min="1"
-                        max="99"
+                        max="999"
                         value={p.quantity}
                         onChange={(e) =>
                           handleUpdate(
@@ -296,7 +296,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                             parseInt(e.target.value) || 1
                           )
                         }
-                        className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 font-mono text-center font-bold text-blue-400 w-14"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 font-mono text-center font-bold text-blue-400 text-xs w-20 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </td>
                     <td className="py-2 px-3 text-right">
