@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { StockPanel, OffcutArea } from '@/types/cutting';
+import { StockPanel, WorkshopItem } from '@/types/cutting';
 import {
   Layers,
   Plus,
@@ -12,21 +12,18 @@ import {
   X,
   Warehouse,
   Check,
+  Undo2,
 } from 'lucide-react';
-
-interface ManualWorkshopStockItem {
-  id: string;
-  material: string;
-  length: number;
-  width: number;
-  quantity: number;
-}
 
 interface StockManagerProps {
   panels: StockPanel[];
   onChange: (panels: StockPanel[]) => void;
   availableMaterials: string[];
-  workshopOffcuts?: (OffcutArea & { material: string; panelIndex: number })[];
+  workshopStock: WorkshopItem[];
+  onAddFromWorkshop: (item: WorkshopItem) => void;
+  onReintegrateToWorkshop: (panel: StockPanel) => void;
+  onDeleteWorkshopItem: (id: string) => void;
+  onAddManualWorkshopItem: (item: WorkshopItem) => void;
 }
 
 const COMMON_PANEL_SIZES = [
@@ -40,7 +37,11 @@ export const StockManager: React.FC<StockManagerProps> = ({
   panels,
   onChange,
   availableMaterials,
-  workshopOffcuts = [],
+  workshopStock,
+  onAddFromWorkshop,
+  onReintegrateToWorkshop,
+  onDeleteWorkshopItem,
+  onAddManualWorkshopItem,
 }) => {
   // État de montage pour createPortal
   const [mounted, setMounted] = useState(false);
@@ -53,10 +54,10 @@ export const StockManager: React.FC<StockManagerProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showWorkshopModal, setShowWorkshopModal] = useState(false);
 
-  // Notification toast après ajout au projet
+  // Notification toast après action
   const [workshopToast, setWorkshopToast] = useState<string | null>(null);
 
-  // Champs du formulaire modal : Matière, Longueur, Largeur, Qté
+  // Champs du formulaire modal d'ajout d'un panneau standard : Matière, Longueur, Largeur, Qté
   const [material, setMaterial] = useState('MDF 19mm');
   const [length, setLength] = useState<number>(2800);
   const [width, setWidth] = useState<number>(2070);
@@ -69,123 +70,20 @@ export const StockManager: React.FC<StockManagerProps> = ({
   const [manualWid, setManualWid] = useState<number>(600);
   const [manualQty, setManualQty] = useState<number>(1);
 
-  // Stock atelier manuel stocké en localStorage
-  const [manualWorkshopStock, setManualWorkshopStock] = useState<
-    ManualWorkshopStockItem[]
-  >(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('calepinage_workshop_stock');
-        return stored ? JSON.parse(stored) : [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
+  // Totaux du Stock Atelier
+  const totalWorkshopPanels = workshopStock.reduce(
+    (acc, it) => acc + it.quantity,
+    0
+  );
+  const totalWorkshopArea = workshopStock
+    .reduce(
+      (acc, it) => acc + (it.length * it.width * it.quantity) / 1_000_000,
+      0
+    )
+    .toFixed(2);
 
-  // Sauvegarder le stock atelier manuel
-  useEffect(() => {
-    if (mounted) {
-      try {
-        localStorage.setItem(
-          'calepinage_workshop_stock',
-          JSON.stringify(manualWorkshopStock)
-        );
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }, [manualWorkshopStock, mounted]);
-
-  // Filtrer les chutes de la découpe >= 500x500 mm
-  const qualifyingOffcuts = useMemo(() => {
-    return workshopOffcuts.filter((o) => {
-      const dim1 = Math.max(o.length, o.width);
-      const dim2 = Math.min(o.length, o.width);
-      return dim1 >= 500 && dim2 >= 500;
-    });
-  }, [workshopOffcuts]);
-
-  // Regrouper les chutes par matière et dimensions
-  const groupedOffcuts = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        key: string;
-        material: string;
-        length: number;
-        width: number;
-        quantity: number;
-        areaM2: number;
-        sampleOffcut: OffcutArea & { material: string; panelIndex: number };
-      }
-    >();
-
-    qualifyingOffcuts.forEach((o) => {
-      const len = Math.round(Math.max(o.length, o.width));
-      const wid = Math.round(Math.min(o.length, o.width));
-      const key = `${o.material.toLowerCase().trim()}_${len}x${wid}`;
-      const existing = map.get(key);
-      if (existing) {
-        existing.quantity += 1;
-        existing.areaM2 += o.areaM2;
-      } else {
-        map.set(key, {
-          key,
-          material: o.material,
-          length: len,
-          width: wid,
-          quantity: 1,
-          areaM2: o.areaM2,
-          sampleOffcut: o,
-        });
-      }
-    });
-
-    return Array.from(map.values());
-  }, [qualifyingOffcuts]);
-
-  // Ajouter un panneau du stock atelier au projet
-  const handleAddWorkshopItemToProject = (
-    mat: string,
-    len: number,
-    wid: number,
-    manualId?: string
-  ) => {
-    const newPanel: StockPanel = {
-      id: `stock-workshop-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      material: mat.trim(),
-      length: Math.max(len, wid),
-      width: Math.min(len, wid),
-      quantity: 1,
-    };
-    onChange([...panels, newPanel]);
-
-    // Si c'est un item manuel, décrémenter sa quantité ou le supprimer
-    if (manualId) {
-      setManualWorkshopStock((prev) =>
-        prev
-          .map((item) =>
-            item.id === manualId
-              ? { ...item, quantity: item.quantity - 1 }
-              : item
-          )
-          .filter((item) => item.quantity > 0)
-      );
-    }
-
-    // Afficher confirmation
-    setWorkshopToast(
-      `Panneau ${len} × ${wid} mm (${mat}) ajouté au stock du projet !`
-    );
-    setTimeout(() => {
-      setWorkshopToast(null);
-    }, 3000);
-  };
-
-  // Ajouter manuellement une chute au stock atelier
-  const handleAddManualWorkshopItem = (e: React.FormEvent) => {
+  // Ajouter manuellement une chute physique au stock atelier
+  const handleAddManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (
       !manualMat.trim() ||
@@ -194,43 +92,25 @@ export const StockManager: React.FC<StockManagerProps> = ({
       manualQty <= 0
     ) {
       alert(
-        'La chute doit avoir des dimensions supérieures ou égales à 500 × 500 mm.'
+        'Une chute en stock atelier doit mesurer au minimum 500 × 500 mm.'
       );
       return;
     }
 
-    const newItem: ManualWorkshopStockItem = {
+    onAddManualWorkshopItem({
       id: `manual-workshop-${Date.now()}`,
       material: manualMat.trim(),
       length: Math.max(manualLen, manualWid),
       width: Math.min(manualLen, manualWid),
       quantity: manualQty,
-    };
+    });
 
-    setManualWorkshopStock((prev) => [...prev, newItem]);
     setShowManualWorkshopForm(false);
-    setWorkshopToast(`Chute ajoutée au stock atelier !`);
+    setWorkshopToast(`Chute enregistrée dans le Stock Atelier !`);
     setTimeout(() => {
       setWorkshopToast(null);
     }, 2500);
   };
-
-  // Supprimer un élément du stock atelier manuel
-  const handleDeleteManualWorkshopItem = (id: string) => {
-    setManualWorkshopStock((prev) => prev.filter((it) => it.id !== id));
-  };
-
-  const totalWorkshopPanels =
-    groupedOffcuts.reduce((acc, it) => acc + it.quantity, 0) +
-    manualWorkshopStock.reduce((acc, it) => acc + it.quantity, 0);
-
-  const totalWorkshopArea = (
-    groupedOffcuts.reduce((acc, it) => acc + it.areaM2, 0) +
-    manualWorkshopStock.reduce(
-      (acc, it) => acc + (it.length * it.width * it.quantity) / 1_000_000,
-      0
-    )
-  ).toFixed(2);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,6 +144,15 @@ export const StockManager: React.FC<StockManagerProps> = ({
   };
 
   const handleDelete = (id: string) => {
+    const target = panels.find((p) => p.id === id);
+    if (target && target.workshopSourceId) {
+      // Le panneau provient de l'atelier : le réintégrer au stock atelier
+      onReintegrateToWorkshop(target);
+      setWorkshopToast(
+        `Panneau ${target.length} × ${target.width} mm réintégré au Stock Atelier !`
+      );
+      setTimeout(() => setWorkshopToast(null), 3000);
+    }
     onChange(panels.filter((p) => p.id !== id));
   };
 
@@ -271,6 +160,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
     const copy: StockPanel = {
       ...panel,
       id: `stock-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      workshopSourceId: undefined, // Une copie manuelle est un panneau indépendant
     };
     onChange([...panels, copy]);
   };
@@ -362,14 +252,24 @@ export const StockManager: React.FC<StockManagerProps> = ({
                   >
                     {/* Matière */}
                     <td className="py-2 px-3">
-                      <input
-                        type="text"
-                        value={p.material}
-                        onChange={(e) =>
-                          handleUpdate(p.id, 'material', e.target.value)
-                        }
-                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full max-w-[170px]"
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={p.material}
+                          onChange={(e) =>
+                            handleUpdate(p.id, 'material', e.target.value)
+                          }
+                          className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full max-w-[170px]"
+                        />
+                        {p.workshopSourceId && (
+                          <span
+                            className="text-[9px] font-mono px-1 py-0.2 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 shrink-0"
+                            title="Panneau issu du Stock Atelier"
+                          >
+                            Atelier
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Dimensions (champs réduits) */}
@@ -429,6 +329,16 @@ export const StockManager: React.FC<StockManagerProps> = ({
                     {/* Actions */}
                     <td className="py-2 px-2 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {p.workshopSourceId && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(p.id)}
+                            className="p-1 rounded hover:bg-teal-500/20 text-teal-400 hover:text-teal-300 transition-colors"
+                            title="Réintégrer cette chute au Stock Atelier"
+                          >
+                            <Undo2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleDuplicate(p)}
@@ -664,7 +574,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
               {/* Formulaire repliable : Ajouter manuellement une chute */}
               {showManualWorkshopForm && (
                 <form
-                  onSubmit={handleAddManualWorkshopItem}
+                  onSubmit={handleAddManualSubmit}
                   className="p-3 bg-slate-900/90 rounded-xl border border-teal-500/30 space-y-3 text-xs"
                 >
                   <div className="flex items-center justify-between">
@@ -766,16 +676,16 @@ export const StockManager: React.FC<StockManagerProps> = ({
 
               {/* Table du stock atelier */}
               <div className="overflow-y-auto flex-1 border border-slate-700/80 rounded-xl min-h-[160px]">
-                {totalWorkshopPanels === 0 ? (
+                {workshopStock.length === 0 ? (
                   <div className="text-center py-10 px-4 text-slate-400 text-xs">
                     <Box className="w-10 h-10 mx-auto text-slate-600 mb-2" />
                     <p className="text-slate-200 font-semibold text-sm">
                       Aucune chute supérieure ou égale à 500 × 500 mm
                     </p>
                     <p className="text-slate-400 mt-1 max-w-md mx-auto text-xs">
-                      Les chutes ≥ 500 × 500 mm issues de vos calepinages
-                      apparaîtront automatiquement ici. Vous pouvez également en
-                      ajouter une manuellement via le bouton ci-dessus.
+                      Les chutes ≥ 500 × 500 mm issues de vos découpes apparaîtront
+                      automatiquement ici. Vous pouvez également enregistrer vos
+                      chutes d&apos;atelier existantes via le bouton ci-dessus.
                     </p>
                   </div>
                 ) : (
@@ -792,53 +702,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/60 text-slate-200">
-                      {/* Chutes issues des calculs de coupe */}
-                      {groupedOffcuts.map((item) => (
-                        <tr
-                          key={item.key}
-                          className="hover:bg-slate-750/50 transition-colors"
-                        >
-                          <td className="py-2.5 px-3 font-semibold text-white">
-                            <div className="flex items-center gap-1.5">
-                              <span>{item.material}</span>
-                              <span className="text-[10px] font-mono px-1.5 py-0.2 bg-blue-500/10 text-blue-300 border border-blue-500/20 rounded">
-                                Calepinage
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-mono font-bold text-teal-300">
-                            {item.length} × {item.width} mm
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className="inline-block bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-0.5 font-mono font-bold text-teal-400 text-xs">
-                              {item.quantity}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-mono text-slate-400">
-                            {item.areaM2.toFixed(2)} m²
-                          </td>
-                          <td className="py-2.5 px-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleAddWorkshopItemToProject(
-                                  item.material,
-                                  item.length,
-                                  item.width
-                                )
-                              }
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-teal-600 hover:bg-teal-500 text-white transition-colors shadow-sm"
-                              title="Ajouter cette chute dans votre stock de panneaux du projet"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Ajouter au projet</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-
-                      {/* Chutes manuelles stockées */}
-                      {manualWorkshopStock.map((item) => {
+                      {workshopStock.map((item) => {
                         const area = (
                           (item.length * item.width * item.quantity) /
                           1_000_000
@@ -850,12 +714,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                             className="hover:bg-slate-750/50 transition-colors"
                           >
                             <td className="py-2.5 px-3 font-semibold text-white">
-                              <div className="flex items-center gap-1.5">
-                                <span>{item.material}</span>
-                                <span className="text-[10px] font-mono px-1.5 py-0.2 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded">
-                                  Atelier
-                                </span>
-                              </div>
+                              {item.material}
                             </td>
                             <td className="py-2.5 px-3 text-center font-mono font-bold text-teal-300">
                               {item.length} × {item.width} mm
@@ -872,25 +731,25 @@ export const StockManager: React.FC<StockManagerProps> = ({
                               <div className="inline-flex items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    handleAddWorkshopItemToProject(
-                                      item.material,
-                                      item.length,
-                                      item.width,
-                                      item.id
-                                    )
-                                  }
+                                  onClick={() => {
+                                    onAddFromWorkshop(item);
+                                    setWorkshopToast(
+                                      `Panneau ${item.length} × ${item.width} mm (${item.material}) ajouté au projet (retiré du stock atelier) !`
+                                    );
+                                    setTimeout(
+                                      () => setWorkshopToast(null),
+                                      3000
+                                    );
+                                  }}
                                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-teal-600 hover:bg-teal-500 text-white transition-colors shadow-sm"
-                                  title="Utiliser cette chute dans le projet actuel"
+                                  title="Ajouter ce panneau au projet (le retire du stock atelier)"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
                                   <span>Ajouter au projet</span>
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    handleDeleteManualWorkshopItem(item.id)
-                                  }
+                                  onClick={() => onDeleteWorkshopItem(item.id)}
                                   className="p-1 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-700/60 transition-colors"
                                   title="Supprimer du stock atelier"
                                 >

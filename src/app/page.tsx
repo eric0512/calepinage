@@ -8,6 +8,7 @@ import {
   StockPanel,
   OffcutArea,
   SavedProject,
+  WorkshopItem,
 } from '@/types/cutting';
 import { DEFAULT_SETTINGS, PRESETS, ProjectPreset } from '@/lib/presets';
 import { optimizeCutting } from '@/lib/optimizer/guillotine';
@@ -52,6 +53,143 @@ export default function Home() {
 
   // Onglet mobile
   const [mobileTab, setMobileTab] = useState<'input' | 'results'>('input');
+
+  // Stock Atelier (inventaire persistant des chutes >= 500x500mm)
+  const [workshopStock, setWorkshopStock] = useState<WorkshopItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('calepinage_workshop_stock');
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+
+  // Sauvegarder le stock atelier dans le localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          'calepinage_workshop_stock',
+          JSON.stringify(workshopStock)
+        );
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [workshopStock]);
+
+  // Réintégrer un panneau au Stock Atelier (si non utilisé ou supprimé du projet)
+  const reintegrateToWorkshop = useCallback(
+    (panel: {
+      material: string;
+      length: number;
+      width: number;
+      quantity?: number;
+      workshopSourceId?: string;
+    }) => {
+      const qty = panel.quantity || 1;
+      const len = Math.round(Math.max(panel.length, panel.width));
+      const wid = Math.round(Math.min(panel.length, panel.width));
+      const mat = panel.material.trim();
+
+      setWorkshopStock((prev) => {
+        const existingIdx = prev.findIndex(
+          (it) =>
+            it.material.toLowerCase().trim() === mat.toLowerCase() &&
+            Math.round(Math.max(it.length, it.width)) === len &&
+            Math.round(Math.min(it.length, it.width)) === wid
+        );
+
+        if (existingIdx >= 0) {
+          const next = [...prev];
+          next[existingIdx] = {
+            ...next[existingIdx],
+            quantity: next[existingIdx].quantity + qty,
+          };
+          return next;
+        } else {
+          return [
+            ...prev,
+            {
+              id:
+                panel.workshopSourceId ||
+                `workshop-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              material: mat,
+              length: len,
+              width: wid,
+              quantity: qty,
+            },
+          ];
+        }
+      });
+    },
+    []
+  );
+
+  // Intégrer un panneau du stock atelier au projet en cours (le supprime du stock atelier)
+  const handleAddFromWorkshop = useCallback(
+    (item: WorkshopItem) => {
+      // 1. Décrémenter la quantité ou supprimer du stock atelier
+      setWorkshopStock((prev) =>
+        prev
+          .map((w) =>
+            w.id === item.id ? { ...w, quantity: w.quantity - 1 } : w
+          )
+          .filter((w) => w.quantity > 0)
+      );
+
+      // 2. Ajouter au stock du projet
+      const newPanel: StockPanel = {
+        id: `stock-workshop-${item.id}-${Date.now()}`,
+        material: item.material,
+        length: item.length,
+        width: item.width,
+        quantity: 1,
+        workshopSourceId: item.id,
+      };
+
+      setStockPanels((prev) => [...prev, newPanel]);
+    },
+    []
+  );
+
+  // Supprimer un élément du stock atelier
+  const handleDeleteWorkshopItem = useCallback((id: string) => {
+    setWorkshopStock((prev) => prev.filter((it) => it.id !== id));
+  }, []);
+
+  // Ajouter manuellement une chute au stock atelier
+  const handleAddManualWorkshopItem = useCallback(
+    (newItem: WorkshopItem) => {
+      setWorkshopStock((prev) => {
+        const len = Math.round(Math.max(newItem.length, newItem.width));
+        const wid = Math.round(Math.min(newItem.length, newItem.width));
+        const mat = newItem.material.trim();
+
+        const existingIdx = prev.findIndex(
+          (it) =>
+            it.material.toLowerCase().trim() === mat.toLowerCase() &&
+            Math.round(Math.max(it.length, it.width)) === len &&
+            Math.round(Math.min(it.length, it.width)) === wid
+        );
+
+        if (existingIdx >= 0) {
+          const next = [...prev];
+          next[existingIdx] = {
+            ...next[existingIdx],
+            quantity: next[existingIdx].quantity + newItem.quantity,
+          };
+          return next;
+        } else {
+          return [...prev, newItem];
+        }
+      });
+    },
+    []
+  );
 
   // Ref pour éviter l'auto-save au tout premier rendu
   const isInitialMount = useRef(true);
@@ -197,7 +335,42 @@ export default function Home() {
     const res = optimizeCutting(stockPanels, cutItems, settings);
     setOptimizationResult(res);
     setMobileTab('results');
-  }, [stockPanels, cutItems, settings]);
+
+    // Vérifier si des panneaux issus du stock atelier n'ont PAS été utilisés par l'optimisation
+    const usedPanelIds = new Set(res.panels.map((p) => p.panelId));
+    const unusedWorkshopPanels = stockPanels.filter(
+      (p) => p.workshopSourceId && !usedPanelIds.has(p.id)
+    );
+
+    if (unusedWorkshopPanels.length > 0) {
+      // Les réintégrer au stock atelier
+      unusedWorkshopPanels.forEach((p) => {
+        reintegrateToWorkshop(p);
+      });
+
+      // Les retirer du stock de panneaux du projet
+      const unusedIds = new Set(unusedWorkshopPanels.map((p) => p.id));
+      setStockPanels((prev) => prev.filter((p) => !unusedIds.has(p.id)));
+    }
+
+    // Enregistrer les nouvelles chutes >= 500x500 mm créées par la coupe dans le stock atelier
+    const newQualifyingOffcuts = (res.reusableOffcuts || []).filter((o) => {
+      const d1 = Math.max(o.length, o.width);
+      const d2 = Math.min(o.length, o.width);
+      return d1 >= 500 && d2 >= 500;
+    });
+
+    if (newQualifyingOffcuts.length > 0) {
+      newQualifyingOffcuts.forEach((o) => {
+        reintegrateToWorkshop({
+          material: o.material,
+          length: o.length,
+          width: o.width,
+          quantity: 1,
+        });
+      });
+    }
+  }, [stockPanels, cutItems, settings, reintegrateToWorkshop]);
 
   // Matières disponibles
   const availableMaterials = useMemo(() => {
@@ -229,6 +402,11 @@ export default function Home() {
         'Êtes-vous sûr de vouloir vider les panneaux et les pièces de ce projet ?'
       )
     ) {
+      // Réintégrer les panneaux empruntés au stock atelier
+      stockPanels
+        .filter((p) => p.workshopSourceId)
+        .forEach((p) => reintegrateToWorkshop(p));
+
       setStockPanels([]);
       setCutItems([]);
       setOptimizationResult(null);
@@ -244,14 +422,42 @@ export default function Home() {
   const handleAddOffcutToStock = (
     offcut: OffcutArea & { material: string }
   ) => {
+    const len = Math.round(Math.max(offcut.length, offcut.width));
+    const wid = Math.round(Math.min(offcut.length, offcut.width));
+    const isQualifying = len >= 500 && wid >= 500;
+
     const newPanel: StockPanel = {
       id: `stock-offcut-${Date.now()}`,
       material: offcut.material,
-      length: Math.round(Math.max(offcut.length, offcut.width)),
-      width: Math.round(Math.min(offcut.length, offcut.width)),
+      length: len,
+      width: wid,
       quantity: 1,
+      workshopSourceId: isQualifying ? `offcut-${Date.now()}` : undefined,
     };
     setStockPanels((prev) => [...prev, newPanel]);
+
+    // Si cette chute était dans le stock atelier, la décrémenter
+    if (isQualifying) {
+      setWorkshopStock((prev) => {
+        const idx = prev.findIndex(
+          (it) =>
+            it.material.toLowerCase().trim() ===
+              offcut.material.toLowerCase().trim() &&
+            Math.round(Math.max(it.length, it.width)) === len &&
+            Math.round(Math.min(it.length, it.width)) === wid
+        );
+        if (idx >= 0) {
+          const next = [...prev];
+          if (next[idx].quantity > 1) {
+            next[idx] = { ...next[idx], quantity: next[idx].quantity - 1 };
+          } else {
+            next.splice(idx, 1);
+          }
+          return next;
+        }
+        return prev;
+      });
+    }
   };
 
   // SI LA VUE ACTIVE EST LE HUB (ACCUEIL)
@@ -352,7 +558,11 @@ export default function Home() {
               panels={stockPanels}
               onChange={setStockPanels}
               availableMaterials={availableMaterials}
-              workshopOffcuts={optimizationResult?.reusableOffcuts || []}
+              workshopStock={workshopStock}
+              onAddFromWorkshop={handleAddFromWorkshop}
+              onReintegrateToWorkshop={reintegrateToWorkshop}
+              onDeleteWorkshopItem={handleDeleteWorkshopItem}
+              onAddManualWorkshopItem={handleAddManualWorkshopItem}
             />
 
             {/* Saisie de la liste de débit */}

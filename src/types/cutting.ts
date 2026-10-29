@@ -22,6 +22,15 @@ export interface StockPanel {
   length: number; // en mm
   width: number; // en mm
   quantity: number; // Quantité disponible
+  workshopSourceId?: string; // Si le panneau provient du stock atelier
+}
+
+export interface WorkshopItem {
+  id: string;
+  material: string;
+  length: number;
+  width: number;
+  quantity: number;
 }
 
 export interface CutItem {
