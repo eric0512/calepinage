@@ -228,7 +228,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                 <th className="py-2.5 px-3">Matière</th>
                 <th className="py-2.5 px-3">Dimensions (L × l mm)</th>
                 <th className="py-2.5 px-3 text-center">Surface Unitaire</th>
-                <th className="py-2.5 px-3 text-center">Quantité</th>
+                <th className="py-2.5 px-3 text-center w-28">Quantité</th>
                 <th className="py-2.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -296,7 +296,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                             parseInt(e.target.value) || 1
                           )
                         }
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 font-mono text-center font-bold text-blue-400 text-xs w-20 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1 font-mono text-center font-bold text-blue-400 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-inner"
                       />
                     </td>
                     <td className="py-2 px-3 text-right">
