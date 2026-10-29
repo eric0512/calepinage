@@ -7,9 +7,15 @@
   --foreground: #f8fafc;
 }
 
+html {
+  background-color: #020617;
+}
+
 body {
   color: var(--foreground);
   background: var(--background);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 @media print {
