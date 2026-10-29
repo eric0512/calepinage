@@ -235,10 +235,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           Ajouter une nouvelle pièce à couper
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
-          {/* Nom / Repère */}
-          <div className="sm:col-span-3">
-            <label className="block text-[11px] text-slate-400 mb-1">
+        {/* LIGNE 1 : Désignation et Matière sur la même ligne */}
+        <div className="flex gap-2 mb-2.5">
+          <div className="flex-1 min-w-0">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
               Désignation / Repère
             </label>
             <input
@@ -246,13 +246,12 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
               placeholder="Ex: Côté gauche, Étagère..."
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-950 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full bg-slate-950 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
             />
           </div>
 
-          {/* Matière */}
-          <div className="sm:col-span-3">
-            <label className="block text-[11px] text-slate-400 mb-1">
+          <div className="flex-1 min-w-0">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
               Matière
             </label>
             <input
@@ -261,7 +260,7 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
               list="cut-materials-list"
               value={material}
               onChange={(e) => setMaterial(e.target.value)}
-              className="w-full bg-slate-950 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full bg-slate-950 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
             />
             <datalist id="cut-materials-list">
               {availableMaterials.map((m) => (
@@ -269,10 +268,12 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
               ))}
             </datalist>
           </div>
+        </div>
 
-          {/* Longueur */}
-          <div className="sm:col-span-2">
-            <label className="block text-[11px] text-slate-400 mb-1">
+        {/* LIGNE 2 : Longueur, Largeur, Quantité, Fil et Bouton Ajout TOUS sur la même ligne */}
+        <div className="flex gap-1.5 sm:gap-2 items-end">
+          <div className="flex-1 min-w-0">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
               Longueur (mm)
             </label>
             <input
@@ -280,15 +281,15 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
               required
               min="20"
               max="6000"
+              placeholder="720"
               value={length || ''}
               onChange={(e) => setLength(parseInt(e.target.value) || 0)}
-              className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs text-center"
             />
           </div>
 
-          {/* Largeur */}
-          <div className="sm:col-span-2">
-            <label className="block text-[11px] text-slate-400 mb-1">
+          <div className="flex-1 min-w-0">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
               Largeur (mm)
             </label>
             <input
@@ -296,52 +297,53 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
               required
               min="20"
               max="4000"
+              placeholder="560"
               value={width || ''}
               onChange={(e) => setWidth(parseInt(e.target.value) || 0)}
-              className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs text-center"
             />
           </div>
 
-          {/* Quantité & Options */}
-          <div className="sm:col-span-2 flex items-end gap-1.5">
-            <div className="w-14">
-              <label className="block text-[11px] text-slate-400 mb-1">
-                Qté
-              </label>
-              <input
-                type="number"
-                required
-                min="1"
-                max="500"
-                value={quantity || ''}
-                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                className="w-full bg-slate-950 text-slate-100 font-mono px-1 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setCanRotate(!canRotate)}
-              className={`p-2 rounded-lg border transition-colors shrink-0 ${
-                canRotate
-                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-400'
-                  : 'bg-slate-800 border-slate-700 text-slate-500'
-              }`}
-              title={
-                canRotate
-                  ? 'Rotation autorisée (Pas de contrainte de fil)'
-                  : 'Rotation interdite (Sens du fil du bois obligatoire)'
-              }
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="submit"
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-3 py-2 rounded-lg transition-colors flex items-center justify-center shrink-0 shadow-sm"
-              title="Ajouter la pièce"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+          <div className="w-14 sm:w-16 shrink-0">
+            <label className="block text-[11px] font-medium text-slate-300 mb-1 text-center">
+              Qté
+            </label>
+            <input
+              type="number"
+              required
+              min="1"
+              max="500"
+              placeholder="2"
+              value={quantity || ''}
+              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              className="w-full bg-slate-950 text-emerald-400 font-mono font-bold px-1 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs text-center"
+            />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setCanRotate(!canRotate)}
+            className={`h-[31px] w-[31px] sm:w-9 rounded-lg border transition-colors shrink-0 flex items-center justify-center mb-px ${
+              canRotate
+                ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-400'
+                : 'bg-slate-800 border-slate-700 text-slate-500'
+            }`}
+            title={
+              canRotate
+                ? 'Rotation autorisée (Pas de contrainte de fil)'
+                : 'Rotation interdite (Sens du fil du bois obligatoire)'
+            }
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="submit"
+            className="h-[31px] w-[34px] sm:w-10 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center shrink-0 shadow-sm mb-px"
+            title="Ajouter la pièce"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
       </form>
 
