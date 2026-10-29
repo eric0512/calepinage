@@ -205,7 +205,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="w-3.5 h-3.5 rounded bg-emerald-950 border border-emerald-500 border-dashed" />
             <span className="text-emerald-400 font-medium">
-              Chute réutilisable
+              Stock Atelier (≥ 500 mm)
             </span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -413,7 +413,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                       fontWeight="bold"
                       fontFamily="monospace"
                     >
-                      {offcut.reusable ? 'CHUTE RÉUTILISABLE' : 'PERTE'}
+                      {offcut.reusable ? 'STOCK ATELIER' : 'PERTE'}
                       <tspan
                         x={offcut.x + offcut.length / 2}
                         dy="28"

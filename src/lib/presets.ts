@@ -2,8 +2,8 @@ import { CutItem, CutSettings, StockPanel } from '@/types/cutting';
 
 export const DEFAULT_SETTINGS: CutSettings = {
   kerf: 3.0, // 3 mm par défaut
-  minOffcutWidth: 200, // 200 mm
-  minOffcutLength: 200, // 200 mm
+  minOffcutWidth: 500, // 500 mm
+  minOffcutLength: 500, // 500 mm
 };
 
 export interface ProjectPreset {
@@ -22,8 +22,8 @@ export const PRESETS: ProjectPreset[] = [
     description: 'Ensemble de caissons bas et étagères avec fond de meuble.',
     settings: {
       kerf: 3.0,
-      minOffcutWidth: 200,
-      minOffcutLength: 200,
+      minOffcutWidth: 500,
+      minOffcutLength: 500,
     },
     stockPanels: [
       {
@@ -110,8 +110,8 @@ export const PRESETS: ProjectPreset[] = [
     description: 'Grande penderie avec montants, étagères et séparateurs.',
     settings: {
       kerf: 3.0,
-      minOffcutWidth: 150,
-      minOffcutLength: 200,
+      minOffcutWidth: 500,
+      minOffcutLength: 500,
     },
     stockPanels: [
       {

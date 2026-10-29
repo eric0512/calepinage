@@ -114,10 +114,10 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({ result }) => {
           </div>
         </div>
 
-        {/* Chutes exploitables & Coupe */}
+        {/* Stock Atelier (chutes >= 500mm) & Coupe */}
         <div className="bg-slate-800/80 backdrop-blur border border-slate-700/80 rounded-2xl p-4">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-medium">Chutes Réutilisables</span>
+            <span className="text-xs font-medium">Stock Atelier (≥ 500mm)</span>
             <CheckCircle2 className="w-4 h-4 text-teal-400" />
           </div>
           <div className="flex items-baseline gap-1.5">

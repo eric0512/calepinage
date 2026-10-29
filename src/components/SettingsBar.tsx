@@ -95,26 +95,27 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
             </div>
           </div>
 
-          {/* Seuil Chute Réutilisable */}
+          {/* Seuil Chute Atelier */}
           <div className="flex items-center gap-2 bg-slate-900/80 px-3.5 py-2 rounded-xl border border-slate-700/80">
             <Ruler className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-xs text-slate-300">Seuil chute min :</span>
+            <span className="text-xs text-slate-300">Seuil stock atelier :</span>
             <input
               type="number"
               step="50"
-              min="50"
-              max="1000"
+              min="100"
+              max="2000"
               value={settings.minOffcutLength}
-              onChange={(e) =>
+              onChange={(e) => {
+                const val = parseInt(e.target.value) || 500;
                 onChange({
                   ...settings,
-                  minOffcutLength: parseInt(e.target.value) || 100,
-                  minOffcutWidth: parseInt(e.target.value) || 100,
-                })
-              }
+                  minOffcutLength: val,
+                  minOffcutWidth: val,
+                });
+              }}
               className="w-16 text-center bg-slate-950 text-emerald-400 font-mono font-semibold text-xs px-2 py-1 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
-            <span className="text-xs font-mono text-slate-400">mm²</span>
+            <span className="text-xs font-mono text-slate-400">mm</span>
           </div>
         </div>
       </div>
