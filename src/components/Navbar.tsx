@@ -13,6 +13,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { PRESETS, ProjectPreset } from '@/lib/presets';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface NavbarProps {
   projectName?: string;
@@ -111,6 +112,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Smartphone className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden lg:inline">Installer l&apos;app</span>
             </button>
+
+            {/* Bouton Thème Clair / Sombre */}
+            <ThemeToggle />
 
             {/* Bouton Projets (Accueil) */}
             <button

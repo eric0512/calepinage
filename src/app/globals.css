@@ -7,8 +7,18 @@
   --foreground: #f8fafc;
 }
 
-html {
+html.dark {
+  --background: #020617;
+  --foreground: #f8fafc;
   background-color: #020617;
+  color-scheme: dark;
+}
+
+html.light {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  background-color: #f1f5f9;
+  color-scheme: light;
 }
 
 body {
@@ -28,6 +38,163 @@ input[type='number']::-webkit-outer-spin-button {
 input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
+}
+
+/* ==========================================================================
+   STYLE DU THÈME CLAIR (LIGHT MODE)
+   ========================================================================== */
+
+/* Arrière-plans principaux et cartes */
+html.light body {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.light .bg-slate-950 {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .bg-slate-900,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/95,
+html.light .bg-slate-900\/98 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-slate-850 {
+  background-color: #f8fafc !important;
+}
+
+html.light .bg-slate-800,
+html.light .bg-slate-800\/80,
+html.light .bg-slate-800\/90 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+}
+
+html.light .bg-slate-750,
+html.light .bg-slate-750\/50,
+html.light .bg-slate-700\/40 {
+  background-color: #f8fafc !important;
+}
+
+/* Séparateurs et Bordures */
+html.light .border-slate-800,
+html.light .border-slate-800\/80,
+html.light .border-slate-700,
+html.light .border-slate-700\/60,
+html.light .border-slate-700\/80 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .divide-slate-700\/60 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-700\/80 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
+}
+
+/* Textes */
+html.light .text-white {
+  color: #0f172a;
+}
+
+html.light .text-slate-100 {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-200 {
+  color: #334155 !important;
+}
+
+html.light .text-slate-300 {
+  color: #475569 !important;
+}
+
+html.light .text-slate-400 {
+  color: #64748b !important;
+}
+
+html.light .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+/* Exceptions textes sur boutons colorés */
+html.light .bg-blue-600,
+html.light .bg-blue-600 *,
+html.light .bg-emerald-600,
+html.light .bg-emerald-600 *,
+html.light .bg-teal-600,
+html.light .bg-teal-600 *,
+html.light .bg-red-600,
+html.light .bg-red-600 *,
+html.light .bg-indigo-600,
+html.light .bg-indigo-600 * {
+  color: #ffffff !important;
+}
+
+/* Boutons neutres */
+html.light button.bg-slate-900,
+html.light button.bg-slate-800 {
+  background-color: #f8fafc !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light button.bg-slate-900:hover,
+html.light button.bg-slate-800:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Champs de formulaires */
+html.light input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.bg-transparent),
+html.light select,
+html.light textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+html.light select:focus,
+html.light textarea:focus {
+  border-color: #2563eb !important;
+  background-color: #ffffff !important;
+}
+
+html.light thead.bg-slate-900\/90,
+html.light thead {
+  background-color: #f8fafc !important;
+}
+
+html.light .hover\:bg-slate-850:hover,
+html.light .hover\:bg-slate-800:hover,
+html.light .hover\:bg-slate-750\/50:hover {
+  background-color: #f8fafc !important;
+}
+
+/* Visualiseur SVG plans de coupe */
+html.light svg rect[fill="#1e293b"] {
+  fill: #f8fafc !important;
+}
+
+html.light svg rect[stroke="#334155"] {
+  stroke: #cbd5e1 !important;
+}
+
+html.light svg text[fill="#f1f5f9"],
+html.light svg text[fill="#94a3b8"] {
+  fill: #334155 !important;
+}
+
+html.light svg line[stroke="#94a3b8"] {
+  stroke: #64748b !important;
+}
+
+/* Modales */
+html.light .fixed.inset-0.bg-slate-950\/80,
+html.light .fixed.inset-0.bg-black\/60 {
+  background-color: rgba(15, 23, 42, 0.45) !important;
 }
 
 @media print {

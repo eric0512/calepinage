@@ -14,6 +14,7 @@ import {
   Plus,
   Smartphone,
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface ProjectHubProps {
   savedProjects: SavedProject[];
@@ -41,7 +42,11 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative">
+      {/* Bouton de bascule de Thème Clair / Sombre en haut à droite */}
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle showLabel />
+      </div>
       {/* Arrière-plan décoratif subtil */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl" />
