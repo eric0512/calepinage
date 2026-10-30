@@ -7,7 +7,6 @@ import {
   Layers,
   Plus,
   Trash2,
-  Copy,
   Box,
   X,
   Warehouse,
@@ -175,15 +174,6 @@ export const StockManager: React.FC<StockManagerProps> = ({
     onChange(panels.filter((p) => p.id !== id));
   };
 
-  const handleDuplicate = (panel: StockPanel) => {
-    const copy: StockPanel = {
-      ...panel,
-      id: `stock-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      workshopSourceId: undefined, // Une copie manuelle est un panneau indépendant
-    };
-    onChange([...panels, copy]);
-  };
-
   const applyPresetSize = (l: number, w: number) => {
     setLength(l);
     setWidth(w);
@@ -254,10 +244,10 @@ export const StockManager: React.FC<StockManagerProps> = ({
             <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
               <tr>
                 <th className="py-2.5 px-3">Matière</th>
-                <th className="py-2.5 px-2 text-center">Dimensions (L × l)</th>
+                <th className="py-2.5 px-2 text-center whitespace-nowrap">Dimensions (L × l)</th>
                 <th className="py-2.5 px-2 text-center">Surface</th>
-                <th className="py-2.5 px-2 text-center w-20">Qté</th>
-                <th className="py-2.5 px-2 text-right">Actions</th>
+                <th className="py-2.5 px-1 text-center w-12 sm:w-14">Qté</th>
+                <th className="py-2.5 px-2 text-right w-12 sm:w-14">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/60 text-slate-200">
@@ -269,15 +259,16 @@ export const StockManager: React.FC<StockManagerProps> = ({
                     key={p.id}
                     className="hover:bg-slate-750/50 transition-colors group"
                   >
-                    {/* Matière (nom réel de la matière sans étiquette parasite) */}
+                    {/* Matière (nom complet de la matière) */}
                     <td className="py-2 px-3">
                       <input
                         type="text"
                         value={p.material}
+                        title={p.material}
                         onChange={(e) =>
                           handleUpdate(p.id, 'material', e.target.value)
                         }
-                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full max-w-[190px]"
+                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full"
                       />
                     </td>
 
@@ -318,7 +309,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                     </td>
 
                     {/* Quantité */}
-                    <td className="py-2 px-2 text-center">
+                    <td className="py-2 px-1 text-center">
                       <input
                         type="number"
                         min="1"
@@ -331,7 +322,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                             parseInt(e.target.value) || 1
                           )
                         }
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-1.5 py-0.5 font-mono text-center font-bold text-blue-400 text-xs w-14 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-1 py-0.5 font-mono text-center font-bold text-blue-400 text-xs w-10 sm:w-11 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </td>
 
@@ -348,14 +339,6 @@ export const StockManager: React.FC<StockManagerProps> = ({
                             <Undo2 className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => handleDuplicate(p)}
-                          className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
-                          title="Dupliquer"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(p.id)}
