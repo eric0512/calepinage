@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 
 export const viewport: Viewport = {
   themeColor: '#020617',
@@ -23,6 +24,10 @@ export const metadata: Metadata = {
     icon: '/icon.svg',
     apple: '/icon-192.png',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'application-name': 'Calepinage',
+  },
 };
 
 export default function RootLayout({
@@ -34,6 +39,7 @@ export default function RootLayout({
     <html lang="fr" className="dark">
       <body className="antialiased bg-slate-950 text-slate-100 min-h-screen">
         {children}
+        <PwaInstallPrompt />
       </body>
     </html>
   );

@@ -10,6 +10,7 @@ import {
   Save,
   Check,
   Database,
+  Smartphone,
 } from 'lucide-react';
 import { PRESETS, ProjectPreset } from '@/lib/presets';
 
@@ -94,6 +95,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden md:inline">
                 {isCloudConnected ? 'Cloud Actif' : 'Lier Cloud'}
               </span>
+            </button>
+
+            {/* Bouton Installer l'application */}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('trigger-pwa-install'));
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors shadow-sm"
+              title="Installer l'application sur votre écran d'accueil"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden lg:inline">Installer l&apos;app</span>
             </button>
 
             {/* Bouton Projets (Accueil) */}
