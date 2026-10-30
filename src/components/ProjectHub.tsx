@@ -12,6 +12,7 @@ import {
   Calendar,
   ArrowRight,
   Plus,
+  Smartphone,
 } from 'lucide-react';
 
 interface ProjectHubProps {
@@ -56,7 +57,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
             Calepinage
           </h1>
-          <div className="flex items-center justify-center gap-2 mt-3">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
             {isCloudConnected ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -67,6 +68,19 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                 Mode Local (Supabase prêt à lier)
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('trigger-pwa-install'));
+                }
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 transition-colors shadow-sm"
+              title="Installer l'application sur votre écran d'accueil"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+              <span>Installer l&apos;application</span>
+            </button>
           </div>
         </div>
 
