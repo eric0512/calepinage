@@ -141,12 +141,14 @@ export default function Home() {
           .filter((w) => w.quantity > 0)
       );
 
-      // 2. Ajouter au stock du projet
+      // 2. Ajouter au stock du projet en conservant son nom de matière d'origine
+      const originalMaterial = item.material.trim();
       const newPanel: StockPanel = {
         id: `stock-workshop-${item.id}-${Date.now()}`,
-        material: item.material,
-        length: item.length,
-        width: item.width,
+        name: originalMaterial,
+        material: originalMaterial,
+        length: Math.round(item.length),
+        width: Math.round(item.width),
         quantity: 1,
         workshopSourceId: item.id,
       };
@@ -382,13 +384,37 @@ export default function Home() {
     }
   }, [stockPanels, cutItems, settings, reintegrateToWorkshop]);
 
-  // Matières disponibles
-  const availableMaterials = useMemo(() => {
+  // Matières présentes dans le stock de panneaux (groupées et triées par ordre alphabétique)
+  const stockMaterials = useMemo(() => {
+    const set = new Set<string>();
+    stockPanels.forEach((p) => {
+      const m = p.material?.trim();
+      if (m) set.add(m);
+    });
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+    );
+  }, [stockPanels]);
+
+  // Toutes les matières connues (stock, atelier, suggestions) triées par ordre alphabétique
+  const allAvailableMaterials = useMemo(() => {
     const set = new Set<string>();
     stockPanels.forEach((p) => p.material && set.add(p.material.trim()));
+    workshopStock.forEach((w) => w.material && set.add(w.material.trim()));
     cutItems.forEach((i) => i.material && set.add(i.material.trim()));
-    return Array.from(set).filter(Boolean);
-  }, [stockPanels, cutItems]);
+    [
+      'Chêne Massif 20mm',
+      'Contreplaqué 5mm',
+      'Contreplaqué Bouleau 15mm',
+      'MDF 19mm',
+      'Mélaminé Blanc 18mm',
+      'OSB 3 18mm',
+    ].forEach((m) => set.add(m));
+
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+    );
+  }, [stockPanels, workshopStock, cutItems]);
 
   // Charger un preset depuis la barre d'outils
   const handleLoadPreset = (preset: ProjectPreset) => {
@@ -567,7 +593,7 @@ export default function Home() {
             <StockManager
               panels={stockPanels}
               onChange={setStockPanels}
-              availableMaterials={availableMaterials}
+              availableMaterials={allAvailableMaterials}
               workshopStock={workshopStock}
               onAddFromWorkshop={handleAddFromWorkshop}
               onReintegrateToWorkshop={reintegrateToWorkshop}
@@ -575,11 +601,11 @@ export default function Home() {
               onAddManualWorkshopItem={handleAddManualWorkshopItem}
             />
 
-            {/* Saisie de la liste de débit */}
+            {/* Saisie de la liste de débit (alimentée exclusivement par les matières en stock) */}
             <CutListManager
               items={cutItems}
               onChange={setCutItems}
-              availableMaterials={availableMaterials}
+              availableMaterials={stockMaterials}
             />
 
             {/* Bouton d'action principal : Calcul de l'optimisation */}

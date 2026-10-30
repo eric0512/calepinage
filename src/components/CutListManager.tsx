@@ -37,28 +37,57 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   onChange,
   availableMaterials,
 }) => {
-  // État local d'ajout rapide
+  // Matières disponibles en stock triées par ordre alphabétique
+  const sortedMaterials = React.useMemo(() => {
+    return [...availableMaterials].sort((a, b) =>
+      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+    );
+  }, [availableMaterials]);
+
+  // État local d'ajout rapide (tous les champs vides par défaut pour un nouveau projet)
   const [name, setName] = useState('');
-  const [material, setMaterial] = useState(
-    availableMaterials[0] || 'MDF 19mm'
-  );
-  const [length, setLength] = useState<number>(720);
-  const [width, setWidth] = useState<number>(560);
-  const [quantity, setQuantity] = useState<number>(2);
+  const [material, setMaterial] = useState('');
+  const [length, setLength] = useState<number | ''>('');
+  const [width, setWidth] = useState<number | ''>('');
+  const [quantity, setQuantity] = useState<number | ''>('');
   const [canRotate, setCanRotate] = useState<boolean>(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Synchroniser la matière par défaut si `availableMaterials` change
+  // Synchroniser la matière sélectionnée avec les matières disponibles dans le stock
   React.useEffect(() => {
-    if (availableMaterials.length > 0 && !availableMaterials.includes(material)) {
-      setMaterial(availableMaterials[0]);
+    if (sortedMaterials.length > 0) {
+      if (!material || !sortedMaterials.includes(material)) {
+        setMaterial(sortedMaterials[0]);
+      }
+    } else {
+      setMaterial('');
     }
-  }, [availableMaterials, material]);
+  }, [sortedMaterials, material]);
+
+  // Réinitialiser les champs de saisie si la liste de débit devient vide (ex: nouveau projet / reset)
+  React.useEffect(() => {
+    if (items.length === 0) {
+      setName('');
+      setLength('');
+      setWidth('');
+      setQuantity('');
+    }
+  }, [items.length]);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    if (length <= 0 || width <= 0 || quantity <= 0) return;
+    const l = typeof length === 'number' ? length : parseFloat(length);
+    const w = typeof width === 'number' ? width : parseFloat(width);
+    const q = typeof quantity === 'number' ? quantity : parseInt(quantity);
+
+    if (!l || !w || !q || l <= 0 || w <= 0 || q <= 0) return;
+    if (!material.trim()) {
+      alert(
+        'Veuillez ajouter au moins un panneau en stock puis sélectionner sa matière.'
+      );
+      return;
+    }
 
     const nextColor =
       COLOR_OPTIONS[items.length % COLOR_OPTIONS.length] || COLOR_OPTIONS[0];
@@ -67,15 +96,18 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
       id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: name.trim() || `Pièce ${items.length + 1}`,
       material: material.trim(),
-      length: Math.max(length, width),
-      width: Math.min(length, width),
-      quantity,
+      length: Math.max(l, w),
+      width: Math.min(l, w),
+      quantity: q,
       canRotate,
       color: nextColor,
     };
 
     onChange([...items, newItem]);
     setName('');
+    setLength('');
+    setWidth('');
+    setQuantity('');
   };
 
   const handleUpdate = (
@@ -254,19 +286,25 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
             <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
               Matière
             </label>
-            <input
-              type="text"
+            <select
               required
-              list="cut-materials-list"
               value={material}
               onChange={(e) => setMaterial(e.target.value)}
-              className="w-full bg-slate-950 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
-            />
-            <datalist id="cut-materials-list">
-              {availableMaterials.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
+              className="w-full bg-slate-950 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-medium"
+            >
+              {sortedMaterials.length === 0 ? (
+                <option value="">-- Aucun panneau en stock --</option>
+              ) : (
+                <>
+                  {!material && <option value="">Choisir une matière...</option>}
+                  {sortedMaterials.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
           </div>
         </div>
 
@@ -389,15 +427,25 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                     </div>
                   </td>
                   <td className="py-2 px-3">
-                    <input
-                      type="text"
+                    <select
                       value={item.material}
-                      list="cut-materials-list"
                       onChange={(e) =>
                         handleUpdate(item.id, 'material', e.target.value)
                       }
-                      className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-emerald-500 rounded px-1.5 py-0.5 text-xs text-slate-300 w-full max-w-[150px]"
-                    />
+                      className="bg-slate-900 text-slate-200 border border-slate-700/80 focus:border-emerald-500 rounded px-1.5 py-0.5 text-xs w-full max-w-[160px] font-medium"
+                    >
+                      {item.material &&
+                        !sortedMaterials.includes(item.material) && (
+                          <option value={item.material}>
+                            {item.material} (hors stock)
+                          </option>
+                        )}
+                      {sortedMaterials.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="py-2 px-3 font-mono">
                     <div className="flex items-center gap-1.5">

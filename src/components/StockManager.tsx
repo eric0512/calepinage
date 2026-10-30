@@ -43,6 +43,25 @@ export const StockManager: React.FC<StockManagerProps> = ({
   onDeleteWorkshopItem,
   onAddManualWorkshopItem,
 }) => {
+  // Liste ordonnée alphabétiquement de toutes les matières disponibles et suggestions
+  const sortedAllMaterials = React.useMemo(() => {
+    const set = new Set<string>();
+    availableMaterials.forEach((m) => m && set.add(m.trim()));
+    workshopStock.forEach((w) => w.material && set.add(w.material.trim()));
+    [
+      'Chêne Massif 20mm',
+      'Contreplaqué 5mm',
+      'Contreplaqué Bouleau 15mm',
+      'MDF 19mm',
+      'Mélaminé Blanc 18mm',
+      'OSB 3 18mm',
+    ].forEach((m) => set.add(m));
+
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+    );
+  }, [availableMaterials, workshopStock]);
+
   // État de montage pour createPortal
   const [mounted, setMounted] = useState(false);
 
@@ -427,15 +446,9 @@ export const StockManager: React.FC<StockManagerProps> = ({
                       className="w-full bg-slate-950 text-slate-100 px-3 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs"
                     />
                     <datalist id="modal-stock-materials-list">
-                      {availableMaterials.map((m) => (
+                      {sortedAllMaterials.map((m) => (
                         <option key={m} value={m} />
                       ))}
-                      <option value="MDF 19mm" />
-                      <option value="Contreplaqué Bouleau 15mm" />
-                      <option value="Contreplaqué 5mm" />
-                      <option value="Mélaminé Blanc 18mm" />
-                      <option value="Chêne Massif 20mm" />
-                      <option value="OSB 3 18mm" />
                     </datalist>
                   </div>
 
@@ -598,10 +611,16 @@ export const StockManager: React.FC<StockManagerProps> = ({
                         type="text"
                         required
                         placeholder="Ex: Contreplaqué 15mm..."
+                        list="modal-workshop-materials-list"
                         value={manualMat}
                         onChange={(e) => setManualMat(e.target.value)}
                         className="w-full bg-slate-950 text-slate-100 px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500 text-xs"
                       />
+                      <datalist id="modal-workshop-materials-list">
+                        {sortedAllMaterials.map((m) => (
+                          <option key={m} value={m} />
+                        ))}
+                      </datalist>
                     </div>
                     <div className="flex-1 min-w-[65px]">
                       <label className="block text-[11px] font-medium text-slate-300 mb-1 text-center">
