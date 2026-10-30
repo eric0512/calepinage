@@ -269,26 +269,16 @@ export const StockManager: React.FC<StockManagerProps> = ({
                     key={p.id}
                     className="hover:bg-slate-750/50 transition-colors group"
                   >
-                    {/* Matière */}
+                    {/* Matière (nom réel de la matière sans étiquette parasite) */}
                     <td className="py-2 px-3">
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="text"
-                          value={p.material}
-                          onChange={(e) =>
-                            handleUpdate(p.id, 'material', e.target.value)
-                          }
-                          className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full max-w-[170px]"
-                        />
-                        {p.workshopSourceId && (
-                          <span
-                            className="text-[9px] font-mono px-1 py-0.2 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30 shrink-0"
-                            title="Panneau issu du Stock Atelier"
-                          >
-                            Atelier
-                          </span>
-                        )}
-                      </div>
+                      <input
+                        type="text"
+                        value={p.material}
+                        onChange={(e) =>
+                          handleUpdate(p.id, 'material', e.target.value)
+                        }
+                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full max-w-[190px]"
+                      />
                     </td>
 
                     {/* Dimensions (champs réduits) */}

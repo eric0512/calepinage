@@ -591,6 +591,7 @@ export default function Home() {
           >
             {/* Gestion du stock de panneaux */}
             <StockManager
+              key={`stock-${currentProjectId}`}
               panels={stockPanels}
               onChange={setStockPanels}
               availableMaterials={allAvailableMaterials}
@@ -603,6 +604,7 @@ export default function Home() {
 
             {/* Saisie de la liste de débit (alimentée exclusivement par les matières en stock) */}
             <CutListManager
+              key={`cut-${currentProjectId}`}
               items={cutItems}
               onChange={setCutItems}
               availableMaterials={stockMaterials}

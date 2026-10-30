@@ -317,11 +317,13 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
             <input
               type="number"
               required
-              min="20"
+              min="1"
               max="6000"
-              placeholder="720"
-              value={length || ''}
-              onChange={(e) => setLength(parseInt(e.target.value) || 0)}
+              placeholder=""
+              value={length}
+              onChange={(e) =>
+                setLength(e.target.value === '' ? '' : parseInt(e.target.value) || '')
+              }
               className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs text-center"
             />
           </div>
@@ -333,11 +335,13 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
             <input
               type="number"
               required
-              min="20"
+              min="1"
               max="4000"
-              placeholder="560"
-              value={width || ''}
-              onChange={(e) => setWidth(parseInt(e.target.value) || 0)}
+              placeholder=""
+              value={width}
+              onChange={(e) =>
+                setWidth(e.target.value === '' ? '' : parseInt(e.target.value) || '')
+              }
               className="w-full bg-slate-950 text-slate-100 font-mono px-2 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs text-center"
             />
           </div>
@@ -351,9 +355,13 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
               required
               min="1"
               max="500"
-              placeholder="2"
-              value={quantity || ''}
-              onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+              placeholder=""
+              value={quantity}
+              onChange={(e) =>
+                setQuantity(
+                  e.target.value === '' ? '' : parseInt(e.target.value) || ''
+                )
+              }
               className="w-full bg-slate-950 text-emerald-400 font-mono font-bold px-1 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs text-center"
             />
           </div>
