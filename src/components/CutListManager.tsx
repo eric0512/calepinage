@@ -11,7 +11,9 @@ import {
   Upload,
   Download,
   Tag,
+  Sparkles,
 } from 'lucide-react';
+import { CabinetAssistantModal } from '@/components/CabinetAssistantModal';
 
 interface CutListManagerProps {
   items: CutItem[];
@@ -51,6 +53,7 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   const [width, setWidth] = useState<number | ''>('');
   const [quantity, setQuantity] = useState<number | ''>('');
   const [canRotate, setCanRotate] = useState<boolean>(true);
+  const [showCabinetModal, setShowCabinetModal] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -227,8 +230,20 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           </div>
         </div>
 
-        {/* Boutons CSV */}
-        <div className="flex items-center gap-2">
+        {/* Actions : Assistant Caisson IA & Boutons CSV */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          {/* Bouton Assistant Caisson IA */}
+          <button
+            type="button"
+            onClick={() => setShowCabinetModal(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-xl transition-all shadow-sm active:scale-95"
+            title="Assistant Caisson IA : calculer automatiquement les cotes selon les dimensions extérieures et l'assemblage"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Assistant Caisson IA</span>
+          </button>
+
+          {/* Boutons CSV */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -548,6 +563,14 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           </table>
         </div>
       )}
+
+      {/* Modal Assistant Caisson & Mobilier IA */}
+      <CabinetAssistantModal
+        isOpen={showCabinetModal}
+        onClose={() => setShowCabinetModal(false)}
+        onAddPieces={(newPieces) => onChange([...items, ...newPieces])}
+        availableMaterials={sortedMaterials}
+      />
     </div>
   );
 };
