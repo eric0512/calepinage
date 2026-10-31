@@ -259,10 +259,19 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
     <div className="bg-slate-900 border border-slate-700/80 rounded-xl p-4 shadow-inner">
       {/* En-tête obligatoire du panneau : dimensions d'origine, matière, efficacité */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800 text-xs">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="font-bold text-amber-400 text-sm">
             Panneau N° {panel.panelIndex}
           </span>
+          {panel.workshopSourceId ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
+              <span>🏭 Chute Stock Atelier</span>
+            </span>
+          ) : (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-medium flex items-center gap-1">
+              <span>📦 Stock Saisi</span>
+            </span>
+          )}
           <span className="text-slate-400">•</span>
           <span className="font-semibold text-white px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
             {panel.material}

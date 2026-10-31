@@ -13,7 +13,7 @@ import {
   CheckCircle2,
   ArrowRight,
 } from 'lucide-react';
-import { CutItem } from '@/types/cutting';
+import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
   CabinetConfig,
   BackType,
@@ -27,6 +27,8 @@ interface CabinetAssistantModalProps {
   onClose: () => void;
   onAddPieces: (newItems: CutItem[]) => void;
   availableMaterials: string[];
+  stockPanels?: StockPanel[];
+  workshopStock?: WorkshopItem[];
 }
 
 const DEFAULT_CONFIG: CabinetConfig = {
@@ -74,13 +76,43 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   onClose,
   onAddPieces,
   availableMaterials,
+  stockPanels = [],
+  workshopStock = [],
 }) => {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'visual' | 'ai'>('visual');
-  const [config, setConfig] = useState<CabinetConfig>(() => ({
-    ...DEFAULT_CONFIG,
-    material: availableMaterials[0] || DEFAULT_CONFIG.material,
-  }));
+  const [config, setConfig] = useState<CabinetConfig>(() => {
+    // 1. Priorité au stock saisi ou stock atelier pour la matière principale
+    const preferredStockMat =
+      stockPanels[0]?.material ||
+      workshopStock[0]?.material ||
+      availableMaterials[0] ||
+      DEFAULT_CONFIG.material;
+    const detectedThickness = extractThicknessFromMaterialName(preferredStockMat);
+
+    // 2. Recherche d'une chute ou d'un panneau fin pour le fond
+    const thinStock =
+      workshopStock.find((w) => {
+        const th = extractThicknessFromMaterialName(w.material);
+        return th && th <= 10;
+      }) ||
+      stockPanels.find((p) => {
+        const th = extractThicknessFromMaterialName(p.material);
+        return th && th <= 10;
+      });
+
+    return {
+      ...DEFAULT_CONFIG,
+      material: preferredStockMat,
+      ...(detectedThickness ? { thickness: detectedThickness } : {}),
+      ...(thinStock
+        ? {
+            backMaterial: thinStock.material,
+            backThickness: extractThicknessFromMaterialName(thinStock.material) || 8,
+          }
+        : {}),
+    };
+  });
 
   // Prompt IA
   const [aiPrompt, setAiPrompt] = useState('');
@@ -93,10 +125,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
   // Synchroniser la matière et l'épaisseur par défaut si disponible
   useEffect(() => {
-    if (availableMaterials.length > 0) {
+    if (stockPanels.length > 0 || workshopStock.length > 0 || availableMaterials.length > 0) {
       setConfig((prev) => {
-        const currentValid = availableMaterials.includes(prev.material);
-        const targetMat = currentValid ? prev.material : availableMaterials[0];
+        const allKnown = [
+          ...stockPanels.map((p) => p.material),
+          ...workshopStock.map((w) => w.material),
+          ...availableMaterials,
+        ];
+        const currentValid = allKnown.includes(prev.material);
+        const targetMat = currentValid
+          ? prev.material
+          : stockPanels[0]?.material || workshopStock[0]?.material || availableMaterials[0] || prev.material;
         const detected = extractThicknessFromMaterialName(targetMat);
         return {
           ...prev,
@@ -105,7 +144,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         };
       });
     }
-  }, [availableMaterials]);
+  }, [stockPanels, workshopStock, availableMaterials]);
 
   // Gestion du changement de matière avec détection automatique de l'épaisseur
   const handleMaterialChange = (newMat: string) => {
@@ -155,6 +194,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         body: JSON.stringify({
           prompt: text,
           availableMaterials,
+          stockPanels,
+          workshopStock,
         }),
       });
 
@@ -195,7 +236,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     }
 
     // 2. Fallback NLP local garanti
-    const local = parseCabinetPromptWithNLP(text, availableMaterials);
+    const local = parseCabinetPromptWithNLP(
+      text,
+      availableMaterials,
+      stockPanels,
+      workshopStock
+    );
     setConfig((prev) => {
       const rawMat = local.material || prev.material;
       const detThick = extractThicknessFromMaterialName(rawMat);
@@ -286,6 +332,25 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             <Sparkles className="w-4 h-4 text-amber-400" />
             <span>2. Assistant Prompt IA (Texte libre)</span>
           </button>
+        </div>
+
+        {/* Bandeau d'état des stocks connectés à l'IA */}
+        <div className="bg-slate-950/80 border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between text-[11px] gap-2">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-blue-300 font-medium">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              <span>Stock Saisi : <strong className="text-white font-mono">{stockPanels.length}</strong> réf(s)</span>
+            </span>
+            <span className="text-slate-600">•</span>
+            <span className="flex items-center gap-1.5 text-emerald-300 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <span>Stock Atelier : <strong className="text-white font-mono">{workshopStock.reduce((s, w) => s + w.quantity, 0)}</strong> chute(s)</span>
+            </span>
+          </div>
+          <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-medium flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>L&apos;IA priorise et utilise automatiquement vos panneaux et chutes réels</span>
+          </span>
         </div>
 
         {/* Corps de la modale scrollable */}
@@ -393,14 +458,45 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     onChange={(e) => handleMaterialChange(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
                   >
-                    {availableMaterials.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                    {!availableMaterials.includes(config.material) && (
-                      <option value={config.material}>{config.material}</option>
+                    {stockPanels.length > 0 && (
+                      <optgroup label="📦 En Stock Saisi (Panneaux projet)">
+                        {stockPanels.map((p, idx) => (
+                          <option key={`sp-${p.id || idx}`} value={p.material}>
+                            {p.material} ({p.length}×{p.width} mm - {p.quantity} dispo)
+                          </option>
+                        ))}
+                      </optgroup>
                     )}
+
+                    {workshopStock.length > 0 && (
+                      <optgroup label="🏭 En Stock Atelier (Chutes réutilisables)">
+                        {workshopStock.map((w, idx) => (
+                          <option key={`ws-${w.id || idx}`} value={w.material}>
+                            {w.material} ({w.length}×{w.width} mm - {w.quantity} chute(s))
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+
+                    <optgroup label="📋 Autres matières">
+                      {availableMaterials
+                        .filter(
+                          (m) =>
+                            !stockPanels.some((p) => p.material === m) &&
+                            !workshopStock.some((w) => w.material === m)
+                        )
+                        .map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                    </optgroup>
+
+                    {!availableMaterials.includes(config.material) &&
+                      !stockPanels.some((p) => p.material === config.material) &&
+                      !workshopStock.some((w) => w.material === config.material) && (
+                        <option value={config.material}>{config.material}</option>
+                      )}
                   </select>
                 </div>
               </div>
@@ -685,10 +781,52 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       <div className="text-[10px] text-slate-400 space-y-1">
                         <div className="flex items-center justify-between">
                           <span>Matière fond :</span>
-                          <span className="text-[9px] text-slate-500">
-                            (différente du {config.thickness}mm)
+                          <span className="text-[9px] text-emerald-400 font-semibold">
+                            (Panneau / chute séparé)
                           </span>
                         </div>
+                        {(workshopStock.length > 0 || stockPanels.length > 0) && (
+                          <select
+                            value={config.backMaterial || ''}
+                            onChange={(e) => {
+                              const chosen = e.target.value;
+                              if (!chosen) return;
+                              const th = extractThicknessFromMaterialName(chosen);
+                              setConfig((prev) => ({
+                                ...prev,
+                                backMaterial: chosen,
+                                ...(th ? { backThickness: th } : {}),
+                              }));
+                            }}
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-amber-300 font-mono"
+                          >
+                            <option value="">Sélectionner parmi vos stocks...</option>
+                            {workshopStock.length > 0 && (
+                              <optgroup label="🏭 Chutes d'atelier disponibles">
+                                {workshopStock.map((w, idx) => (
+                                  <option key={`ws-b-${idx}`} value={w.material}>
+                                    {w.material} ({w.length}×{w.width} mm - {w.quantity} chute(s))
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {stockPanels.length > 0 && (
+                              <optgroup label="📦 Panneaux saisis">
+                                {stockPanels.map((p, idx) => (
+                                  <option key={`sp-b-${idx}`} value={p.material}>
+                                    {p.material} ({p.length}×{p.width} mm)
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            <optgroup label="📋 Matières courantes pour fond">
+                              <option value="MDF 8mm">MDF 8mm (Standard)</option>
+                              <option value="Isorel 3mm">Isorel 3mm (Fond classique)</option>
+                              <option value="Contreplaqué 5mm">Contreplaqué 5mm</option>
+                              <option value="Mélaminé Blanc 8mm">Mélaminé Blanc 8mm</option>
+                            </optgroup>
+                          </select>
+                        )}
                         <input
                           type="text"
                           value={config.backMaterial || `MDF ${config.backThickness || 8}mm`}

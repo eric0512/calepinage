@@ -80,6 +80,8 @@ export interface CutLine {
 
 export interface PanelResult {
   panelId: string;
+  workshopSourceId?: string;
+  panelName?: string;
   panelIndex: number;
   material: string;
   panelLength: number;

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { CutItem } from '@/types/cutting';
+import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
   ListPlus,
   Plus,
@@ -20,6 +20,8 @@ interface CutListManagerProps {
   onChange: (items: CutItem[]) => void;
   availableMaterials: string[];
   allAvailableMaterials?: string[];
+  stockPanels?: StockPanel[];
+  workshopStock?: WorkshopItem[];
   onAutoAddStockPanel?: (material: string) => void;
 }
 
@@ -41,6 +43,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   onChange,
   availableMaterials,
   allAvailableMaterials,
+  stockPanels,
+  workshopStock,
   onAutoAddStockPanel,
 }) => {
   // Matières disponibles en stock triées par ordre alphabétique
@@ -587,6 +591,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
             ? allAvailableMaterials
             : sortedMaterials
         }
+        stockPanels={stockPanels}
+        workshopStock={workshopStock}
       />
     </div>
   );

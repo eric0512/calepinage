@@ -269,7 +269,9 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
  */
 export function parseCabinetPromptWithNLP(
   prompt: string,
-  availableMaterials: string[] = []
+  availableMaterials: string[] = [],
+  stockPanels: { material: string; length: number; width: number; quantity: number }[] = [],
+  workshopStock: { material: string; length: number; width: number; quantity: number }[] = []
 ): Partial<CabinetConfig> {
   const text = prompt.toLowerCase();
   const config: Partial<CabinetConfig> = {};
@@ -363,7 +365,14 @@ export function parseCabinetPromptWithNLP(
     const thickVal = parseInt(backMatch[2], 10);
     if (thickVal >= 3 && thickVal <= 30) {
       config.backThickness = thickVal;
-      if (rawBackMat.includes('mdf')) {
+      // 1. Chercher d'abord dans les chutes atelier ou le stock saisi si une matière correspond à cette épaisseur
+      const matchingStockBack =
+        workshopStock.find((w) => extractThicknessFromMaterialName(w.material) === thickVal) ||
+        stockPanels.find((p) => extractThicknessFromMaterialName(p.material) === thickVal);
+
+      if (matchingStockBack) {
+        config.backMaterial = matchingStockBack.material;
+      } else if (rawBackMat.includes('mdf')) {
         config.backMaterial = `MDF ${thickVal}mm`;
       } else if (rawBackMat.includes('isorel')) {
         config.backMaterial = `Isorel ${thickVal}mm`;
@@ -376,6 +385,22 @@ export function parseCabinetPromptWithNLP(
       } else {
         config.backMaterial = `MDF ${thickVal}mm`;
       }
+    }
+  } else if (config.backType !== 'none') {
+    // Si fond demandé sans préciser, vérifier si des chutes minces existent en stock atelier ou saisi
+    const thinStock =
+      workshopStock.find((w) => {
+        const th = extractThicknessFromMaterialName(w.material);
+        return th && th <= 10;
+      }) ||
+      stockPanels.find((p) => {
+        const th = extractThicknessFromMaterialName(p.material);
+        return th && th <= 10;
+      });
+
+    if (thinStock) {
+      config.backMaterial = thinStock.material;
+      config.backThickness = extractThicknessFromMaterialName(thinStock.material) || 8;
     }
   }
 
@@ -396,17 +421,51 @@ export function parseCabinetPromptWithNLP(
     config.doors = 'one_door';
   }
 
-  // 8. Matière
-  if (availableMaterials.length > 0) {
+  // 8. Matière du caisson (Priorité absolue au stock saisi et atelier)
+  const allStockMats = [
+    ...stockPanels.map((p) => p.material.trim()),
+    ...workshopStock.map((w) => w.material.trim()),
+  ];
+
+  // A. Recherche d'une correspondance directe avec les panneaux en stock
+  for (const mat of allStockMats) {
+    const cleanMat = mat.toLowerCase();
+    // Ex: "osb", "mdf", "chene", ou le nom complet
+    const words = cleanMat.split(/\s+/).filter((w) => w.length > 2);
+    if (text.includes(cleanMat) || words.some((w) => text.includes(w))) {
+      config.material = mat;
+      const th = extractThicknessFromMaterialName(mat);
+      if (th) config.thickness = th;
+      break;
+    }
+  }
+
+  // B. Recherche dans availableMaterials si pas trouvé dans le stock
+  if (!config.material && availableMaterials.length > 0) {
     for (const mat of availableMaterials) {
       if (text.includes(mat.toLowerCase().trim())) {
         config.material = mat;
+        const th = extractThicknessFromMaterialName(mat);
+        if (th) config.thickness = th;
         break;
       }
     }
   }
 
-  // Si pas de matière directe trouvée mais mot-clé générique
+  // C. Si aucune matière mentionnée mais du stock est présent, utiliser le stock saisi en premier
+  if (!config.material) {
+    if (stockPanels.length > 0) {
+      config.material = stockPanels[0].material;
+      const th = extractThicknessFromMaterialName(stockPanels[0].material);
+      if (th) config.thickness = th;
+    } else if (workshopStock.length > 0) {
+      config.material = workshopStock[0].material;
+      const th = extractThicknessFromMaterialName(workshopStock[0].material);
+      if (th) config.thickness = th;
+    }
+  }
+
+  // D. Fallback générique si vraiment aucun stock n'est renseigné
   if (!config.material) {
     if (text.includes('mélaminé') || text.includes('melamine')) {
       config.material = 'Mélaminé Blanc 18mm';

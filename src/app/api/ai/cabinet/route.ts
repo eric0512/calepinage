@@ -4,7 +4,13 @@ import { parseCabinetPromptWithNLP } from '@/lib/cabinet-calculator';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prompt, availableMaterials = [], apiKey } = body;
+    const {
+      prompt,
+      availableMaterials = [],
+      stockPanels = [],
+      workshopStock = [],
+      apiKey,
+    } = body;
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json(
@@ -14,6 +20,30 @@ export async function POST(req: NextRequest) {
     }
 
     const geminiKey = apiKey || process.env.GEMINI_API_KEY;
+
+    // Synthèse de l'inventaire réel de l'utilisateur (Stock saisi et Stock atelier)
+    const stockSummaryLines: string[] = [];
+    if (Array.isArray(stockPanels) && stockPanels.length > 0) {
+      stockSummaryLines.push('PANNEAUX EN STOCK SAISI (Projet en cours) :');
+      stockPanels.forEach(
+        (p: { material: string; length: number; width: number; quantity: number }) => {
+          stockSummaryLines.push(
+            `- "${p.material}" : ${p.length}×${p.width} mm (qté: ${p.quantity})`
+          );
+        }
+      );
+    }
+    if (Array.isArray(workshopStock) && workshopStock.length > 0) {
+      stockSummaryLines.push('CHUTES ET PANNEAUX EN STOCK ATELIER :');
+      workshopStock.forEach(
+        (w: { material: string; length: number; width: number; quantity: number }) => {
+          stockSummaryLines.push(
+            `- "${w.material}" : ${w.length}×${w.width} mm (qté: ${w.quantity})`
+          );
+        }
+      );
+    }
+    const inventoryContext = stockSummaryLines.join('\n');
 
     // 1. Si une clé Gemini est disponible, on interroge Gemini pour une compréhension avancée
     if (geminiKey) {
@@ -33,9 +63,18 @@ Tu dois analyser la description en langage naturel d'un meuble ou caisson et en 
   "shelfRecess": number (retrait de façade des étagères en mm, défaut: 20),
   "partitionsCount": number (séparations verticales, 0 ou 1),
   "doors": "none" | "one_door" | "two_doors",
-  "material": "string (la matière la plus proche parmi les disponibles ou mentionnée)",
-  "backMaterial": "string (matière spécifique du fond avec son épaisseur, ex: 'MDF 8mm' ou 'Isorel 3mm' si fond demandé)"
+  "material": "string (matière choisie en priorité dans les stocks de l'utilisateur)",
+  "backMaterial": "string (matière spécifique du fond avec son épaisseur, ex: 'MDF 8mm' ou 'Isorel 3mm' choisie en priorité dans le stock atelier ou saisi)"
 }
+
+RÈGLE IMPÉRATIVE SUR LES STOCKS :
+Tu DOIS utiliser en priorité les matières et épaisseurs RÉELLEMENT DISPONIBLES dans le stock de l'utilisateur (stock atelier et stock saisi ci-dessous).
+Si une matière du stock correspond à l'épaisseur souhaitée (ou s'en rapproche), utilise son intitulé exact !
+Pour le fond ("backMaterial"), recherche en priorité les chutes minces (ex: 8mm, 5mm, 3mm) présentes dans le stock atelier ou saisi.
+
+INVENTAIRE DES STOCKS DISPONIBLES :
+${inventoryContext || "Aucun stock préalablement saisi"}
+
 Réponds UNIQUEMENT par ce JSON sans balises markdown ni texte supplémentaire.`;
 
         const response = await fetch(
@@ -49,7 +88,7 @@ Réponds UNIQUEMENT par ce JSON sans balises markdown ni texte supplémentaire.`
                   role: 'user',
                   parts: [
                     {
-                      text: `${systemInstruction}\n\nMatières disponibles en stock : ${JSON.stringify(
+                      text: `${systemInstruction}\n\nMatières disponibles : ${JSON.stringify(
                         availableMaterials
                       )}\n\nDemande utilisateur : "${prompt}"`,
                     },
@@ -83,7 +122,12 @@ Réponds UNIQUEMENT par ce JSON sans balises markdown ni texte supplémentaire.`
     }
 
     // 2. Moteur d'analyse locale intelligente (NLP Menuiserie)
-    const localParsed = parseCabinetPromptWithNLP(prompt, availableMaterials);
+    const localParsed = parseCabinetPromptWithNLP(
+      prompt,
+      availableMaterials,
+      stockPanels,
+      workshopStock
+    );
 
     return NextResponse.json({
       success: true,

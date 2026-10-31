@@ -335,17 +335,59 @@ export default function Home() {
 
   // Recalcul de l'optimisation
   const handleOptimize = useCallback(() => {
-    if (cutItems.length === 0 || stockPanels.length === 0) {
+    // 1. Panneaux bruts saisis dans le projet
+    const projectPanels: StockPanel[] = stockPanels.map((p) => ({ ...p }));
+
+    // 2. Chutes et panneaux disponibles dans le stock atelier (convertis en candidats réutilisables)
+    const workshopPanels: StockPanel[] = workshopStock.map((w, idx) => ({
+      id: `stock-workshop-${w.id}-${idx}`,
+      name: `Chute Atelier (${w.length}×${w.width})`,
+      material: w.material.trim(),
+      length: Math.round(Math.max(w.length, w.width)),
+      width: Math.round(Math.min(w.length, w.width)),
+      quantity: w.quantity,
+      workshopSourceId: w.id,
+    }));
+
+    // Combiner les stocks : les chutes atelier (priorisées par l'algorithme pour éviter le gaspillage) + panneaux saisis
+    const combinedPanels = [...workshopPanels, ...projectPanels];
+
+    if (cutItems.length === 0 || combinedPanels.length === 0) {
       alert(
-        'Veuillez ajouter au moins un panneau en stock et une pièce à découper.'
+        'Veuillez ajouter au moins un panneau en stock (saisi ou atelier) et une pièce à découper.'
       );
       return;
     }
-    const res = optimizeCutting(stockPanels, cutItems, settings);
+
+    const res = optimizeCutting(combinedPanels, cutItems, settings);
     setOptimizationResult(res);
     setMobileTab('results');
 
-    // Vérifier si des panneaux issus du stock atelier n'ont PAS été utilisés par l'optimisation
+    // Mettre à jour le stock atelier selon ce qui a été RÉELLEMENT consommé par l'optimisation
+    const usedWorkshopCounts = new Map<string, number>();
+    res.panels.forEach((p) => {
+      // Si ce panneau provient d'une chute atelier qui n'était pas déjà décomptée dans le projet
+      const wasAlreadyInProject = stockPanels.some((sp) => sp.id === p.panelId);
+      if (p.workshopSourceId && !wasAlreadyInProject) {
+        usedWorkshopCounts.set(
+          p.workshopSourceId,
+          (usedWorkshopCounts.get(p.workshopSourceId) || 0) + 1
+        );
+      }
+    });
+
+    if (usedWorkshopCounts.size > 0) {
+      setWorkshopStock((prev) =>
+        prev
+          .map((w) => {
+            const used = usedWorkshopCounts.get(w.id) || 0;
+            return { ...w, quantity: Math.max(0, w.quantity - used) };
+          })
+          .filter((w) => w.quantity > 0)
+      );
+    }
+
+    // Vérifier si des panneaux issus du stock atelier manuellement ajoutés n'ont PAS été utilisés
     const usedPanelIds = new Set(res.panels.map((p) => p.panelId));
     const unusedWorkshopPanels = stockPanels.filter(
       (p) => p.workshopSourceId && !usedPanelIds.has(p.id)
@@ -379,7 +421,7 @@ export default function Home() {
         });
       });
     }
-  }, [stockPanels, cutItems, settings, reintegrateToWorkshop]);
+  }, [stockPanels, workshopStock, cutItems, settings, reintegrateToWorkshop]);
 
   // Matières présentes dans le stock de panneaux (groupées et triées par ordre alphabétique)
   const stockMaterials = useMemo(() => {
@@ -610,23 +652,27 @@ export default function Home() {
               onChange={setCutItems}
               availableMaterials={stockMaterials}
               allAvailableMaterials={allAvailableMaterials}
+              stockPanels={stockPanels}
+              workshopStock={workshopStock}
               onAutoAddStockPanel={(mat) => {
-                setStockPanels((prev) => {
-                  const alreadyExists = prev.some(
-                    (p) => p.material.trim().toLowerCase() === mat.trim().toLowerCase()
-                  );
-                  if (alreadyExists) return prev;
-                  return [
-                    ...prev,
-                    {
-                      id: `sp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                      material: mat,
-                      length: 2800,
-                      width: 2070,
-                      quantity: 1,
-                    },
-                  ];
-                });
+                const existsInStockPanels = stockPanels.some(
+                  (p) => p.material.trim().toLowerCase() === mat.trim().toLowerCase()
+                );
+                const existsInWorkshop = workshopStock.some(
+                  (w) => w.material.trim().toLowerCase() === mat.trim().toLowerCase()
+                );
+                if (existsInStockPanels || existsInWorkshop) return;
+
+                setStockPanels((prev) => [
+                  ...prev,
+                  {
+                    id: `sp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                    material: mat,
+                    length: 2800,
+                    width: 2070,
+                    quantity: 1,
+                  },
+                ]);
               }}
             />
 

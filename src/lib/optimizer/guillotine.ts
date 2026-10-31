@@ -97,6 +97,8 @@ export function optimizeCutting(
       length: number;
       width: number;
       material: string;
+      workshopSourceId?: string;
+      name?: string;
     }[] = [];
 
     materialPanels.forEach((sp) => {
@@ -106,8 +108,20 @@ export function optimizeCutting(
           length: sp.length,
           width: sp.width,
           material: sp.material,
+          workshopSourceId: sp.workshopSourceId,
+          name: sp.name,
         });
       }
+    });
+
+    // Priorité aux chutes du stock atelier pour réutiliser les petites surfaces avant d'entamer de grands panneaux
+    availablePanels.sort((a, b) => {
+      const aIsWorkshop = !!a.workshopSourceId;
+      const bIsWorkshop = !!b.workshopSourceId;
+      if (aIsWorkshop && !bIsWorkshop) return -1;
+      if (!aIsWorkshop && bIsWorkshop) return 1;
+      // À priorité égale, utiliser les plus petits panneaux en premier (surface croissante)
+      return a.length * a.width - b.length * b.width;
     });
 
     // Si pas de stock spécifié pour ce matériau mais des pièces demandées,
@@ -172,7 +186,11 @@ export function optimizeCutting(
         );
 
         if (packResult.placedPieces.length === 0) {
-          // Aucune pièce n'a pu rentrer sur ce panneau (trop grand par rapport au panneau)
+          // Si aucune pièce n'a pu rentrer sur ce panneau (trop petit),
+          // on passe au panneau suivant de la file s'il en reste (ex: panneau plein format après une chute)
+          if (stockQueue.length > 0) {
+            continue;
+          }
           break;
         }
 
@@ -313,7 +331,14 @@ function computeAvgEfficiency(panels: PanelResult[]): number {
  * Calepinage d'un seul panneau avec découpes guillotines récursives
  */
 function packSinglePanel(
-  panel: { stockId: string; length: number; width: number; material: string },
+  panel: {
+    stockId: string;
+    length: number;
+    width: number;
+    material: string;
+    workshopSourceId?: string;
+    name?: string;
+  },
   pieces: PieceToPlace[],
   kerf: number,
   minOffcutLength: number,
@@ -515,6 +540,8 @@ function packSinglePanel(
 
   return {
     panelId: panel.stockId,
+    workshopSourceId: panel.workshopSourceId,
+    panelName: panel.name,
     panelIndex,
     material: panel.material,
     panelLength,
