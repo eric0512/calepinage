@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { StockPanel, WorkshopItem } from '@/types/cutting';
 import {
@@ -99,6 +99,33 @@ export const StockManager: React.FC<StockManagerProps> = ({
       0
     )
     .toFixed(2);
+
+  // Filtre par matière pour la fenêtre modale Stock Atelier
+  const [selectedWorkshopMaterial, setSelectedWorkshopMaterial] =
+    useState<string>('all');
+
+  const workshopMaterials = useMemo(() => {
+    const set = new Set<string>();
+    workshopStock.forEach((it) => {
+      if (it.material && it.material.trim()) {
+        set.add(it.material.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+    );
+  }, [workshopStock]);
+
+  const filteredWorkshopStock = useMemo(() => {
+    if (selectedWorkshopMaterial === 'all') {
+      return workshopStock;
+    }
+    return workshopStock.filter(
+      (it) =>
+        it.material.toLowerCase().trim() ===
+        selectedWorkshopMaterial.toLowerCase().trim()
+    );
+  }, [workshopStock, selectedWorkshopMaterial]);
 
   // Ajouter manuellement une chute physique au stock atelier
   const handleAddManualSubmit = (e: React.FormEvent) => {
@@ -666,6 +693,49 @@ export const StockManager: React.FC<StockManagerProps> = ({
                 </button>
               </div>
 
+              {/* Barre de filtrage par matière dans le Stock Atelier */}
+              {workshopMaterials.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/70 p-2.5 rounded-xl border border-slate-700/80">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-300 font-semibold whitespace-nowrap">
+                      Filtrer par matière :
+                    </label>
+                    <select
+                      value={selectedWorkshopMaterial}
+                      onChange={(e) => setSelectedWorkshopMaterial(e.target.value)}
+                      className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium"
+                    >
+                      <option value="all">
+                        Toutes les matières ({workshopStock.reduce((sum, it) => sum + it.quantity, 0)})
+                      </option>
+                      {workshopMaterials.map((mat) => {
+                        const count = workshopStock
+                          .filter(
+                            (it) =>
+                              it.material.toLowerCase().trim() ===
+                              mat.toLowerCase().trim()
+                          )
+                          .reduce((sum, it) => sum + it.quantity, 0);
+                        return (
+                          <option key={mat} value={mat}>
+                            {mat} ({count})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  {selectedWorkshopMaterial !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWorkshopMaterial('all')}
+                      className="text-[11px] text-teal-400 hover:text-teal-300 hover:underline"
+                    >
+                      Voir toutes les matières
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Table du stock atelier */}
               <div className="overflow-y-auto flex-1 border border-slate-700/80 rounded-xl min-h-[160px]">
                 {workshopStock.length === 0 ? (
@@ -679,6 +749,20 @@ export const StockManager: React.FC<StockManagerProps> = ({
                       automatiquement ici. Vous pouvez également enregistrer vos
                       chutes d&apos;atelier existantes via le bouton ci-dessus.
                     </p>
+                  </div>
+                ) : filteredWorkshopStock.length === 0 ? (
+                  <div className="text-center py-10 px-4 text-slate-400 text-xs">
+                    <Box className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                    <p className="text-slate-200 font-semibold text-xs">
+                      Aucune chute trouvée pour la matière « {selectedWorkshopMaterial} »
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWorkshopMaterial('all')}
+                      className="mt-2 text-teal-400 hover:underline font-semibold"
+                    >
+                      Réinitialiser le filtre
+                    </button>
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs">
@@ -694,7 +778,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700/60 text-slate-200">
-                      {workshopStock.map((item) => {
+                      {filteredWorkshopStock.map((item) => {
                         const area = (
                           (item.length * item.width * item.quantity) /
                           1_000_000
@@ -737,7 +821,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
                                   title="Ajouter ce panneau au projet (le retire du stock atelier)"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
-                                  <span>Ajouter au projet</span>
+                                  <span>Ajouter</span>
                                 </button>
                                 <button
                                   type="button"

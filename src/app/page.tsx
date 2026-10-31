@@ -546,10 +546,7 @@ export default function Home() {
 
       {/* Contenu Principal de l'Atelier */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 print:hidden">
-        {/* 1. Configuration & Trait de scie (Kerf) */}
-        <SettingsBar settings={settings} onChange={setSettings} />
-
-        {/* Boutons d'onglets pour navigation sur mobile */}
+        {/* Boutons d'onglets pour navigation sur mobile (placés tout en haut sur mobile) */}
         <div className="flex lg:hidden bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
           <button
             type="button"
@@ -575,6 +572,11 @@ export default function Home() {
             <Layers className="w-4 h-4" />
             <span>2. Plans de Coupe</span>
           </button>
+        </div>
+
+        {/* 1. Configuration & Trait de scie (Kerf) : masqué sur mobile lorsque l'onglet 2 est actif */}
+        <div className={mobileTab === 'results' ? 'hidden lg:block' : 'block'}>
+          <SettingsBar settings={settings} onChange={setSettings} />
         </div>
 
         {/* Grille principale : Formulaires à gauche, Plans et Résultats à droite */}
@@ -627,14 +629,14 @@ export default function Home() {
           >
             {optimizationResult ? (
               <>
-                {/* Statistiques Globales & Taux de chute */}
-                <StatsSummary result={optimizationResult} />
-
-                {/* Visualiseur SVG interactif des panneaux */}
+                {/* Visualiseur SVG interactif des panneaux (placé directement sous l'onglet 2. Plans de coupe) */}
                 <CuttingVisualizer
                   panels={optimizationResult.panels}
                   kerf={settings.kerf}
                 />
+
+                {/* Statistiques Globales & Taux de chute */}
+                <StatsSummary result={optimizationResult} />
 
                 {/* Liste des chutes valorisables */}
                 <OffcutsList
