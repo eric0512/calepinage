@@ -403,6 +403,9 @@ export default function Home() {
       'Chêne Massif 20mm',
       'Contreplaqué 5mm',
       'Contreplaqué Bouleau 15mm',
+      'Isorel 3mm',
+      'MDF 8mm',
+      'MDF 18mm',
       'MDF 19mm',
       'Mélaminé Blanc 18mm',
       'OSB 3 18mm',
@@ -606,6 +609,25 @@ export default function Home() {
               items={cutItems}
               onChange={setCutItems}
               availableMaterials={stockMaterials}
+              allAvailableMaterials={allAvailableMaterials}
+              onAutoAddStockPanel={(mat) => {
+                setStockPanels((prev) => {
+                  const alreadyExists = prev.some(
+                    (p) => p.material.trim().toLowerCase() === mat.trim().toLowerCase()
+                  );
+                  if (alreadyExists) return prev;
+                  return [
+                    ...prev,
+                    {
+                      id: `sp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                      material: mat,
+                      length: 2800,
+                      width: 2070,
+                      quantity: 1,
+                    },
+                  ];
+                });
+              }}
             />
 
             {/* Bouton d'action principal : Calcul de l'optimisation */}

@@ -38,11 +38,12 @@ const DEFAULT_CONFIG: CabinetConfig = {
   assemblyType: 'sides_full', // Montants continus (Haut et Bas intérieurs)
   backType: 'applique',
   backThickness: 8,
+  backMaterial: 'MDF 8mm',
   shelvesCount: 1,
   shelfRecess: 20,
   partitionsCount: 0,
   doors: 'none',
-  material: 'Mélaminé Blanc 18mm',
+  material: 'MDF 18mm',
 };
 
 const PROMPT_PRESETS = [
@@ -109,11 +110,19 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   // Gestion du changement de matière avec détection automatique de l'épaisseur
   const handleMaterialChange = (newMat: string) => {
     const detectedThickness = extractThicknessFromMaterialName(newMat);
-    setConfig((prev) => ({
-      ...prev,
-      material: newMat,
-      ...(detectedThickness ? { thickness: detectedThickness } : {}),
-    }));
+    setConfig((prev) => {
+      const base = newMat.replace(/\s*\d{1,2}\s*mm/i, '').trim();
+      let updatedBack = prev.backMaterial;
+      if (!updatedBack || updatedBack === prev.material) {
+        updatedBack = `${base || 'MDF'} ${prev.backThickness || 8}mm`;
+      }
+      return {
+        ...prev,
+        material: newMat,
+        ...(detectedThickness ? { thickness: detectedThickness } : {}),
+        backMaterial: updatedBack,
+      };
+    });
   };
 
   // Liste dynamique des boutons d'épaisseur
@@ -152,11 +161,24 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       if (res.ok) {
         const data = await res.json();
         if (data.config) {
-          setConfig((prev) => ({
-            ...prev,
-            ...data.config,
-            material: data.config.material || prev.material,
-          }));
+          setConfig((prev) => {
+            const rawMat = data.config.material || prev.material;
+            const detThick = extractThicknessFromMaterialName(rawMat);
+            const bThick = data.config.backThickness || prev.backThickness || 8;
+            let bMat = data.config.backMaterial;
+            if (!bMat && bThick) {
+              const base = rawMat.replace(/\s*\d{1,2}\s*mm/i, '').trim();
+              bMat = `${base || 'MDF'} ${bThick}mm`;
+            }
+            return {
+              ...prev,
+              ...data.config,
+              material: rawMat,
+              ...(detThick ? { thickness: detThick } : {}),
+              backThickness: bThick,
+              backMaterial: bMat || prev.backMaterial,
+            };
+          });
           setAiSuccessMessage(
             data.source === 'gemini-ai'
               ? 'Paramètres déduits avec succès par l\'IA Gemini !'
@@ -174,11 +196,24 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
     // 2. Fallback NLP local garanti
     const local = parseCabinetPromptWithNLP(text, availableMaterials);
-    setConfig((prev) => ({
-      ...prev,
-      ...local,
-      material: local.material || prev.material,
-    }));
+    setConfig((prev) => {
+      const rawMat = local.material || prev.material;
+      const detThick = extractThicknessFromMaterialName(rawMat);
+      const bThick = local.backThickness || prev.backThickness || 8;
+      let bMat = local.backMaterial;
+      if (!bMat && bThick) {
+        const base = rawMat.replace(/\s*\d{1,2}\s*mm/i, '').trim();
+        bMat = `${base || 'MDF'} ${bThick}mm`;
+      }
+      return {
+        ...prev,
+        ...local,
+        material: rawMat,
+        ...(detThick ? { thickness: detThick } : {}),
+        backThickness: bThick,
+        backMaterial: bMat || prev.backMaterial,
+      };
+    });
     setAiSuccessMessage('Paramètres calculés avec succès !');
     setIsAnalyzing(false);
     setTimeout(() => setActiveTab('visual'), 600);
@@ -595,9 +630,16 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
                 {/* Fond de caisson */}
                 <div className="space-y-2 sm:border-l sm:border-slate-800 sm:pl-3">
-                  <label className="block text-xs font-bold text-white">
-                    Fond de caisson :
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-white">
+                      Fond de caisson :
+                    </label>
+                    {config.backType !== 'none' && (
+                      <span className="text-[10px] text-amber-400 font-medium">
+                        Panneau séparé
+                      </span>
+                    )}
+                  </div>
                   <select
                     value={config.backType}
                     onChange={(e) =>
@@ -611,21 +653,54 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   </select>
 
                   {config.backType !== 'none' && (
-                    <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-                      <span>Épaisseur fond :</span>
-                      <div className="inline-flex items-center gap-1">
+                    <div className="space-y-2 pt-2 border-t border-slate-800">
+                      <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                        <span>Épaisseur fond :</span>
+                        <div className="inline-flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="2"
+                            max="30"
+                            value={config.backThickness}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value) || 8;
+                              setConfig((prev) => {
+                                const base = (prev.backMaterial || 'MDF')
+                                  .replace(/\s*\d{1,2}\s*mm/i, '')
+                                  .trim();
+                                return {
+                                  ...prev,
+                                  backThickness: val,
+                                  backMaterial: `${base || 'MDF'} ${val}mm`,
+                                };
+                              });
+                            }}
+                            className="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-center text-white font-mono font-bold"
+                          />
+                          <span>mm</span>
+                        </div>
+                      </div>
+
+                      {/* Choix / Nom de la matière du fond */}
+                      <div className="text-[10px] text-slate-400 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span>Matière fond :</span>
+                          <span className="text-[9px] text-slate-500">
+                            (différente du {config.thickness}mm)
+                          </span>
+                        </div>
                         <input
-                          type="number"
-                          value={config.backThickness}
+                          type="text"
+                          value={config.backMaterial || `MDF ${config.backThickness || 8}mm`}
                           onChange={(e) =>
-                            setConfig({
-                              ...config,
-                              backThickness: parseInt(e.target.value) || 8,
-                            })
+                            setConfig((prev) => ({
+                              ...prev,
+                              backMaterial: e.target.value,
+                            }))
                           }
-                          className="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-center text-white font-mono"
+                          placeholder="Ex: MDF 8mm, Isorel 3mm"
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-amber-300 font-mono"
                         />
-                        <span>mm</span>
                       </div>
                     </div>
                   )}
@@ -774,9 +849,14 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           />
                           <span>{p.role}</span>
                         </span>
-                        <span className="font-mono text-amber-400">
-                          {p.quantity} × ({p.length} × {p.width} mm)
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-amber-300 font-mono font-medium">
+                            {p.material}
+                          </span>
+                          <span className="font-mono text-amber-400">
+                            {p.quantity} × ({p.length} × {p.width} mm)
+                          </span>
+                        </div>
                       </div>
                       <div className="text-[10px] text-slate-400 pl-3.5 italic">
                         {p.formula}

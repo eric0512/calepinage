@@ -33,7 +33,8 @@ Tu dois analyser la description en langage naturel d'un meuble ou caisson et en 
   "shelfRecess": number (retrait de façade des étagères en mm, défaut: 20),
   "partitionsCount": number (séparations verticales, 0 ou 1),
   "doors": "none" | "one_door" | "two_doors",
-  "material": "string (la matière la plus proche parmi les disponibles ou mentionnée)"
+  "material": "string (la matière la plus proche parmi les disponibles ou mentionnée)",
+  "backMaterial": "string (matière spécifique du fond avec son épaisseur, ex: 'MDF 8mm' ou 'Isorel 3mm' si fond demandé)"
 }
 Réponds UNIQUEMENT par ce JSON sans balises markdown ni texte supplémentaire.`;
 

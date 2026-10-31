@@ -19,6 +19,8 @@ interface CutListManagerProps {
   items: CutItem[];
   onChange: (items: CutItem[]) => void;
   availableMaterials: string[];
+  allAvailableMaterials?: string[];
+  onAutoAddStockPanel?: (material: string) => void;
 }
 
 const COLOR_OPTIONS = [
@@ -38,6 +40,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   items,
   onChange,
   availableMaterials,
+  allAvailableMaterials,
+  onAutoAddStockPanel,
 }) => {
   // Matières disponibles en stock triées par ordre alphabétique
   const sortedMaterials = React.useMemo(() => {
@@ -568,8 +572,21 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
       <CabinetAssistantModal
         isOpen={showCabinetModal}
         onClose={() => setShowCabinetModal(false)}
-        onAddPieces={(newPieces) => onChange([...items, ...newPieces])}
-        availableMaterials={sortedMaterials}
+        onAddPieces={(newPieces) => {
+          if (onAutoAddStockPanel) {
+            // Identifier les matières uniques ajoutées
+            const distinctMaterials = Array.from(new Set(newPieces.map((p) => p.material.trim()).filter(Boolean)));
+            distinctMaterials.forEach((mat) => {
+              onAutoAddStockPanel(mat);
+            });
+          }
+          onChange([...items, ...newPieces]);
+        }}
+        availableMaterials={
+          allAvailableMaterials && allAvailableMaterials.length > 0
+            ? allAvailableMaterials
+            : sortedMaterials
+        }
       />
     </div>
   );

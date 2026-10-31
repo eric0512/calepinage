@@ -70,9 +70,21 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     partitionsCount,
     doors,
     material,
-    backMaterial = material,
+    backMaterial,
     doorMaterial = material,
   } = config;
+
+  // Résolution stricte de la matière du fond pour éviter qu'il ne soit débité sur le panneau 18mm !
+  let resolvedBackMaterial = backMaterial?.trim();
+  if (!resolvedBackMaterial) {
+    if (backThickness && backThickness !== thickness) {
+      // Déduire le nom de base sans l'épaisseur du caisson (ex: "MDF 18mm" -> base "MDF" -> "MDF 8mm")
+      const base = material.replace(/\s*\d{1,2}\s*mm/i, '').trim();
+      resolvedBackMaterial = `${base || 'MDF'} ${backThickness}mm`;
+    } else {
+      resolvedBackMaterial = material;
+    }
+  }
 
   const pieces: CabinetPieceCalculation[] = [];
 
@@ -171,13 +183,13 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   if (backType === 'applique') {
     // Fond cloué ou vissé en applique à l'arrière
     pieces.push({
-      role: 'Fond (en applique arrière)',
+      role: `Fond (applique arrière) [${resolvedBackMaterial}]`,
       description: `${config.name} - Fond applique`,
-      formula: `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${backThickness} mm)`,
+      formula: `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${backThickness} mm - Matière : ${resolvedBackMaterial})`,
       length: Math.max(height, width),
       width: Math.min(height, width),
       quantity: 1,
-      material: backMaterial,
+      material: resolvedBackMaterial,
       color: PIECE_COLORS.back,
     });
   } else if (backType === 'groove') {
@@ -187,13 +199,13 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const backW = interiorWidth + 2 * grooveDepth;
 
     pieces.push({
-      role: 'Fond (en rainure encastrée)',
+      role: `Fond (rainure encastrée) [${resolvedBackMaterial}]`,
       description: `${config.name} - Fond rainure`,
-      formula: `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm)`,
+      formula: `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm - Matière : ${resolvedBackMaterial})`,
       length: Math.max(backH, backW),
       width: Math.min(backH, backW),
       quantity: 1,
-      material: backMaterial,
+      material: resolvedBackMaterial,
       color: PIECE_COLORS.back,
     });
   }
@@ -342,10 +354,29 @@ export function parseCabinetPromptWithNLP(
     config.backType = 'applique';
   }
 
-  // Épaisseur du fond si mentionnée (ex: fond de 8mm, fond 10mm, fond 3mm)
-  const backThickMatch = text.match(/fond\s*(?:de)?\s*(\d{1,2})\s*mm/);
-  if (backThickMatch) {
-    config.backThickness = parseInt(backThickMatch[1], 10);
+  // Détection de la matière et de l'épaisseur du fond
+  // Exemples : "fond de mdf 8mm", "fond en mdf 8mm", "fond mdf 8", "fond isorel 3mm", "fond de 8mm", "fond 8mm"
+  const backPattern = /fond\s*(?:de|en)?\s*([a-zA-ZÀ-ÿ\s]+)?\s*(\d{1,2})\s*(?:mm)?/i;
+  const backMatch = text.match(backPattern);
+  if (backMatch) {
+    const rawBackMat = (backMatch[1] || '').trim();
+    const thickVal = parseInt(backMatch[2], 10);
+    if (thickVal >= 3 && thickVal <= 30) {
+      config.backThickness = thickVal;
+      if (rawBackMat.includes('mdf')) {
+        config.backMaterial = `MDF ${thickVal}mm`;
+      } else if (rawBackMat.includes('isorel')) {
+        config.backMaterial = `Isorel ${thickVal}mm`;
+      } else if (rawBackMat.includes('contreplaqu')) {
+        config.backMaterial = `Contreplaqué ${thickVal}mm`;
+      } else if (rawBackMat.includes('melamin')) {
+        config.backMaterial = `Mélaminé ${thickVal}mm`;
+      } else if (rawBackMat) {
+        config.backMaterial = `${rawBackMat.charAt(0).toUpperCase() + rawBackMat.slice(1)} ${thickVal}mm`;
+      } else {
+        config.backMaterial = `MDF ${thickVal}mm`;
+      }
+    }
   }
 
   // 6. Séparation verticale
