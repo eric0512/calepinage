@@ -28,6 +28,10 @@ import { PrintDossier } from '@/components/PrintDossier';
 import { ProjectHub } from '@/components/ProjectHub';
 import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 import { SupabaseConfigModal } from '@/components/SupabaseConfigModal';
+import {
+  MissingStockModal,
+  MissingMaterialInfo,
+} from '@/components/MissingStockModal';
 import { Play, Layers, ListPlus } from 'lucide-react';
 
 export default function Home() {
@@ -52,6 +56,10 @@ export default function Home() {
 
   // Onglet mobile
   const [mobileTab, setMobileTab] = useState<'input' | 'results'>('input');
+
+  // Gestion des matières absentes du stock (suspension de l'optimisation)
+  const [showMissingStockModal, setShowMissingStockModal] = useState<boolean>(false);
+  const [missingStockData, setMissingStockData] = useState<MissingMaterialInfo[]>([]);
 
   // Stock Atelier (inventaire persistant des chutes >= 500x500mm)
   const [workshopStock, setWorkshopStock] = useState<WorkshopItem[]>(() => {
@@ -333,95 +341,171 @@ export default function Home() {
     await deleteProjectFromCloud(projectId);
   };
 
-  // Recalcul de l'optimisation
-  const handleOptimize = useCallback(() => {
-    // 1. Panneaux bruts saisis dans le projet
-    const projectPanels: StockPanel[] = stockPanels.map((p) => ({ ...p }));
+  // Exécution du calcul d'optimisation
+  const executeOptimization = useCallback(
+    (customStockPanels?: StockPanel[], customCutItems?: CutItem[]) => {
+      const activeStockPanels = customStockPanels || stockPanels;
+      const activeCutItems = customCutItems || cutItems;
 
-    // 2. Chutes et panneaux disponibles dans le stock atelier (convertis en candidats réutilisables)
-    const workshopPanels: StockPanel[] = workshopStock.map((w, idx) => ({
-      id: `stock-workshop-${w.id}-${idx}`,
-      name: `Chute Atelier (${w.length}×${w.width})`,
-      material: w.material.trim(),
-      length: Math.round(Math.max(w.length, w.width)),
-      width: Math.round(Math.min(w.length, w.width)),
-      quantity: w.quantity,
-      workshopSourceId: w.id,
-    }));
+      // 1. Panneaux bruts saisis dans le projet
+      const projectPanels: StockPanel[] = activeStockPanels.map((p) => ({ ...p }));
 
-    // Combiner les stocks : les chutes atelier (priorisées par l'algorithme pour éviter le gaspillage) + panneaux saisis
-    const combinedPanels = [...workshopPanels, ...projectPanels];
+      // 2. Chutes et panneaux disponibles dans le stock atelier (convertis en candidats réutilisables)
+      const workshopPanels: StockPanel[] = workshopStock.map((w, idx) => ({
+        id: `stock-workshop-${w.id}-${idx}`,
+        name: `Chute Atelier (${w.length}×${w.width})`,
+        material: w.material.trim(),
+        length: Math.round(Math.max(w.length, w.width)),
+        width: Math.round(Math.min(w.length, w.width)),
+        quantity: w.quantity,
+        workshopSourceId: w.id,
+      }));
 
-    if (cutItems.length === 0 || combinedPanels.length === 0) {
-      alert(
-        'Veuillez ajouter au moins un panneau en stock (saisi ou atelier) et une pièce à découper.'
-      );
-      return;
-    }
+      // Combiner les stocks : les chutes atelier (priorisées par l'algorithme pour éviter le gaspillage) + panneaux saisis
+      const combinedPanels = [...workshopPanels, ...projectPanels];
 
-    const res = optimizeCutting(combinedPanels, cutItems, settings);
-    setOptimizationResult(res);
-    setMobileTab('results');
+      if (activeCutItems.length === 0 || combinedPanels.length === 0) {
+        alert(
+          'Veuillez ajouter au moins un panneau en stock (saisi ou atelier) et une pièce à découper.'
+        );
+        return;
+      }
 
-    // Mettre à jour le stock atelier selon ce qui a été RÉELLEMENT consommé par l'optimisation
-    const usedWorkshopCounts = new Map<string, number>();
-    res.panels.forEach((p) => {
-      // Si ce panneau provient d'une chute atelier qui n'était pas déjà décomptée dans le projet
-      const wasAlreadyInProject = stockPanels.some((sp) => sp.id === p.panelId);
-      if (p.workshopSourceId && !wasAlreadyInProject) {
-        usedWorkshopCounts.set(
-          p.workshopSourceId,
-          (usedWorkshopCounts.get(p.workshopSourceId) || 0) + 1
+      const res = optimizeCutting(combinedPanels, activeCutItems, settings);
+      setOptimizationResult(res);
+      setMobileTab('results');
+
+      // Mettre à jour le stock atelier selon ce qui a été RÉELLEMENT consommé par l'optimisation
+      const usedWorkshopCounts = new Map<string, number>();
+      res.panels.forEach((p) => {
+        // Si ce panneau provient d'une chute atelier qui n'était pas déjà décomptée dans le projet
+        const wasAlreadyInProject = activeStockPanels.some((sp) => sp.id === p.panelId);
+        if (p.workshopSourceId && !wasAlreadyInProject) {
+          usedWorkshopCounts.set(
+            p.workshopSourceId,
+            (usedWorkshopCounts.get(p.workshopSourceId) || 0) + 1
+          );
+        }
+      });
+
+      if (usedWorkshopCounts.size > 0) {
+        setWorkshopStock((prev) =>
+          prev
+            .map((w) => {
+              const used = usedWorkshopCounts.get(w.id) || 0;
+              return { ...w, quantity: Math.max(0, w.quantity - used) };
+            })
+            .filter((w) => w.quantity > 0)
         );
       }
-    });
 
-    if (usedWorkshopCounts.size > 0) {
-      setWorkshopStock((prev) =>
-        prev
-          .map((w) => {
-            const used = usedWorkshopCounts.get(w.id) || 0;
-            return { ...w, quantity: Math.max(0, w.quantity - used) };
-          })
-          .filter((w) => w.quantity > 0)
+      // Vérifier si des panneaux issus du stock atelier manuellement ajoutés n'ont PAS été utilisés
+      const usedPanelIds = new Set(res.panels.map((p) => p.panelId));
+      const unusedWorkshopPanels = activeStockPanels.filter(
+        (p) => p.workshopSourceId && !usedPanelIds.has(p.id)
       );
-    }
 
-    // Vérifier si des panneaux issus du stock atelier manuellement ajoutés n'ont PAS été utilisés
-    const usedPanelIds = new Set(res.panels.map((p) => p.panelId));
-    const unusedWorkshopPanels = stockPanels.filter(
-      (p) => p.workshopSourceId && !usedPanelIds.has(p.id)
-    );
-
-    if (unusedWorkshopPanels.length > 0) {
-      // Les réintégrer au stock atelier
-      unusedWorkshopPanels.forEach((p) => {
-        reintegrateToWorkshop(p);
-      });
-
-      // Les retirer du stock de panneaux du projet
-      const unusedIds = new Set(unusedWorkshopPanels.map((p) => p.id));
-      setStockPanels((prev) => prev.filter((p) => !unusedIds.has(p.id)));
-    }
-
-    // Enregistrer les nouvelles chutes >= 500x500 mm créées par la coupe dans le stock atelier
-    const newQualifyingOffcuts = (res.reusableOffcuts || []).filter((o) => {
-      const d1 = Math.max(o.length, o.width);
-      const d2 = Math.min(o.length, o.width);
-      return d1 >= 500 && d2 >= 500;
-    });
-
-    if (newQualifyingOffcuts.length > 0) {
-      newQualifyingOffcuts.forEach((o) => {
-        reintegrateToWorkshop({
-          material: o.material,
-          length: o.length,
-          width: o.width,
-          quantity: 1,
+      if (unusedWorkshopPanels.length > 0) {
+        // Les réintégrer au stock atelier
+        unusedWorkshopPanels.forEach((p) => {
+          reintegrateToWorkshop(p);
         });
+
+        // Les retirer du stock de panneaux du projet
+        const unusedIds = new Set(unusedWorkshopPanels.map((p) => p.id));
+        setStockPanels((prev) => prev.filter((p) => !unusedIds.has(p.id)));
+      }
+
+      // Enregistrer les nouvelles chutes >= 500x500 mm créées par la coupe dans le stock atelier
+      const newQualifyingOffcuts = (res.reusableOffcuts || []).filter((o) => {
+        const d1 = Math.max(o.length, o.width);
+        const d2 = Math.min(o.length, o.width);
+        return d1 >= 500 && d2 >= 500;
       });
-    }
-  }, [stockPanels, workshopStock, cutItems, settings, reintegrateToWorkshop]);
+
+      if (newQualifyingOffcuts.length > 0) {
+        newQualifyingOffcuts.forEach((o) => {
+          reintegrateToWorkshop({
+            material: o.material,
+            length: o.length,
+            width: o.width,
+            quantity: 1,
+          });
+        });
+      }
+    },
+    [stockPanels, workshopStock, cutItems, settings, reintegrateToWorkshop]
+  );
+
+  // Recalcul de l'optimisation avec contrôle strict des matières en stock
+  const handleOptimize = useCallback(
+    (customCutItems?: CutItem[]) => {
+      const itemsToCheck = customCutItems || cutItems;
+      if (itemsToCheck.length === 0) {
+        alert('Veuillez ajouter au moins une pièce à découper.');
+        return;
+      }
+
+      // 1. Vérifier si chaque matière demandée est présente en stock (saisi ou atelier)
+      const availableMats = new Set([
+        ...stockPanels.map((p) => p.material.trim().toLowerCase()),
+        ...workshopStock.map((w) => w.material.trim().toLowerCase()),
+      ]);
+
+      const missing: MissingMaterialInfo[] = [];
+      itemsToCheck.forEach((it) => {
+        const mat = it.material?.trim();
+        if (mat && !availableMats.has(mat.toLowerCase())) {
+          const existing = missing.find(
+            (m) => m.material.toLowerCase() === mat.toLowerCase()
+          );
+          const len = Math.max(it.length, it.width);
+          const wid = Math.min(it.length, it.width);
+          if (existing) {
+            existing.requiredPiecesCount += it.quantity;
+            existing.maxPieceLength = Math.max(existing.maxPieceLength, len);
+            existing.maxPieceWidth = Math.max(existing.maxPieceWidth, wid);
+          } else {
+            missing.push({
+              material: mat,
+              requiredPiecesCount: it.quantity,
+              maxPieceLength: len,
+              maxPieceWidth: wid,
+            });
+          }
+        }
+      });
+
+      // 2. STOPPER L'OPTIMISATION SI UNE MATIÈRE EST ABSENTE DU STOCK !
+      if (missing.length > 0) {
+        setMissingStockData(missing);
+        setShowMissingStockModal(true);
+        return;
+      }
+
+      // 3. Si toutes les matières sont en stock, lancer le calcul
+      executeOptimization(stockPanels, itemsToCheck);
+    },
+    [cutItems, stockPanels, workshopStock, executeOptimization]
+  );
+
+  // Confirmation de l'ajout en stock et calcul immédiat de l'optimisation
+  const handleConfirmMissingStockAndOptimize = useCallback(
+    (newPanels: StockPanel[]) => {
+      setShowMissingStockModal(false);
+      const updatedStock = [...stockPanels, ...newPanels];
+      setStockPanels(updatedStock);
+      // Lancer le calepinage avec le stock mis à jour
+      executeOptimization(updatedStock, cutItems);
+    },
+    [stockPanels, cutItems, executeOptimization]
+  );
+
+  // Confirmation de l'ajout en stock seulement
+  const handleConfirmMissingStockOnly = useCallback((newPanels: StockPanel[]) => {
+    setShowMissingStockModal(false);
+    setStockPanels((prev) => [...prev, ...newPanels]);
+  }, []);
 
   // Matières présentes dans le stock de panneaux (groupées et triées par ordre alphabétique)
   const stockMaterials = useMemo(() => {
@@ -654,33 +738,16 @@ export default function Home() {
               allAvailableMaterials={allAvailableMaterials}
               stockPanels={stockPanels}
               workshopStock={workshopStock}
-              onAutoAddStockPanel={(mat) => {
-                const existsInStockPanels = stockPanels.some(
-                  (p) => p.material.trim().toLowerCase() === mat.trim().toLowerCase()
-                );
-                const existsInWorkshop = workshopStock.some(
-                  (w) => w.material.trim().toLowerCase() === mat.trim().toLowerCase()
-                );
-                if (existsInStockPanels || existsInWorkshop) return;
-
-                setStockPanels((prev) => [
-                  ...prev,
-                  {
-                    id: `sp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                    material: mat,
-                    length: 2800,
-                    width: 2070,
-                    quantity: 1,
-                  },
-                ]);
-              }}
+              onRequestOptimize={(newPieces) =>
+                handleOptimize(newPieces ? [...cutItems, ...newPieces] : cutItems)
+              }
             />
 
             {/* Bouton d'action principal : Calcul de l'optimisation */}
             <div className="pt-2 sticky bottom-4 z-20">
               <button
                 type="button"
-                onClick={handleOptimize}
+                onClick={() => handleOptimize()}
                 className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm uppercase tracking-wider py-3.5 px-6 rounded-2xl shadow-xl hover:shadow-amber-500/20 transition-all flex items-center justify-center gap-2.5 active:scale-[0.99] border border-amber-400/30"
               >
                 <Play className="w-4 h-4 fill-current" />
@@ -731,6 +798,15 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* Modale de suspension d'optimisation : Matière hors stock */}
+      <MissingStockModal
+        isOpen={showMissingStockModal}
+        missingMaterials={missingStockData}
+        onClose={() => setShowMissingStockModal(false)}
+        onConfirmAndOptimize={handleConfirmMissingStockAndOptimize}
+        onConfirmOnly={handleConfirmMissingStockOnly}
+      />
 
       {/* Footer */}
       <footer className="mt-auto border-t border-slate-800 py-4 text-center text-xs text-slate-500 print:hidden">

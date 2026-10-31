@@ -7,11 +7,13 @@ import {
   Layers,
   Box,
   Plus,
+  Play,
   X,
   Sliders,
   Send,
   CheckCircle2,
   ArrowRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
@@ -26,6 +28,7 @@ interface CabinetAssistantModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddPieces: (newItems: CutItem[]) => void;
+  onAddAndOptimize?: (newItems: CutItem[]) => void;
   availableMaterials: string[];
   stockPanels?: StockPanel[];
   workshopStock?: WorkshopItem[];
@@ -75,6 +78,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   isOpen,
   onClose,
   onAddPieces,
+  onAddAndOptimize,
   availableMaterials,
   stockPanels = [],
   workshopStock = [],
@@ -265,9 +269,34 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     setTimeout(() => setActiveTab('visual'), 600);
   };
 
+  // Détection des matières utilisées par l'IA qui ne sont présentes ni en stock saisi ni en atelier
+  const missingMaterialsInAssistant = useMemo(() => {
+    const stockMatSet = new Set([
+      ...stockPanels.map((p) => p.material.trim().toLowerCase()),
+      ...workshopStock.map((w) => w.material.trim().toLowerCase()),
+    ]);
+    const missing = new Set<string>();
+    calculated.cutItems.forEach((it) => {
+      if (it.material && !stockMatSet.has(it.material.trim().toLowerCase())) {
+        missing.add(it.material.trim());
+      }
+    });
+    return Array.from(missing);
+  }, [calculated.cutItems, stockPanels, workshopStock]);
+
   // Injection des pièces calculées dans la liste de débit
   const handleInjectPieces = () => {
     onAddPieces(calculated.cutItems);
+    onClose();
+  };
+
+  // Injection des pièces et lancement immédiat du calepinage
+  const handleInjectAndOptimize = () => {
+    if (onAddAndOptimize) {
+      onAddAndOptimize(calculated.cutItems);
+    } else {
+      onAddPieces(calculated.cutItems);
+    }
     onClose();
   };
 
@@ -1007,6 +1036,25 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           </div>
         </div>
 
+        {/* Alerte si matière hors stock */}
+        {missingMaterialsInAssistant.length > 0 && (
+          <div className="px-5 py-2.5 bg-amber-500/10 border-t border-amber-500/20 text-xs text-amber-300 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 font-medium">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                Matière(s) non en stock :{' '}
+                <strong className="text-white font-mono">
+                  {missingMaterialsInAssistant.join(', ')}
+                </strong>
+                .
+              </span>
+            </span>
+            <span className="text-[11px] text-amber-400/90 hidden sm:inline">
+              La mise en stock vous sera proposée avant le calcul.
+            </span>
+          </div>
+        )}
+
         {/* Pied de la modale avec bouton principal d'injection */}
         <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-slate-400 text-center sm:text-left">
@@ -1017,7 +1065,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             calculé(s) selon l&apos;épaisseur de {config.thickness} mm.
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
@@ -1029,12 +1077,19 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             <button
               type="button"
               onClick={handleInjectPieces}
+              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 font-medium text-xs transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Ajouter au débit</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleInjectAndOptimize}
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs transition-all shadow-lg active:scale-95"
             >
-              <Plus className="w-4 h-4 text-slate-950" />
-              <span>
-                Ajouter ces {calculated.cutItems.reduce((acc, it) => acc + it.quantity, 0)} pièces au débit
-              </span>
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Ajouter &amp; Optimiser</span>
             </button>
           </div>
         </div>
