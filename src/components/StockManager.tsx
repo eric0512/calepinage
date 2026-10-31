@@ -209,7 +209,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
   const totalPanelsCount = panels.reduce((sum, p) => sum + p.quantity, 0);
 
   return (
-    <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm">
+    <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-3 sm:p-5 shadow-sm">
       {/* En-tête avec Titre et Boutons à droite */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-2.5 pt-0.5">
@@ -270,11 +270,11 @@ export const StockManager: React.FC<StockManagerProps> = ({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
               <tr>
-                <th className="py-2.5 px-3">Matière</th>
-                <th className="py-2.5 px-2 text-center whitespace-nowrap">Dimensions (L × l)</th>
-                <th className="py-2.5 px-2 text-center">Surface</th>
-                <th className="py-2.5 px-1 text-center w-12 sm:w-14">Qté</th>
-                <th className="py-2.5 px-2 text-right w-12 sm:w-14">Actions</th>
+                <th className="py-2.5 px-2.5 sm:px-3 min-w-[120px] sm:min-w-[160px]">Matière</th>
+                <th className="py-2.5 px-1 sm:px-2 text-center whitespace-nowrap">Dimensions (L × l)</th>
+                <th className="py-2.5 px-2 text-center hidden sm:table-cell">Surface</th>
+                <th className="py-2.5 px-1 text-center w-10 sm:w-14">Qté</th>
+                <th className="py-2.5 px-1 sm:px-2 text-right w-8 sm:w-12">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/60 text-slate-200">
@@ -286,8 +286,8 @@ export const StockManager: React.FC<StockManagerProps> = ({
                     key={p.id}
                     className="hover:bg-slate-750/50 transition-colors group"
                   >
-                    {/* Matière (nom complet de la matière) */}
-                    <td className="py-2 px-3">
+                    {/* Matière (nom complet de la matière, toujours visible sans troncature) */}
+                    <td className="py-2 px-2.5 sm:px-3 min-w-[120px] sm:min-w-[160px]">
                       <input
                         type="text"
                         value={p.material}
@@ -295,13 +295,13 @@ export const StockManager: React.FC<StockManagerProps> = ({
                         onChange={(e) =>
                           handleUpdate(p.id, 'material', e.target.value)
                         }
-                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full"
+                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-blue-500 rounded px-1.5 py-0.5 text-xs font-semibold text-white w-full min-w-0"
                       />
                     </td>
 
-                    {/* Dimensions (champs réduits) */}
-                    <td className="py-2 px-2 text-center font-mono">
-                      <div className="inline-flex items-center gap-1">
+                    {/* Dimensions (champs réduits avec surface intégrée sous les dimensions sur mobile) */}
+                    <td className="py-2 px-1 sm:px-2 text-center font-mono">
+                      <div className="inline-flex items-center gap-0.5 sm:gap-1">
                         <input
                           type="number"
                           value={p.length}
@@ -312,9 +312,9 @@ export const StockManager: React.FC<StockManagerProps> = ({
                               parseInt(e.target.value) || 0
                             )
                           }
-                          className="bg-slate-900/90 border border-slate-700/80 focus:border-blue-500 rounded px-1 py-0.5 w-12 sm:w-14 text-center text-xs text-slate-100"
+                          className="bg-slate-900/90 border border-slate-700/80 focus:border-blue-500 rounded px-1 py-0.5 w-11 sm:w-14 text-center text-xs text-slate-100"
                         />
-                        <span className="text-slate-500 text-[11px]">×</span>
+                        <span className="text-slate-500 text-[10px] sm:text-[11px]">×</span>
                         <input
                           type="number"
                           value={p.width}
@@ -325,13 +325,16 @@ export const StockManager: React.FC<StockManagerProps> = ({
                               parseInt(e.target.value) || 0
                             )
                           }
-                          className="bg-slate-900/90 border border-slate-700/80 focus:border-blue-500 rounded px-1 py-0.5 w-12 sm:w-14 text-center text-xs text-slate-100"
+                          className="bg-slate-900/90 border border-slate-700/80 focus:border-blue-500 rounded px-1 py-0.5 w-11 sm:w-14 text-center text-xs text-slate-100"
                         />
                       </div>
+                      <span className="block sm:hidden text-[10px] text-slate-400 font-sans mt-0.5">
+                        {area} m²
+                      </span>
                     </td>
 
-                    {/* Surface */}
-                    <td className="py-2 px-2 text-center font-mono text-slate-400 text-[11px]">
+                    {/* Surface (colonne dédiée visible sur écran moyen et grand) */}
+                    <td className="py-2 px-2 text-center font-mono text-slate-400 text-[11px] hidden sm:table-cell">
                       {area} m²
                     </td>
 
@@ -349,12 +352,12 @@ export const StockManager: React.FC<StockManagerProps> = ({
                             parseInt(e.target.value) || 1
                           )
                         }
-                        className="bg-slate-900 border border-slate-700 rounded-lg px-1 py-0.5 font-mono text-center font-bold text-blue-400 text-xs w-10 sm:w-11 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="bg-slate-900 border border-slate-700 rounded-lg px-1 py-0.5 font-mono text-center font-bold text-blue-400 text-xs w-9 sm:w-11 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
                     </td>
 
                     {/* Actions */}
-                    <td className="py-2 px-2 text-right">
+                    <td className="py-2 px-1 sm:px-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         {p.workshopSourceId && (
                           <button
