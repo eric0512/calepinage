@@ -237,7 +237,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                               e.stopPropagation();
                               if (
                                 window.confirm(
-                                  `Supprimer le projet "${project.name}" ?`
+                                  `Supprimer définitivement le projet "${project.name}" et effacer tous ses enregistrements sur Supabase Cloud ?`
                                 )
                               ) {
                                 onDeleteProject(project.id);

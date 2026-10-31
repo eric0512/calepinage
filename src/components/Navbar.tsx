@@ -9,6 +9,7 @@ import {
   FolderOpen,
   Save,
   Check,
+  Trash2,
 } from 'lucide-react';
 import { PRESETS, ProjectPreset } from '@/lib/presets';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -17,6 +18,7 @@ interface NavbarProps {
   projectName?: string;
   onOpenHub: () => void;
   onSaveProject: () => void;
+  onDeleteCurrentProject?: () => void;
   onOpenSupabaseModal?: () => void;
   onLoadPreset: (preset: ProjectPreset) => void;
   onReset: () => void;
@@ -28,6 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   projectName = 'Mon Projet',
   onOpenHub,
   onSaveProject,
+  onDeleteCurrentProject,
   onLoadPreset,
   onReset,
   onPrint,
@@ -148,14 +151,26 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden sm:inline">Dossier</span>
             </button>
 
-            {/* Réinitialiser */}
+            {/* Réinitialiser les données */}
             <button
               onClick={onReset}
-              className="p-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-950/30 border border-transparent transition-colors"
-              title="Vider et réinitialiser"
+              className="p-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-amber-400 hover:bg-amber-950/30 border border-transparent transition-colors"
+              title="Vider et réinitialiser les débits"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
+
+            {/* Supprimer définitivement le projet */}
+            {onDeleteCurrentProject && (
+              <button
+                type="button"
+                onClick={onDeleteCurrentProject}
+                className="p-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-red-400 hover:bg-red-950/30 border border-transparent transition-colors"
+                title="Supprimer définitivement ce projet de Supabase"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -242,6 +242,16 @@ export default function Home() {
     async (silent: boolean = false) => {
       if (!currentProjectId && currentView !== 'editor') return;
 
+      // Si le projet est vidé de toutes ses informations (aucun panneau et aucune pièce),
+      // supprimer définitivement l'enregistrement de Supabase pour ne laisser aucun projet fantôme.
+      if (stockPanels.length === 0 && cutItems.length === 0) {
+        if (currentProjectId) {
+          await deleteProjectFromCloud(currentProjectId);
+          setSavedProjects((prev) => prev.filter((p) => p.id !== currentProjectId));
+        }
+        return;
+      }
+
       const projectToSave: SavedProject = {
         id: currentProjectId || `project-${Date.now()}`,
         name: projectName,
@@ -335,10 +345,27 @@ export default function Home() {
     persistProject(false);
   };
 
-  // Supprimer un projet existant
+  // Supprimer un projet existant et effacer tous ses enregistrements sur Supabase Cloud
   const handleDeleteProject = async (projectId: string) => {
+    // 1. Mettre à jour immédiatement la liste des projets locale
     setSavedProjects((prev) => prev.filter((p) => p.id !== projectId));
+
+    // 2. Si le projet supprimé est celui actuellement chargé dans l'éditeur, réinitialiser pour couper tout auto-save
+    if (currentProjectId === projectId) {
+      setCurrentProjectId('');
+      setProjectName('Nouveau Projet');
+      setStockPanels([]);
+      setCutItems([]);
+      setOptimizationResult(null);
+      setIsSaved(false);
+      setCurrentView('hub');
+    }
+
+    // 3. Supprimer définitivement l'enregistrement dans la table Supabase
     await deleteProjectFromCloud(projectId);
+
+    // 4. Resynchroniser avec Supabase Cloud
+    await refreshProjectsList();
   };
 
   // Exécution du calcul d'optimisation
@@ -558,10 +585,10 @@ export default function Home() {
   };
 
   // Réinitialiser le projet actuel
-  const handleReset = () => {
+  const handleReset = async () => {
     if (
       window.confirm(
-        'Êtes-vous sûr de vouloir vider les panneaux et les pièces de ce projet ?'
+        'Êtes-vous sûr de vouloir vider tous les panneaux et les pièces de ce projet ?\n\nToutes les informations associées seront supprimées.'
       )
     ) {
       // Réintégrer les panneaux empruntés au stock atelier
@@ -572,6 +599,12 @@ export default function Home() {
       setStockPanels([]);
       setCutItems([]);
       setOptimizationResult(null);
+
+      // Si le projet est enregistré sur Supabase, supprimer son enregistrement maintenant qu'il est vidé
+      if (currentProjectId) {
+        await deleteProjectFromCloud(currentProjectId);
+        setSavedProjects((prev) => prev.filter((p) => p.id !== currentProjectId));
+      }
     }
   };
 
@@ -651,6 +684,19 @@ export default function Home() {
         projectName={projectName}
         onOpenHub={() => setCurrentView('hub')}
         onSaveProject={handleManualSave}
+        onDeleteCurrentProject={
+          currentProjectId
+            ? () => {
+                if (
+                  window.confirm(
+                    `Supprimer définitivement le projet "${projectName}" et toutes ses données sur Supabase Cloud ?`
+                  )
+                ) {
+                  handleDeleteProject(currentProjectId);
+                }
+              }
+            : undefined
+        }
         onLoadPreset={handleLoadPreset}
         onReset={handleReset}
         onPrint={handlePrint}
