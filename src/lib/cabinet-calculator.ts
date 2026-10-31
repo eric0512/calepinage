@@ -393,3 +393,22 @@ export function parseCabinetPromptWithNLP(
   return config;
 }
 
+/**
+ * Extrait l'épaisseur en millimètres depuis le libellé d'une matière.
+ * Exemples : "MDF 18mm" -> 18, "Contreplaqué 15 mm" -> 15, "OSB 18" -> 18, "Mélaminé Blanc 19mm" -> 19
+ */
+export function extractThicknessFromMaterialName(matName: string): number | null {
+  if (!matName) return null;
+  const mmMatch = matName.match(/(\d{1,2})\s*mm/i);
+  if (mmMatch) {
+    const val = parseInt(mmMatch[1], 10);
+    if (val >= 3 && val <= 50) return val;
+  }
+  const numMatch = matName.match(/\b(\d{1,2})\b/);
+  if (numMatch) {
+    const val = parseInt(numMatch[1], 10);
+    if (val >= 6 && val <= 40) return val;
+  }
+  return null;
+}
+

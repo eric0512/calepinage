@@ -19,6 +19,7 @@ import {
   BackType,
   calculateCabinetPieces,
   parseCabinetPromptWithNLP,
+  extractThicknessFromMaterialName,
 } from '@/lib/cabinet-calculator';
 
 interface CabinetAssistantModalProps {
@@ -89,12 +90,40 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     setMounted(true);
   }, []);
 
-  // Synchroniser la matière par défaut si disponible
+  // Synchroniser la matière et l'épaisseur par défaut si disponible
   useEffect(() => {
-    if (availableMaterials.length > 0 && !availableMaterials.includes(config.material)) {
-      setConfig((prev) => ({ ...prev, material: availableMaterials[0] }));
+    if (availableMaterials.length > 0) {
+      setConfig((prev) => {
+        const currentValid = availableMaterials.includes(prev.material);
+        const targetMat = currentValid ? prev.material : availableMaterials[0];
+        const detected = extractThicknessFromMaterialName(targetMat);
+        return {
+          ...prev,
+          material: targetMat,
+          ...(detected ? { thickness: detected } : {}),
+        };
+      });
     }
-  }, [availableMaterials, config.material]);
+  }, [availableMaterials]);
+
+  // Gestion du changement de matière avec détection automatique de l'épaisseur
+  const handleMaterialChange = (newMat: string) => {
+    const detectedThickness = extractThicknessFromMaterialName(newMat);
+    setConfig((prev) => ({
+      ...prev,
+      material: newMat,
+      ...(detectedThickness ? { thickness: detectedThickness } : {}),
+    }));
+  };
+
+  // Liste dynamique des boutons d'épaisseur
+  const thicknessOptions = useMemo(() => {
+    const defaultList = [15, 16, 18, 19, 22];
+    if (config.thickness && !defaultList.includes(config.thickness)) {
+      return [...defaultList, config.thickness].sort((a, b) => a - b);
+    }
+    return defaultList;
+  }, [config.thickness]);
 
   // Calcul mathématique rigoureux des pièces
   const calculated = useMemo(() => {
@@ -326,7 +355,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   </label>
                   <select
                     value={config.material}
-                    onChange={(e) => setConfig({ ...config, material: e.target.value })}
+                    onChange={(e) => handleMaterialChange(e.target.value)}
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
                   >
                     {availableMaterials.map((m) => (
@@ -398,12 +427,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-slate-300 font-semibold">
                     Épaisseur du bois :
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    {[15, 16, 18, 19, 22].map((th) => (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {thicknessOptions.map((th) => (
                       <button
                         key={th}
                         type="button"
@@ -417,6 +446,22 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         {th} mm
                       </button>
                     ))}
+                    <div className="inline-flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5">
+                      <input
+                        type="number"
+                        min="3"
+                        max="50"
+                        value={config.thickness}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            thickness: parseInt(e.target.value) || 0,
+                          })
+                        }
+                        className="w-8 bg-transparent text-center text-xs font-mono font-bold text-amber-400 focus:outline-none"
+                      />
+                      <span className="text-[10px] text-slate-400">mm</span>
+                    </div>
                   </div>
                 </div>
               </div>
