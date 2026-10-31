@@ -29,7 +29,6 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   onOpenProject,
   onCreateNewProject,
   onDeleteProject,
-  isCloudConnected = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'hub' | 'existing'>('hub');
   const [newProjectName, setNewProjectName] = useState('');
@@ -62,17 +61,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
             Calepinage
           </h1>
-          <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
-            {isCloudConnected ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Connecté à Supabase Cloud (roadtrip-vercel)
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1 rounded-full bg-slate-900 text-slate-400 border border-slate-800">
-                Mode Local (Supabase prêt à lier)
-              </span>
-            )}
+          <div className="flex items-center justify-center gap-2 mt-4">
             <button
               type="button"
               onClick={() => {
@@ -80,7 +69,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                   window.dispatchEvent(new CustomEvent('trigger-pwa-install'));
                 }
               }}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 transition-colors shadow-sm"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 transition-colors shadow-sm"
               title="Installer l'application sur votre écran d'accueil"
             >
               <Smartphone className="w-3.5 h-3.5 text-amber-400" />

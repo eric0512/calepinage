@@ -9,8 +9,6 @@ import {
   FolderOpen,
   Save,
   Check,
-  Database,
-  Smartphone,
 } from 'lucide-react';
 import { PRESETS, ProjectPreset } from '@/lib/presets';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -24,19 +22,16 @@ interface NavbarProps {
   onReset: () => void;
   onPrint: () => void;
   isSaved?: boolean;
-  isCloudConnected?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   projectName = 'Mon Projet',
   onOpenHub,
   onSaveProject,
-  onOpenSupabaseModal,
   onLoadPreset,
   onReset,
   onPrint,
   isSaved = false,
-  isCloudConnected = false,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white shadow-md print:hidden">
@@ -77,42 +72,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Actions & Presets */}
           <div className="flex items-center space-x-1.5 sm:space-x-3">
-            {/* Bouton Supabase Cloud */}
-            <button
-              type="button"
-              onClick={onOpenSupabaseModal}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors shadow-sm ${
-                isCloudConnected
-                  ? 'bg-emerald-950/70 border-emerald-500/30 text-emerald-300'
-                  : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
-              }`}
-              title="Configurer la liaison Supabase Cloud"
-            >
-              <Database
-                className={`w-3.5 h-3.5 ${
-                  isCloudConnected ? 'text-emerald-400' : 'text-slate-400'
-                }`}
-              />
-              <span className="hidden md:inline">
-                {isCloudConnected ? 'Cloud Actif' : 'Lier Cloud'}
-              </span>
-            </button>
-
-            {/* Bouton Installer l'application */}
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('trigger-pwa-install'));
-                }
-              }}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors shadow-sm"
-              title="Installer l'application sur votre écran d'accueil"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden lg:inline">Installer l&apos;app</span>
-            </button>
-
             {/* Bouton Thème Clair / Sombre */}
             <ThemeToggle />
 

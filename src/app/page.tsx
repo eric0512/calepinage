@@ -13,7 +13,6 @@ import {
 import { DEFAULT_SETTINGS, PRESETS, ProjectPreset } from '@/lib/presets';
 import { optimizeCutting } from '@/lib/optimizer/guillotine';
 import {
-  isSupabaseConfigured,
   getProjects,
   saveProjectToCloud,
   deleteProjectFromCloud,
@@ -27,6 +26,7 @@ import { CuttingVisualizer } from '@/components/CuttingVisualizer';
 import { OffcutsList } from '@/components/OffcutsList';
 import { PrintDossier } from '@/components/PrintDossier';
 import { ProjectHub } from '@/components/ProjectHub';
+import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 import { SupabaseConfigModal } from '@/components/SupabaseConfigModal';
 import { Play, Layers, ListPlus } from 'lucide-react';
 
@@ -48,7 +48,6 @@ export default function Home() {
   // Liste des projets sauvegardés
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [isSaved, setIsSaved] = useState<boolean>(false);
-  const [cloudConnected, setCloudConnected] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
 
   // Onglet mobile
@@ -198,8 +197,6 @@ export default function Home() {
 
   // Charger les projets depuis Supabase ou Cache local
   const refreshProjectsList = useCallback(() => {
-    setCloudConnected(isSupabaseConfigured());
-
     getProjects().then(({ projects }) => {
       const isFirstLaunch =
         typeof window !== 'undefined' &&
@@ -505,8 +502,9 @@ export default function Home() {
           onOpenProject={handleOpenProject}
           onCreateNewProject={handleCreateNewProject}
           onDeleteProject={handleDeleteProject}
-          isCloudConnected={cloudConnected}
         />
+        {/* L'invitation à installer l'application n'est proposée QUE sur la page d'accueil */}
+        <PwaInstallPrompt />
         <SupabaseConfigModal
           isOpen={isSupabaseModalOpen}
           onClose={() => setIsSupabaseModalOpen(false)}
@@ -519,17 +517,15 @@ export default function Home() {
   // SI LA VUE ACTIVE EST L'ATELIER (ÉDITEUR)
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Barre de navigation avec nom du projet, badge Supabase et bouton Accueil */}
+      {/* Barre de navigation avec nom du projet et bouton Accueil */}
       <Navbar
         projectName={projectName}
         onOpenHub={() => setCurrentView('hub')}
         onSaveProject={handleManualSave}
-        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onLoadPreset={handleLoadPreset}
         onReset={handleReset}
         onPrint={handlePrint}
         isSaved={isSaved}
-        isCloudConnected={cloudConnected}
       />
 
       {/* Modal de configuration Supabase Cloud */}

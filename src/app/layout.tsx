@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { PwaInstallPrompt } from '@/components/PwaInstallPrompt';
 
 export const viewport: Viewport = {
   themeColor: '#020617',
@@ -57,7 +56,6 @@ export default function RootLayout({
       </head>
       <body className="antialiased bg-slate-950 text-slate-100 min-h-screen transition-colors duration-200">
         {children}
-        <PwaInstallPrompt />
       </body>
     </html>
   );
