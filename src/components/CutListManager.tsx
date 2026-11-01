@@ -380,7 +380,7 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   };
 
   return (
-    <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-5 shadow-sm">
+    <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-3 sm:p-5 shadow-sm">
       {/* En-tête avec compteur et actions CSV */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
@@ -621,15 +621,19 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                 </div>
               </div>
 
-              {/* Tableau des découpes de cette catégorie */}
+              {/* Tableau des découpes de cette catégorie (optimisé sans défilement horizontal mobile) */}
               <div className="overflow-x-auto rounded-xl border border-slate-700/80 bg-slate-900/40">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
                     <tr>
-                      <th className="py-2.5 px-3">Dimensions (L × l mm)</th>
-                      <th className="py-2.5 px-3 text-center">Qté</th>
-                      <th className="py-2.5 px-3 text-center">Fil du bois</th>
-                      <th className="py-2.5 px-3 text-right">Actions</th>
+                      <th className="py-2 px-1.5 sm:px-3 text-left">
+                        Dimensions <span className="text-[10px] text-slate-500 font-normal hidden sm:inline">(L × l mm)</span>
+                      </th>
+                      <th className="py-2 px-1 text-center w-12 sm:w-16">Qté</th>
+                      <th className="py-2 px-1 text-center w-10 sm:w-20" title="Sens du fil du bois">
+                        Fil<span className="hidden sm:inline"> du bois</span>
+                      </th>
+                      <th className="py-2 px-1.5 sm:px-3 text-right w-16 sm:w-20">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700/60 text-slate-200">
@@ -638,8 +642,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                         key={item.id}
                         className="hover:bg-slate-750/50 transition-colors group"
                       >
-                        <td className="py-2 px-3 font-mono">
-                          <div className="flex items-center gap-1.5">
+                        <td className="py-1.5 sm:py-2 px-1.5 sm:px-3 font-mono">
+                          <div className="flex items-center gap-1 sm:gap-1.5">
                             <input
                               type="number"
                               value={item.length}
@@ -650,9 +654,9 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                   parseInt(e.target.value) || 0
                                 )
                               }
-                              className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-emerald-500 rounded px-1 py-0.5 w-16 text-slate-200 font-semibold"
+                              className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-slate-700/60 sm:border-transparent focus:border-emerald-500 rounded px-1 py-0.5 w-12 sm:w-16 text-slate-200 font-semibold text-center sm:text-left text-xs"
                             />
-                            <span className="text-slate-500">×</span>
+                            <span className="text-slate-500 text-[11px]">×</span>
                             <input
                               type="number"
                               value={item.width}
@@ -663,12 +667,12 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                   parseInt(e.target.value) || 0
                                 )
                               }
-                              className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-emerald-500 rounded px-1 py-0.5 w-16 text-slate-200 font-semibold"
+                              className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-slate-700/60 sm:border-transparent focus:border-emerald-500 rounded px-1 py-0.5 w-12 sm:w-16 text-slate-200 font-semibold text-center sm:text-left text-xs"
                             />
-                            <span className="text-[10px] text-slate-500">mm</span>
+                            <span className="text-[10px] text-slate-500 hidden sm:inline">mm</span>
                           </div>
                         </td>
-                        <td className="py-2 px-3 text-center">
+                        <td className="py-1.5 sm:py-2 px-1 text-center">
                           <input
                             type="number"
                             min="1"
@@ -681,16 +685,16 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                 parseInt(e.target.value) || 1
                               )
                             }
-                            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 font-mono text-center font-bold text-emerald-400 w-14"
+                            className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 font-mono text-center font-bold text-emerald-400 w-10 sm:w-12 text-xs"
                           />
                         </td>
-                        <td className="py-2 px-3 text-center">
+                        <td className="py-1.5 sm:py-2 px-1 text-center">
                           <button
                             type="button"
                             onClick={() =>
                               handleUpdate(item.id, 'canRotate', !item.canRotate)
                             }
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                            className={`inline-flex items-center justify-center gap-1 h-7 w-7 sm:h-auto sm:w-auto p-1 sm:px-2 sm:py-0.5 rounded text-[11px] font-medium transition-colors ${
                               item.canRotate
                                 ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/30'
                                 : 'bg-amber-950/70 text-amber-400 border border-amber-500/30'
@@ -701,12 +705,12 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                 : 'Sens strict (Respect du fil du bois obligatoire)'
                             }
                           >
-                            <RotateCw className="w-3 h-3" />
-                            <span>{item.canRotate ? 'Libre' : 'Fil fixe'}</span>
+                            <RotateCw className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{item.canRotate ? 'Libre' : 'Fil fixe'}</span>
                           </button>
                         </td>
-                        <td className="py-2 px-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
+                        <td className="py-1.5 sm:py-2 px-1.5 sm:px-3 text-right">
+                          <div className="flex items-center justify-end gap-0.5 sm:gap-1">
                             <button
                               type="button"
                               onClick={() => handleDuplicate(item)}
