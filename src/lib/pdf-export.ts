@@ -30,42 +30,45 @@ export function exportCuttingPlansToPdf(
       doc.addPage('a4', 'portrait');
     }
 
-    // 1. En-tête de la page A4
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.roundedRect(marginX, marginTop, contentWidth, 24, 3, 3, 'F');
+    // 1. En-tête de la page A4 (Fond blanc avec texte noir pour impression et lisibilité optimale)
+    const headerHeight = 22;
+    doc.setFillColor(255, 255, 255); // Fond blanc
+    doc.setDrawColor(203, 213, 225); // Bordure discrète slate-300
+    doc.setLineWidth(0.4);
+    doc.roundedRect(marginX, marginTop, contentWidth, headerHeight, 2, 2, 'FD');
 
     // Titre principal
-    doc.setTextColor(245, 158, 11); // amber-500
+    doc.setTextColor(0, 0, 0); // Noir
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
+    doc.setFontSize(12.5);
     doc.text(
       `PLAN DE COUPE — PANNEAU ${panel.panelIndex} / ${panels.length}`,
-      marginX + 6,
-      marginTop + 8
+      marginX + 5,
+      marginTop + 6.5
     );
 
     // Projet et matière
-    doc.setTextColor(255, 255, 255);
+    doc.setTextColor(30, 41, 59); // Noir / slate-800
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     const sourceLabel = panel.workshopSourceId ? 'Chute Atelier' : 'Panneau Stock';
     doc.text(
       `Matière : ${panel.material} (${sourceLabel}) — Format brut : ${panel.panelLength} × ${panel.panelWidth} mm`,
-      marginX + 6,
-      marginTop + 14.5
+      marginX + 5,
+      marginTop + 12.5
     );
 
     // Métriques (Rendement, trait de scie, nb pièces)
     doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184); // slate-400
+    doc.setTextColor(71, 85, 105); // slate-600
     doc.text(
       `Rendement : ${panel.efficiencyPercentage}%  |  Trait de scie : ${kerf.toFixed(
         1
       )} mm  |  Pièces : ${panel.placedPieces.length}  |  Chutes atelier : ${
         panel.offcuts.filter((o) => o.reusable).length
       }`,
-      marginX + 6,
-      marginTop + 20
+      marginX + 5,
+      marginTop + 18
     );
 
     // 2. Dimensions du plan de coupe en orientation VERTICALE
@@ -74,9 +77,11 @@ export function exportCuttingPlansToPdf(
     const panelW = isLandscape ? panel.panelWidth : panel.panelLength; // petite dimension (horizontale)
     const panelH = isLandscape ? panel.panelLength : panel.panelWidth; // grande dimension (verticale)
 
-    const availableAreaY = marginTop + 28;
+    // Dégagement garanti : réserve 14 mm au-dessus du panneau pour la cote supérieure
+    const topDimensionMargin = 14;
+    const availableAreaY = marginTop + headerHeight + topDimensionMargin;
     const availableAreaHeight = pageHeight - availableAreaY - marginBottom - 12; // hauteur disponible
-    const availableAreaWidth = contentWidth - 14; // largeur disponible avec marges pour cotations
+    const availableAreaWidth = contentWidth - 14; // largeur disponible avec marge pour cote gauche
 
     // Échelle proportionnelle
     const scale = Math.min(
@@ -207,23 +212,23 @@ export function exportCuttingPlansToPdf(
     });
 
     // 6. Cotations extérieures du panneau (Largeur en haut, Hauteur à gauche)
-    doc.setDrawColor(71, 85, 105);
-    doc.setLineWidth(0.3);
-    doc.setTextColor(30, 41, 59);
+    doc.setDrawColor(15, 23, 42); // Noir net
+    doc.setLineWidth(0.35);
+    doc.setTextColor(0, 0, 0); // Noir pur
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
+    doc.setFontSize(8);
 
-    // Cote Horizontale (Largeur en haut)
-    doc.line(drawX, drawY - 3, drawX + drawW, drawY - 3);
-    doc.line(drawX, drawY - 5, drawX, drawY - 1);
-    doc.line(drawX + drawW, drawY - 5, drawX + drawW, drawY - 1);
-    doc.text(`${panelW} mm`, drawX + drawW / 2, drawY - 4.5, { align: 'center' });
+    // Cote Horizontale (Largeur en haut, parfaitement dégagée du bandeau blanc)
+    doc.line(drawX, drawY - 4, drawX + drawW, drawY - 4);
+    doc.line(drawX, drawY - 6.5, drawX, drawY - 1.5);
+    doc.line(drawX + drawW, drawY - 6.5, drawX + drawW, drawY - 1.5);
+    doc.text(`${panelW} mm`, drawX + drawW / 2, drawY - 6, { align: 'center' });
 
     // Cote Verticale (Hauteur à gauche)
-    doc.line(drawX - 3, drawY, drawX - 3, drawY + drawH);
-    doc.line(drawX - 5, drawY, drawX - 1, drawY);
-    doc.line(drawX - 5, drawY + drawH, drawX - 1, drawY + drawH);
-    doc.text(`${panelH} mm`, drawX - 4.5, drawY + drawH / 2, {
+    doc.line(drawX - 4, drawY, drawX - 4, drawY + drawH);
+    doc.line(drawX - 6.5, drawY, drawX - 1.5, drawY);
+    doc.line(drawX - 6.5, drawY + drawH, drawX - 1.5, drawY + drawH);
+    doc.text(`${panelH} mm`, drawX - 6, drawY + drawH / 2, {
       align: 'center',
       angle: 90,
     });
