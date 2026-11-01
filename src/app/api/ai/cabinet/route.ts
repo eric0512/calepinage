@@ -64,7 +64,8 @@ Tu dois analyser la description en langage naturel d'un meuble ou caisson et en 
   "partitionsCount": number (séparations verticales, 0 ou 1),
   "doors": "none" | "one_door" | "two_doors",
   "material": "string (matière choisie en priorité dans les stocks de l'utilisateur)",
-  "backMaterial": "string (matière spécifique du fond avec son épaisseur, ex: 'MDF 8mm' ou 'Isorel 3mm' choisie en priorité dans le stock atelier ou saisi)"
+  "backMaterial": "string (matière spécifique du fond avec son épaisseur, ex: 'MDF 8mm' ou 'Isorel 3mm' choisie en priorité dans le stock atelier ou saisi)",
+  "cabinetCount": number (nombre de caissons identiques souhaités, défaut: 1)
 }
 
 RÈGLE IMPÉRATIVE SUR LES STOCKS :

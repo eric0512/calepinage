@@ -49,6 +49,7 @@ const DEFAULT_CONFIG: CabinetConfig = {
   partitionsCount: 0,
   doors: 'none',
   material: 'MDF 18mm',
+  cabinetCount: 1,
 };
 
 const PROMPT_PRESETS = [
@@ -464,69 +465,99 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Colonne Gauche : Formulaire de paramétrage (7 colonnes) */}
             <div className="lg:col-span-7 space-y-5">
-              {/* Nom & Matière */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-850 p-3.5 rounded-2xl border border-slate-800">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                    Nom du meuble
-                  </label>
-                  <input
-                    type="text"
-                    value={config.name}
-                    onChange={(e) => setConfig({ ...config, name: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
-                  />
-                </div>
+              {/* Nom du meuble, Matière et Nbre de caissons (alignés sur la même ligne) */}
+              <div className="bg-slate-850 p-3.5 rounded-2xl border border-slate-800">
+                <div className="grid grid-cols-12 gap-2 sm:gap-2.5 items-end">
+                  {/* 1. Nom du meuble (réduit) */}
+                  <div className="col-span-5 sm:col-span-4 min-w-0">
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 truncate">
+                      <span className="sm:hidden">Nom</span>
+                      <span className="hidden sm:inline">Nom du meuble</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={config.name}
+                      onChange={(e) => setConfig({ ...config, name: e.target.value })}
+                      placeholder="Ex: Caisson Meuble"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 truncate"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                    Matière du caisson
-                  </label>
-                  <select
-                    value={config.material}
-                    onChange={(e) => handleMaterialChange(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
-                  >
-                    {stockPanels.length > 0 && (
-                      <optgroup label="📦 En Stock Saisi (Panneaux projet)">
-                        {stockPanels.map((p, idx) => (
-                          <option key={`sp-${p.id || idx}`} value={p.material}>
-                            {p.material} ({p.length}×{p.width} mm - {p.quantity} dispo)
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-
-                    {workshopStock.length > 0 && (
-                      <optgroup label="🏭 En Stock Atelier (Chutes réutilisables)">
-                        {workshopStock.map((w, idx) => (
-                          <option key={`ws-${w.id || idx}`} value={w.material}>
-                            {w.material} ({w.length}×{w.width} mm - {w.quantity} chute(s))
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-
-                    <optgroup label="📋 Autres matières">
-                      {availableMaterials
-                        .filter(
-                          (m) =>
-                            !stockPanels.some((p) => p.material === m) &&
-                            !workshopStock.some((w) => w.material === m)
-                        )
-                        .map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                    </optgroup>
-
-                    {!availableMaterials.includes(config.material) &&
-                      !stockPanels.some((p) => p.material === config.material) &&
-                      !workshopStock.some((w) => w.material === config.material) && (
-                        <option value={config.material}>{config.material}</option>
+                  {/* 2. Matière du caisson (réduit) */}
+                  <div className="col-span-4 sm:col-span-5 min-w-0">
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 truncate">
+                      <span className="sm:hidden">Matière</span>
+                      <span className="hidden sm:inline">Matière du caisson</span>
+                    </label>
+                    <select
+                      value={config.material}
+                      onChange={(e) => handleMaterialChange(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white truncate focus:outline-none focus:border-amber-500 font-medium"
+                    >
+                      {stockPanels.length > 0 && (
+                        <optgroup label="📦 En Stock Saisi (Panneaux projet)">
+                          {stockPanels.map((p, idx) => (
+                            <option key={`sp-${p.id || idx}`} value={p.material}>
+                              {p.material} ({p.length}×{p.width} mm - {p.quantity} dispo)
+                            </option>
+                          ))}
+                        </optgroup>
                       )}
-                  </select>
+
+                      {workshopStock.length > 0 && (
+                        <optgroup label="🏭 En Stock Atelier (Chutes réutilisables)">
+                          {workshopStock.map((w, idx) => (
+                            <option key={`ws-${w.id || idx}`} value={w.material}>
+                              {w.material} ({w.length}×{w.width} mm - {w.quantity} chute(s))
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+
+                      <optgroup label="📋 Autres matières">
+                        {availableMaterials
+                          .filter(
+                            (m) =>
+                              !stockPanels.some((p) => p.material === m) &&
+                              !workshopStock.some((w) => w.material === m)
+                          )
+                          .map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                      </optgroup>
+
+                      {!availableMaterials.includes(config.material) &&
+                        !stockPanels.some((p) => p.material === config.material) &&
+                        !workshopStock.some((w) => w.material === config.material) && (
+                          <option value={config.material}>{config.material}</option>
+                        )}
+                    </select>
+                  </div>
+
+                  {/* 3. Nbre de caissons */}
+                  <div className="col-span-3 min-w-0">
+                    <label className="block text-[11px] font-bold text-amber-300 mb-1 truncate text-center sm:text-left">
+                      <span className="sm:hidden">Nbre caisson</span>
+                      <span className="hidden sm:inline">Nbre de caissons</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={config.cabinetCount || 1}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setConfig({
+                          ...config,
+                          cabinetCount: isNaN(val) || val < 1 ? 1 : val,
+                        });
+                      }}
+                      className="w-full bg-slate-900 border border-amber-500/50 focus:border-amber-400 rounded-lg px-2 py-1.5 text-xs text-amber-400 font-mono font-bold text-center shadow-inner"
+                      title="Nombre de caissons identiques à débiter"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1060,9 +1091,19 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           <div className="text-xs text-slate-400 text-center sm:text-left">
             Total :{' '}
             <strong className="text-white font-mono">
-              {calculated.cutItems.reduce((acc, it) => acc + it.quantity, 0)} panneau(x)
+              {calculated.cutItems.reduce((acc, it) => acc + it.quantity, 0)} pièce(s)
             </strong>{' '}
-            calculé(s) selon l&apos;épaisseur de {config.thickness} mm.
+            {(config.cabinetCount || 1) > 1 && (
+              <span className="text-amber-300 font-semibold">
+                ({config.cabinetCount} caissons ×{' '}
+                {Math.round(
+                  calculated.cutItems.reduce((acc, it) => acc + it.quantity, 0) /
+                    (config.cabinetCount || 1)
+                )}{' '}
+                pcs){' '}
+              </span>
+            )}
+            calculée(s) selon l&apos;épaisseur de {config.thickness} mm.
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">

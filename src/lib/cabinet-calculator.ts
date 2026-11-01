@@ -20,6 +20,7 @@ export interface CabinetConfig {
   material: string; // Matière principale
   backMaterial?: string; // Matière du fond
   doorMaterial?: string; // Matière des portes
+  cabinetCount?: number; // Nombre de caissons identiques à fabriquer
 }
 
 export interface CabinetPieceCalculation {
@@ -72,7 +73,10 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     material,
     backMaterial,
     doorMaterial = material,
+    cabinetCount: rawCabinetCount = 1,
   } = config;
+
+  const cabinetCount = Math.max(1, rawCabinetCount || 1);
 
   // Résolution stricte de la matière du fond pour éviter qu'il ne soit débité sur le panneau 18mm !
   let resolvedBackMaterial = backMaterial?.trim();
@@ -100,13 +104,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     sideFormula = `${height} - (2 × ${thickness}) = ${sideHeight} mm (Côtés intérieurs)`;
   }
 
+  const sidesQty = 2 * cabinetCount;
   pieces.push({
-    role: 'Côtés (Gauche & Droit)',
+    role: cabinetCount > 1 ? `Côtés (${sidesQty} pcs pour ${cabinetCount} caissons)` : 'Côtés (Gauche & Droit)',
     description: `${config.name} - Côtés`,
-    formula: sideFormula,
+    formula: cabinetCount > 1 ? `${sideFormula} (2 × ${cabinetCount} = ${sidesQty} pcs)` : sideFormula,
     length: Math.max(sideHeight, structuralDepth),
     width: Math.min(sideHeight, structuralDepth),
-    quantity: 2,
+    quantity: sidesQty,
     material,
     color: PIECE_COLORS.sides,
   });
@@ -120,13 +125,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     topBottomFormula = `${width} - (2 × ${thickness}) = ${topBottomWidth} mm (Haut/Bas intérieurs)`;
   }
 
+  const topBottomQty = 2 * cabinetCount;
   pieces.push({
-    role: 'Haut & Bas (Dessus & Dessous)',
+    role: cabinetCount > 1 ? `Haut & Bas (${topBottomQty} pcs pour ${cabinetCount} caissons)` : 'Haut & Bas (Dessus & Dessous)',
     description: `${config.name} - Dessus / Dessous`,
-    formula: topBottomFormula,
+    formula: cabinetCount > 1 ? `${topBottomFormula} (2 × ${cabinetCount} = ${topBottomQty} pcs)` : topBottomFormula,
     length: Math.max(topBottomWidth, structuralDepth),
     width: Math.min(topBottomWidth, structuralDepth),
-    quantity: 2,
+    quantity: topBottomQty,
     material,
     color: PIECE_COLORS.topBottom,
   });
@@ -140,14 +146,15 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   if (partitionsCount > 0) {
     const partitionHeight = interiorHeight;
     const partitionFormula = `Hauteur intérieure : ${height} - (2 × ${thickness}) = ${partitionHeight} mm`;
+    const partitionQty = partitionsCount * cabinetCount;
 
     pieces.push({
       role: 'Séparation verticale',
       description: `${config.name} - Séparation centrale`,
-      formula: partitionFormula,
+      formula: cabinetCount > 1 ? `${partitionFormula} (${partitionsCount} × ${cabinetCount} = ${partitionQty} pcs)` : partitionFormula,
       length: Math.max(partitionHeight, structuralDepth),
       width: Math.min(partitionHeight, structuralDepth),
-      quantity: partitionsCount,
+      quantity: partitionQty,
       material,
       color: PIECE_COLORS.partition,
     });
@@ -165,12 +172,15 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     }
 
     const shelfDepth = Math.max(50, structuralDepth - shelfRecess);
-    const totalShelvesQty = partitionsCount > 0 ? shelvesCount * (partitionsCount + 1) : shelvesCount;
+    const shelvesPerCabinet = partitionsCount > 0 ? shelvesCount * (partitionsCount + 1) : shelvesCount;
+    const totalShelvesQty = shelvesPerCabinet * cabinetCount;
 
     pieces.push({
       role: `Étagère(s) [Retrait ${shelfRecess} mm]`,
       description: `${config.name} - Étagère`,
-      formula: `${shelfFormula} × Profondeur (${structuralDepth} - ${shelfRecess} = ${shelfDepth} mm)`,
+      formula: cabinetCount > 1
+        ? `${shelfFormula} × Profondeur (${structuralDepth} - ${shelfRecess} = ${shelfDepth} mm) [${shelvesPerCabinet} × ${cabinetCount} = ${totalShelvesQty} pcs]`
+        : `${shelfFormula} × Profondeur (${structuralDepth} - ${shelfRecess} = ${shelfDepth} mm)`,
       length: Math.max(shelfWidth, shelfDepth),
       width: Math.min(shelfWidth, shelfDepth),
       quantity: totalShelvesQty,
@@ -180,15 +190,18 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   }
 
   // 5. Fond du caisson
+  const backQty = 1 * cabinetCount;
   if (backType === 'applique') {
     // Fond cloué ou vissé en applique à l'arrière
     pieces.push({
       role: `Fond (applique arrière) [${resolvedBackMaterial}]`,
       description: `${config.name} - Fond applique`,
-      formula: `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${backThickness} mm - Matière : ${resolvedBackMaterial})`,
+      formula: cabinetCount > 1
+        ? `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${backThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
+        : `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${backThickness} mm - Matière : ${resolvedBackMaterial})`,
       length: Math.max(height, width),
       width: Math.min(height, width),
-      quantity: 1,
+      quantity: backQty,
       material: resolvedBackMaterial,
       color: PIECE_COLORS.back,
     });
@@ -201,10 +214,12 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     pieces.push({
       role: `Fond (rainure encastrée) [${resolvedBackMaterial}]`,
       description: `${config.name} - Fond rainure`,
-      formula: `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm - Matière : ${resolvedBackMaterial})`,
+      formula: cabinetCount > 1
+        ? `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
+        : `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm - Matière : ${resolvedBackMaterial})`,
       length: Math.max(backH, backW),
       width: Math.min(backH, backW),
-      quantity: 1,
+      quantity: backQty,
       material: resolvedBackMaterial,
       color: PIECE_COLORS.back,
     });
@@ -214,26 +229,32 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   if (doors === 'one_door') {
     const doorH = height - 4; // 2mm en haut, 2mm en bas
     const doorW = width - 4; // 2mm à gauche, 2mm à droite
+    const doorQty = 1 * cabinetCount;
     pieces.push({
       role: 'Porte battante simple (Jeu 2 mm)',
       description: `${config.name} - Porte`,
-      formula: `Applique (${height} - 4mm) × (${width} - 4mm)`,
+      formula: cabinetCount > 1
+        ? `Applique (${height} - 4mm) × (${width} - 4mm) [1 × ${cabinetCount} = ${doorQty} pcs]`
+        : `Applique (${height} - 4mm) × (${width} - 4mm)`,
       length: Math.max(doorH, doorW),
       width: Math.min(doorH, doorW),
-      quantity: 1,
+      quantity: doorQty,
       material: doorMaterial,
       color: PIECE_COLORS.door,
     });
   } else if (doors === 'two_doors') {
     const doorH = height - 4;
     const doorW = Math.floor((width - 6) / 2); // 2mm à gauche, 2mm au centre, 2mm à droite
+    const doorQty = 2 * cabinetCount;
     pieces.push({
       role: 'Portes battantes doubles (2 battants, Jeu 2 mm)',
       description: `${config.name} - Battant de porte`,
-      formula: `2 battants : (${width} - 6mm) / 2 = ${doorW} mm × ${doorH} mm`,
+      formula: cabinetCount > 1
+        ? `2 battants : (${width} - 6mm) / 2 = ${doorW} mm × ${doorH} mm [2 × ${cabinetCount} = ${doorQty} pcs]`
+        : `2 battants : (${width} - 6mm) / 2 = ${doorW} mm × ${doorH} mm`,
       length: Math.max(doorH, doorW),
       width: Math.min(doorH, doorW),
-      quantity: 2,
+      quantity: doorQty,
       material: doorMaterial,
       color: PIECE_COLORS.door,
     });
@@ -275,6 +296,17 @@ export function parseCabinetPromptWithNLP(
 ): Partial<CabinetConfig> {
   const text = prompt.toLowerCase();
   const config: Partial<CabinetConfig> = {};
+
+  // 0. Détection du nombre de caissons (ex: "3 caissons", "faire 2 meubles", "quantité: 4")
+  const countMatch =
+    text.match(/(\d+)\s*(?:caissons?|meubles?)/i) ||
+    text.match(/(?:quantité|qte|qté|nombre)\s*(?:de)?\s*(?:caissons?)?\s*(?:de|:)?\s*(\d+)/i);
+  if (countMatch) {
+    const cVal = parseInt(countMatch[1], 10);
+    if (cVal >= 1 && cVal <= 100) {
+      config.cabinetCount = cVal;
+    }
+  }
 
   // 1. Détection des 3 dimensions (ex: 800x600x400 ou 800 * 600 * 400 ou 800 × 600 × 400)
   const dims3Match = text.match(/(\d{2,4})\s*(?:x|\*|×)\s*(\d{2,4})\s*(?:x|\*|×)\s*(\d{2,4})/);
