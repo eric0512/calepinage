@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
   ListPlus,
@@ -8,8 +8,6 @@ import {
   Trash2,
   Copy,
   RotateCw,
-  Upload,
-  Download,
   Tag,
   Sparkles,
 } from 'lucide-react';
@@ -222,8 +220,6 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   const [canRotate, setCanRotate] = useState<boolean>(true);
   const [showCabinetModal, setShowCabinetModal] = useState<boolean>(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   // Synchroniser la matière sélectionnée avec les matières disponibles dans le stock
   React.useEffect(() => {
     if (sortedMaterials.length > 0) {
@@ -310,78 +306,9 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
 
   const totalPiecesCount = items.reduce((sum, it) => sum + it.quantity, 0);
 
-  // Export CSV
-  const handleExportCSV = () => {
-    if (items.length === 0) return;
-    const header = 'Nom,Matiere,Longueur_mm,Largeur_mm,Quantite,RotationAutorisee\n';
-    const rows = items
-      .map(
-        (it) =>
-          `"${it.name.replace(/"/g, '""')}","${it.material}",${it.length},${
-            it.width
-          },${it.quantity},${it.canRotate ? 'OUI' : 'NON'}`
-      )
-      .join('\n');
-    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'liste_debit_menuiserie.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Import CSV
-  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      if (!text) return;
-
-      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-      const imported: CutItem[] = [];
-
-      // Détecter si première ligne est header
-      const startIdx = lines[0].toLowerCase().includes('nom') || lines[0].toLowerCase().includes('longueur') ? 1 : 0;
-
-      for (let i = startIdx; i < lines.length; i++) {
-        const cols = lines[i].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-        if (cols.length >= 4) {
-          const itName = cols[0] || `Pièce ${i}`;
-          const itMat = cols[1] || availableMaterials[0] || 'MDF 19mm';
-          const itLen = parseFloat(cols[2]) || 500;
-          const itWid = parseFloat(cols[3]) || 300;
-          const itQty = parseInt(cols[4]) || 1;
-          const itRot = cols[5] ? cols[5].toLowerCase() === 'oui' || cols[5] === '1' || cols[5].toLowerCase() === 'true' : true;
-
-          imported.push({
-            id: `item-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 6)}`,
-            name: itName,
-            material: itMat,
-            length: Math.max(itLen, itWid),
-            width: Math.min(itLen, itWid),
-            quantity: Math.max(1, itQty),
-            canRotate: itRot,
-            color: COLOR_OPTIONS[imported.length % COLOR_OPTIONS.length],
-          });
-        }
-      }
-
-      if (imported.length > 0) {
-        onChange([...items, ...imported]);
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   return (
     <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-3 sm:p-5 shadow-sm">
-      {/* En-tête avec compteur et actions CSV */}
+      {/* En-tête avec compteur et action Assistant Caisson */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
@@ -397,9 +324,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           </div>
         </div>
 
-        {/* Actions : Assistant Caisson IA & Boutons CSV */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          {/* Bouton Assistant Caisson IA */}
+        {/* Action : Assistant Caisson IA */}
+        <div className="flex items-center">
           <button
             type="button"
             onClick={() => setShowCabinetModal(true)}
@@ -408,34 +334,6 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>Assistant Caisson IA</span>
-          </button>
-
-          {/* Boutons CSV */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors shadow-sm"
-            title="Importer une liste CSV"
-          >
-            <Upload className="w-3.5 h-3.5 text-slate-400" />
-            <span className="hidden sm:inline">Importer CSV</span>
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImportCSV}
-            accept=".csv"
-            className="hidden"
-          />
-
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors shadow-sm"
-            title="Exporter la liste en CSV"
-          >
-            <Download className="w-3.5 h-3.5 text-slate-400" />
-            <span className="hidden sm:inline">Exporter CSV</span>
           </button>
         </div>
       </div>

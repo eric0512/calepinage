@@ -85,9 +85,13 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
         </h2>
 
         {result.panels.map((panel, idx) => {
-          const margin = 50;
-          const svgW = panel.panelLength + margin * 2;
-          const svgH = panel.panelWidth + margin * 2;
+          const isLandscape = panel.panelLength > panel.panelWidth;
+          const panelW = isLandscape ? panel.panelWidth : panel.panelLength; // petite dimension (horizontale)
+          const panelH = isLandscape ? panel.panelLength : panel.panelWidth; // grande dimension (verticale)
+
+          const margin = 40;
+          const svgW = panelW + margin * 2;
+          const svgH = panelH + margin * 2;
 
           return (
             <div
@@ -101,7 +105,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                   </strong>{' '}
                   <span className="font-semibold">{panel.material}</span> — Format brut :{' '}
                   <span className="font-mono">
-                    {panel.panelLength} × {panel.panelWidth} mm
+                    {panel.panelLength} × {panel.panelWidth} mm (Vertical {panelH} × Horizontal {panelW} mm)
                   </span>
                 </div>
                 <div className="font-mono">
@@ -110,107 +114,130 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                 </div>
               </div>
 
-              {/* Rendu SVG noir & blanc / contours nets pour imprimante */}
-              <div className="w-full border border-gray-400 bg-white p-2">
+              {/* Rendu SVG noir & blanc / contours nets pour imprimante (orienté verticalement) */}
+              <div className="w-full border border-gray-400 bg-white p-2 flex justify-center">
                 <svg
                   viewBox={`0 0 ${svgW} ${svgH}`}
-                  className="w-full h-auto"
+                  className="w-full h-auto max-h-[220mm]"
                 >
                   <g transform={`translate(${margin}, ${margin})`}>
                     {/* Cadre du panneau */}
                     <rect
                       x="0"
                       y="0"
-                      width={panel.panelLength}
-                      height={panel.panelWidth}
+                      width={panelW}
+                      height={panelH}
                       fill="#f8fafc"
                       stroke="#000000"
                       strokeWidth="2"
                     />
 
                     {/* Chutes */}
-                    {panel.offcuts.map((offcut) => (
-                      <g key={offcut.id}>
-                        <rect
-                          x={offcut.x}
-                          y={offcut.y}
-                          width={offcut.length}
-                          height={offcut.width}
-                          fill={offcut.reusable ? '#e2e8f0' : '#f1f5f9'}
-                          stroke="#64748b"
-                          strokeWidth="1"
-                          strokeDasharray="4,2"
-                        />
-                        {offcut.length >= 150 && offcut.width >= 80 && (
-                          <text
-                            x={offcut.x + offcut.length / 2}
-                            y={offcut.y + offcut.width / 2}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            fill="#475569"
-                            fontSize="20"
-                            fontFamily="monospace"
-                          >
-                            {offcut.reusable ? 'CHUTE' : 'PERTE'} (
-                            {Math.round(offcut.length)}×{Math.round(offcut.width)})
-                          </text>
-                        )}
-                      </g>
-                    ))}
+                    {panel.offcuts.map((offcut) => {
+                      const ox = isLandscape ? offcut.y : offcut.x;
+                      const oy = isLandscape ? offcut.x : offcut.y;
+                      const ow = isLandscape ? offcut.width : offcut.length;
+                      const oh = isLandscape ? offcut.length : offcut.width;
+
+                      return (
+                        <g key={offcut.id}>
+                          <rect
+                            x={ox}
+                            y={oy}
+                            width={ow}
+                            height={oh}
+                            fill={offcut.reusable ? '#e2e8f0' : '#f1f5f9'}
+                            stroke="#64748b"
+                            strokeWidth="1"
+                            strokeDasharray="4,2"
+                          />
+                          {ow >= 100 && oh >= 60 && (
+                            <text
+                              x={ox + ow / 2}
+                              y={oy + oh / 2}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fill="#475569"
+                              fontSize="20"
+                              fontFamily="monospace"
+                            >
+                              {offcut.reusable ? 'CHUTE' : 'PERTE'} (
+                              {Math.round(offcut.length)}×{Math.round(offcut.width)})
+                            </text>
+                          )}
+                        </g>
+                      );
+                    })}
 
                     {/* Traits de coupe */}
-                    {panel.cutLines.map((line, i) => (
-                      <line
-                        key={i}
-                        x1={line.x1}
-                        y1={line.y1}
-                        x2={line.x2}
-                        y2={line.y2}
-                        stroke="#000000"
-                        strokeWidth="1.5"
-                        strokeDasharray="3,3"
-                      />
-                    ))}
+                    {panel.cutLines.map((line, i) => {
+                      const x1 = isLandscape ? line.y1 : line.x1;
+                      const y1 = isLandscape ? line.x1 : line.y1;
+                      const x2 = isLandscape ? line.y2 : line.x2;
+                      const y2 = isLandscape ? line.x2 : line.y2;
+
+                      return (
+                        <line
+                          key={i}
+                          x1={x1}
+                          y1={y1}
+                          x2={x2}
+                          y2={y2}
+                          stroke="#000000"
+                          strokeWidth="1.5"
+                          strokeDasharray="3,3"
+                        />
+                      );
+                    })}
 
                     {/* Pièces */}
                     {panel.placedPieces.map((piece) => {
+                      const px = isLandscape ? piece.y : piece.x;
+                      const py = isLandscape ? piece.x : piece.y;
+                      const pw = isLandscape ? piece.width : piece.length;
+                      const ph = isLandscape ? piece.length : piece.width;
+
                       const fSize = Math.min(
                         36,
-                        Math.max(16, piece.length / 15, piece.width / 12)
+                        Math.max(16, pw / 12, ph / 15)
                       );
                       return (
                         <g key={piece.id}>
                           <rect
-                            x={piece.x}
-                            y={piece.y}
-                            width={piece.length}
-                            height={piece.width}
+                            x={px}
+                            y={py}
+                            width={pw}
+                            height={ph}
                             fill="#ffffff"
                             stroke="#000000"
                             strokeWidth="2"
                           />
-                          <text
-                            x={piece.x + piece.length / 2}
-                            y={piece.y + piece.width / 2 - 8}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            fill="#000000"
-                            fontSize={fSize}
-                            fontWeight="bold"
-                          >
-                            {piece.name}
-                          </text>
-                          <text
-                            x={piece.x + piece.length / 2}
-                            y={piece.y + piece.width / 2 + 14}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            fill="#000000"
-                            fontSize={fSize * 0.75}
-                            fontFamily="monospace"
-                          >
-                            {piece.length} × {piece.width} mm
-                          </text>
+                          {pw >= 40 && ph >= 40 && (
+                            <>
+                              <text
+                                x={px + pw / 2}
+                                y={py + ph / 2 - 8}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fill="#000000"
+                                fontSize={fSize}
+                                fontWeight="bold"
+                              >
+                                {piece.name}
+                              </text>
+                              <text
+                                x={px + pw / 2}
+                                y={py + ph / 2 + 14}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                fill="#000000"
+                                fontSize={fSize * 0.75}
+                                fontFamily="monospace"
+                              >
+                                {piece.length} × {piece.width} mm
+                              </text>
+                            </>
+                          )}
                         </g>
                       );
                     })}

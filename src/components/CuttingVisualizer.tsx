@@ -10,7 +10,9 @@ import {
   ChevronRight,
   Layers,
   Info,
+  FileDown,
 } from 'lucide-react';
+import { exportCuttingPlansToPdf } from '@/lib/pdf-export';
 
 interface CuttingVisualizerProps {
   panels: PanelResult[];
@@ -26,8 +28,21 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const [hoveredOffcut, setHoveredOffcut] = useState<OffcutArea | null>(null);
   const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
 
   const patternId = useId();
+
+  const handleExportPDF = () => {
+    setIsExportingPdf(true);
+    try {
+      exportCuttingPlansToPdf(panels, kerf);
+    } catch (err) {
+      console.error('Erreur export PDF:', err);
+      alert('Une erreur est survenue lors de l\'exportation PDF.');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   if (panels.length === 0) {
     return (
@@ -51,7 +66,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
       {/* Barre d'outils du visualiseur */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-700/80">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-white tracking-wide">
               Plans de Coupe Graphiques Interactifs
             </h3>
@@ -59,7 +74,22 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
               {panels.length} panneau(x) optimisé(s)
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
+
+          {/* Bouton Export PDF sous le texte X panneau(x) optimisé */}
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              disabled={isExportingPdf}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs shadow-md shadow-rose-900/30 transition-all active:scale-95 disabled:opacity-50"
+              title="Exporter tous les plans de coupe dans un fichier PDF (1 panneau par feuille A4)"
+            >
+              <FileDown className="w-4 h-4 text-white" />
+              <span>{isExportingPdf ? 'Génération du PDF...' : 'Exporter PDF (1 panneau / feuille A4)'}</span>
+            </button>
+          </div>
+
+          <p className="text-xs text-slate-400 mt-1.5">
             Trait de scie appliqué :{' '}
             <span className="font-mono text-amber-400 font-semibold">
               {kerf.toFixed(1)} mm
@@ -250,10 +280,15 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
   setHoveredOffcut,
   patternId,
 }) => {
+  // Orientation : la plus grande dimension à la verticale et la plus petite à l'horizontale
+  const isLandscape = panel.panelLength > panel.panelWidth;
+  const panelWidthDisplay = isLandscape ? panel.panelWidth : panel.panelLength; // Petite dimension (Horizontale)
+  const panelHeightDisplay = isLandscape ? panel.panelLength : panel.panelWidth; // Grande dimension (Verticale)
+
   // Marges pour afficher les cotes extérieures du panneau
-  const margin = 80;
-  const svgWidth = panel.panelLength + margin * 2;
-  const svgHeight = panel.panelWidth + margin * 2;
+  const margin = 70;
+  const svgWidth = panelWidthDisplay + margin * 2;
+  const svgHeight = panelHeightDisplay + margin * 2;
 
   return (
     <div className="bg-slate-900 border border-slate-700/80 rounded-xl p-4 shadow-inner">
@@ -278,7 +313,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
           </span>
           <span className="text-slate-400">•</span>
           <span className="font-mono text-slate-300 font-semibold">
-            {panel.panelLength} × {panel.panelWidth} mm
+            {panel.panelLength} × {panel.panelWidth} mm (Vertical {panelHeightDisplay} × Horizontal {panelWidthDisplay} mm)
           </span>
         </div>
 
@@ -366,99 +401,118 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
 
             {/* Groupe décalé par la marge pour les cotes extérieures */}
             <g transform={`translate(${margin}, ${margin})`}>
-              {/* 1. Rectangle brut du panneau */}
+              {/* 1. Rectangle brut du panneau (Vertical) */}
               <rect
                 x="0"
                 y="0"
-                width={panel.panelLength}
-                height={panel.panelWidth}
+                width={panelWidthDisplay}
+                height={panelHeightDisplay}
                 fill="#1e293b"
                 stroke="#334155"
                 strokeWidth="2"
               />
 
               {/* 2. Dessiner les chutes (offcuts) */}
-              {panel.offcuts.map((offcut) => (
-                <g
-                  key={offcut.id}
-                  onMouseEnter={() => setHoveredOffcut(offcut)}
-                  onMouseLeave={() => setHoveredOffcut(null)}
-                  className="cursor-pointer transition-opacity"
-                >
-                  <rect
-                    x={offcut.x}
-                    y={offcut.y}
-                    width={offcut.length}
-                    height={offcut.width}
-                    fill={
-                      offcut.reusable
-                        ? `url(#hatch-reusable-${patternId})`
-                        : `url(#hatch-waste-${patternId})`
-                    }
-                    stroke={offcut.reusable ? '#10b981' : '#334155'}
-                    strokeWidth={offcut.reusable ? '2' : '1'}
-                    strokeDasharray={offcut.reusable ? '6,3' : 'none'}
-                    opacity={
-                      hoveredOffcut?.id === offcut.id
-                        ? 0.9
-                        : offcut.reusable
-                        ? 0.7
-                        : 0.4
-                    }
-                  />
+              {panel.offcuts.map((offcut) => {
+                const ox = isLandscape ? offcut.y : offcut.x;
+                const oy = isLandscape ? offcut.x : offcut.y;
+                const ow = isLandscape ? offcut.width : offcut.length;
+                const oh = isLandscape ? offcut.length : offcut.width;
 
-                  {/* Étiquette sur la chute si dimensions suffisantes */}
-                  {offcut.length >= 180 && offcut.width >= 100 && (
-                    <text
-                      x={offcut.x + offcut.length / 2}
-                      y={offcut.y + offcut.width / 2}
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fill={offcut.reusable ? '#34d399' : '#94a3b8'}
-                      fontSize={Math.min(
-                        36,
-                        Math.max(16, offcut.length / 15, offcut.width / 10)
-                      )}
-                      fontWeight="bold"
-                      fontFamily="monospace"
-                    >
-                      {offcut.reusable ? 'STOCK ATELIER' : 'PERTE'}
-                      <tspan
-                        x={offcut.x + offcut.length / 2}
-                        dy="28"
-                        fontSize="0.85em"
-                        fontWeight="normal"
+                return (
+                  <g
+                    key={offcut.id}
+                    onMouseEnter={() => setHoveredOffcut(offcut)}
+                    onMouseLeave={() => setHoveredOffcut(null)}
+                    className="cursor-pointer transition-opacity"
+                  >
+                    <rect
+                      x={ox}
+                      y={oy}
+                      width={ow}
+                      height={oh}
+                      fill={
+                        offcut.reusable
+                          ? `url(#hatch-reusable-${patternId})`
+                          : `url(#hatch-waste-${patternId})`
+                      }
+                      stroke={offcut.reusable ? '#10b981' : '#334155'}
+                      strokeWidth={offcut.reusable ? '2' : '1'}
+                      strokeDasharray={offcut.reusable ? '6,3' : 'none'}
+                      opacity={
+                        hoveredOffcut?.id === offcut.id
+                          ? 0.9
+                          : offcut.reusable
+                          ? 0.7
+                          : 0.4
+                      }
+                    />
+
+                    {/* Étiquette sur la chute si dimensions suffisantes */}
+                    {ow >= 100 && oh >= 80 && (
+                      <text
+                        x={ox + ow / 2}
+                        y={oy + oh / 2}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill={offcut.reusable ? '#34d399' : '#94a3b8'}
+                        fontSize={Math.min(
+                          32,
+                          Math.max(16, ow / 10, oh / 15)
+                        )}
+                        fontWeight="bold"
+                        fontFamily="monospace"
                       >
-                        {Math.round(offcut.length)} × {Math.round(offcut.width)}{' '}
-                        mm
-                      </tspan>
-                    </text>
-                  )}
-                </g>
-              ))}
+                        {offcut.reusable ? 'STOCK ATELIER' : 'PERTE'}
+                        <tspan
+                          x={ox + ow / 2}
+                          dy="24"
+                          fontSize="0.85em"
+                          fontWeight="normal"
+                        >
+                          {Math.round(offcut.length)} × {Math.round(offcut.width)}{' '}
+                          mm
+                        </tspan>
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
 
               {/* 3. Lignes de coupe guillotine avec indication de trait de scie */}
-              {panel.cutLines.map((line, idx) => (
-                <line
-                  key={`cut-${idx}`}
-                  x1={line.x1}
-                  y1={line.y1}
-                  x2={line.x2}
-                  y2={line.y2}
-                  stroke="#fbbf24"
-                  strokeWidth={Math.max(1.5, kerf)}
-                  strokeDasharray="4,2"
-                  opacity="0.8"
-                />
-              ))}
+              {panel.cutLines.map((line, idx) => {
+                const x1 = isLandscape ? line.y1 : line.x1;
+                const y1 = isLandscape ? line.x1 : line.y1;
+                const x2 = isLandscape ? line.y2 : line.x2;
+                const y2 = isLandscape ? line.x2 : line.y2;
+
+                return (
+                  <line
+                    key={`cut-${idx}`}
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
+                    stroke="#fbbf24"
+                    strokeWidth={Math.max(1.5, kerf)}
+                    strokeDasharray="4,2"
+                    opacity="0.8"
+                  />
+                );
+              })}
 
               {/* 4. Dessiner les pièces placées */}
               {panel.placedPieces.map((piece) => {
+                const px = isLandscape ? piece.y : piece.x;
+                const py = isLandscape ? piece.x : piece.y;
+                const pw = isLandscape ? piece.width : piece.length;
+                const ph = isLandscape ? piece.length : piece.width;
+
                 const isHovered = hoveredPiece?.id === piece.id;
                 // Calcul taille police proportionnelle
                 const fontSizeTitle = Math.min(
-                  42,
-                  Math.max(16, piece.length / 14, piece.width / 10)
+                  36,
+                  Math.max(15, pw / 10, ph / 14)
                 );
                 const fontSizeDims = fontSizeTitle * 0.75;
 
@@ -471,10 +525,10 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                   >
                     {/* Rectangle de la pièce */}
                     <rect
-                      x={piece.x}
-                      y={piece.y}
-                      width={piece.length}
-                      height={piece.width}
+                      x={px}
+                      y={py}
+                      width={pw}
+                      height={ph}
                       fill={piece.color}
                       fillOpacity={isHovered ? 0.95 : 0.75}
                       stroke={isHovered ? '#ffffff' : '#0f172a'}
@@ -483,12 +537,12 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                     />
 
                     {/* Étiquette & Dimensions centrées */}
-                    {piece.length >= 80 && piece.width >= 50 && (
+                    {pw >= 40 && ph >= 40 && (
                       <g className="pointer-events-none select-none">
                         {/* Ombre de texte pour lisibilité parfaite */}
                         <text
-                          x={piece.x + piece.length / 2}
-                          y={piece.y + piece.width / 2 - fontSizeDims * 0.4}
+                          x={px + pw / 2}
+                          y={py + ph / 2 - fontSizeDims * 0.4}
                           textAnchor="middle"
                           dominantBaseline="middle"
                           fill="#ffffff"
@@ -499,8 +553,8 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                           {piece.name}
                         </text>
                         <text
-                          x={piece.x + piece.length / 2}
-                          y={piece.y + piece.width / 2 + fontSizeDims * 0.9}
+                          x={px + pw / 2}
+                          y={py + ph / 2 + fontSizeDims * 0.9}
                           textAnchor="middle"
                           dominantBaseline="middle"
                           fill="#f8fafc"
@@ -518,67 +572,67 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 );
               })}
 
-              {/* Cotations extérieures du panneau (Largeur et Hauteur totales) */}
-              {/* Flèche Longueur (Haut) */}
+              {/* Cotations extérieures du panneau (Largeur en haut, Hauteur à gauche) */}
+              {/* Flèche Largeur Horizontale (Haut) */}
               <line
                 x1="0"
-                y1="-25"
-                x2={panel.panelLength}
-                y2="-25"
+                y1="-22"
+                x2={panelWidthDisplay}
+                y2="-22"
                 stroke="#94a3b8"
                 strokeWidth="2"
               />
-              <line x1="0" y1="-35" x2="0" y2="-15" stroke="#94a3b8" strokeWidth="2" />
+              <line x1="0" y1="-30" x2="0" y2="-14" stroke="#94a3b8" strokeWidth="2" />
               <line
-                x1={panel.panelLength}
-                y1="-35"
-                x2={panel.panelLength}
-                y2="-15"
+                x1={panelWidthDisplay}
+                y1="-30"
+                x2={panelWidthDisplay}
+                y2="-14"
                 stroke="#94a3b8"
                 strokeWidth="2"
               />
               <text
-                x={panel.panelLength / 2}
-                y="-32"
+                x={panelWidthDisplay / 2}
+                y="-28"
                 textAnchor="middle"
                 fill="#f1f5f9"
-                fontSize="24"
+                fontSize="22"
                 fontWeight="bold"
                 fontFamily="monospace"
               >
-                Longueur Panneau : {panel.panelLength} mm
+                {panelWidthDisplay} mm
               </text>
 
-              {/* Flèche Largeur (Gauche) */}
+              {/* Flèche Longueur Verticale (Gauche) */}
               <line
-                x1="-25"
+                x1="-22"
                 y1="0"
-                x2="-25"
-                y2={panel.panelWidth}
+                x2="-22"
+                y2={panelHeightDisplay}
                 stroke="#94a3b8"
                 strokeWidth="2"
               />
-              <line x1="-35" y1="0" x2="-15" y2="0" stroke="#94a3b8" strokeWidth="2" />
+              <line x1="-30" y1="0" x2="-14" y2="0" stroke="#94a3b8" strokeWidth="2" />
               <line
-                x1="-35"
-                y1={panel.panelWidth}
-                x2="-15"
-                y2={panel.panelWidth}
+                x1="-30"
+                y1={panelHeightDisplay}
+                x2="-14"
+                y2={panelHeightDisplay}
                 stroke="#94a3b8"
                 strokeWidth="2"
               />
               <text
-                x="-32"
-                y={panel.panelWidth / 2}
+                x="-28"
+                y={panelHeightDisplay / 2}
                 textAnchor="middle"
                 dominantBaseline="central"
                 fill="#f1f5f9"
-                fontSize="24"
+                fontSize="22"
                 fontWeight="bold"
                 fontFamily="monospace"
-                transform={`rotate(-90, -32, ${panel.panelWidth / 2})`}
+                transform={`rotate(-90, -28, ${panelHeightDisplay / 2})`}
               >
-                Largeur Panneau : {panel.panelWidth} mm
+                {panelHeightDisplay} mm
               </text>
             </g>
           </svg>
