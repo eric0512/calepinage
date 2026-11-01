@@ -604,13 +604,13 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           {groupedItems.map((group) => (
             <div key={group.category} className="space-y-1.5">
               {/* Titre de la catégorie avec la matière à droite (ex: Côtés ; Mélaminé Blanc 18mm) */}
-              <div className="flex items-center justify-between px-1 flex-wrap gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
                   <span
                     className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
                     style={{ backgroundColor: group.color }}
                   />
-                  <h3 className="text-xs font-bold text-slate-100 tracking-wide flex items-center gap-1.5 flex-wrap">
+                  <h3 className="text-xs font-bold text-slate-100 tracking-wide flex items-center gap-1.5">
                     <span>{group.category}</span>
                     {group.materials.length > 0 && (
                       <span className="text-slate-300 font-medium">
@@ -618,9 +618,6 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                       </span>
                     )}
                   </h3>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900/90 text-slate-400 border border-slate-700/60 font-mono">
-                    {group.totalQty} pièce{group.totalQty > 1 ? 's' : ''} ({group.items.length} réf.)
-                  </span>
                 </div>
               </div>
 
@@ -629,7 +626,6 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
                     <tr>
-                      <th className="py-2.5 px-3">Matière</th>
                       <th className="py-2.5 px-3">Dimensions (L × l mm)</th>
                       <th className="py-2.5 px-3 text-center">Qté</th>
                       <th className="py-2.5 px-3 text-center">Fil du bois</th>
@@ -642,27 +638,6 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                         key={item.id}
                         className="hover:bg-slate-750/50 transition-colors group"
                       >
-                        <td className="py-2 px-3">
-                          <select
-                            value={item.material}
-                            onChange={(e) =>
-                              handleUpdate(item.id, 'material', e.target.value)
-                            }
-                            className="bg-slate-900 text-slate-200 border border-slate-700/80 focus:border-emerald-500 rounded px-1.5 py-0.5 text-xs w-full max-w-[170px] font-medium"
-                          >
-                            {item.material &&
-                              !sortedMaterials.includes(item.material) && (
-                                <option value={item.material}>
-                                  {item.material} (hors stock)
-                                </option>
-                              )}
-                            {sortedMaterials.map((m) => (
-                              <option key={m} value={m}>
-                                {m}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
                         <td className="py-2 px-3 font-mono">
                           <div className="flex items-center gap-1.5">
                             <input
