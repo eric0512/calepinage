@@ -40,6 +40,7 @@ const COLOR_OPTIONS = [
 
 interface GroupedCutItems {
   category: string;
+  materials: string[];
   color: string;
   items: CutItem[];
   totalQty: number;
@@ -192,7 +193,14 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
         CATEGORY_COLORS[category] ||
         catItems[0]?.color ||
         '#64748b';
-      groups.push({ category, color, items: catItems, totalQty });
+      const materials = Array.from(
+        new Set(
+          catItems
+            .map((it) => it.material?.trim())
+            .filter((m): m is string => Boolean(m))
+        )
+      );
+      groups.push({ category, materials, color, items: catItems, totalQty });
     });
 
     return groups.sort((a, b) => {
@@ -595,15 +603,20 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
         <div className="space-y-4">
           {groupedItems.map((group) => (
             <div key={group.category} className="space-y-1.5">
-              {/* Titre de la catégorie (ex: Côtés, Haut et bas, etc.) */}
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
+              {/* Titre de la catégorie avec la matière à droite (ex: Côtés ; Mélaminé Blanc 18mm) */}
+              <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span
                     className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
                     style={{ backgroundColor: group.color }}
                   />
-                  <h3 className="text-xs font-bold text-slate-100 tracking-wide">
-                    {group.category}
+                  <h3 className="text-xs font-bold text-slate-100 tracking-wide flex items-center gap-1.5 flex-wrap">
+                    <span>{group.category}</span>
+                    {group.materials.length > 0 && (
+                      <span className="text-slate-300 font-medium">
+                        ; <span className="text-emerald-400 font-semibold">{group.materials.join(', ')}</span>
+                      </span>
+                    )}
                   </h3>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900/90 text-slate-400 border border-slate-700/60 font-mono">
                     {group.totalQty} pièce{group.totalQty > 1 ? 's' : ''} ({group.items.length} réf.)
