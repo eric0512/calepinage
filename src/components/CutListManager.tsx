@@ -38,6 +38,125 @@ const COLOR_OPTIONS = [
   '#6366f1', // Indigo
 ];
 
+interface GroupedCutItems {
+  category: string;
+  color: string;
+  items: CutItem[];
+  totalQty: number;
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  'Côtés': '#3b82f6',
+  'Haut et bas': '#10b981',
+  'Étagères': '#f59e0b',
+  'Fond': '#ec4899',
+  'Portes': '#06b6d4',
+  'Séparations & Cloisons': '#8b5cf6',
+  'Tiroirs': '#f97316',
+  'Traverses & Renforts': '#14b8a6',
+  'Autres pièces': '#94a3b8',
+};
+
+const CATEGORY_PRIORITY = [
+  'Côtés',
+  'Haut et bas',
+  'Étagères',
+  'Fond',
+  'Portes',
+  'Séparations & Cloisons',
+  'Tiroirs',
+  'Traverses & Renforts',
+  'Autres pièces',
+];
+
+export function getPieceCategory(name: string): string {
+  if (!name || !name.trim()) return 'Autres pièces';
+  const clean = name.toLowerCase().trim();
+
+  if (/^pi[èe]ce(\s*\d+)?$/i.test(clean) || clean === 'sans nom' || clean === 'divers') {
+    return 'Autres pièces';
+  }
+
+  if (
+    clean.includes('côté') ||
+    clean.includes('cote') ||
+    clean.includes('montant') ||
+    clean.includes('flanc')
+  ) {
+    return 'Côtés';
+  }
+
+  if (
+    clean.includes('dessus') ||
+    clean.includes('dessous') ||
+    clean.includes('haut') ||
+    clean.includes('bas') ||
+    clean.includes('chapeau') ||
+    clean.includes('plancher') ||
+    clean.includes('plafond')
+  ) {
+    return 'Haut et bas';
+  }
+
+  if (
+    clean.includes('étagère') ||
+    clean.includes('etagere') ||
+    clean.includes('tablette') ||
+    clean.includes('rayonnage')
+  ) {
+    return 'Étagères';
+  }
+
+  if (
+    clean.includes('fond') ||
+    clean.includes('arriere') ||
+    clean.includes('arrière') ||
+    clean.includes('dos')
+  ) {
+    return 'Fond';
+  }
+
+  if (
+    clean.includes('porte') ||
+    clean.includes('battant') ||
+    clean.includes('facade') ||
+    clean.includes('façade') ||
+    clean.includes('ouvrant')
+  ) {
+    return 'Portes';
+  }
+
+  if (
+    clean.includes('séparation') ||
+    clean.includes('separation') ||
+    clean.includes('cloison') ||
+    clean.includes('diviseur')
+  ) {
+    return 'Séparations & Cloisons';
+  }
+
+  if (clean.includes('tiroir')) {
+    return 'Tiroirs';
+  }
+
+  if (
+    clean.includes('traverse') ||
+    clean.includes('renfort') ||
+    clean.includes('plinthe') ||
+    clean.includes('bandeau')
+  ) {
+    return 'Traverses & Renforts';
+  }
+
+  if (name.includes(' - ')) {
+    const parts = name.split(' - ');
+    const lastPart = parts[parts.length - 1].trim();
+    if (lastPart) return getPieceCategory(lastPart);
+  }
+
+  return name.trim();
+}
+
 export const CutListManager: React.FC<CutListManagerProps> = ({
   items,
   onChange,
@@ -53,6 +172,38 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
       a.localeCompare(b, 'fr', { sensitivity: 'base' })
     );
   }, [availableMaterials]);
+
+  // Regroupement articulé des pièces par catégorie (Côtés, Haut et bas, Étagères, Fond, etc.)
+  const groupedItems = React.useMemo(() => {
+    const map = new Map<string, CutItem[]>();
+
+    items.forEach((item) => {
+      const cat = getPieceCategory(item.name);
+      if (!map.has(cat)) {
+        map.set(cat, []);
+      }
+      map.get(cat)!.push(item);
+    });
+
+    const groups: GroupedCutItems[] = [];
+    map.forEach((catItems, category) => {
+      const totalQty = catItems.reduce((acc, it) => acc + it.quantity, 0);
+      const color =
+        CATEGORY_COLORS[category] ||
+        catItems[0]?.color ||
+        '#64748b';
+      groups.push({ category, color, items: catItems, totalQty });
+    });
+
+    return groups.sort((a, b) => {
+      const idxA = CATEGORY_PRIORITY.indexOf(a.category);
+      const idxB = CATEGORY_PRIORITY.indexOf(b.category);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.category.localeCompare(b.category, 'fr');
+    });
+  }, [items]);
 
   // État local d'ajout rapide (tous les champs vides par défaut pour un nouveau projet)
   const [name, setName] = useState('');
@@ -290,15 +441,33 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           Ajouter une nouvelle pièce à couper
         </div>
 
-        {/* LIGNE 1 : Désignation et Matière sur la même ligne */}
+        {/* LIGNE 1 : Catégorie / Titre et Matière sur la même ligne */}
         <div className="flex gap-2 mb-2.5">
           <div className="flex-1 min-w-0">
-            <label className="block text-[11px] font-medium text-slate-300 mb-1 truncate">
-              Désignation / Repère
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-medium text-slate-300 truncate">
+                Catégorie / Titre
+              </label>
+              <div className="hidden sm:flex items-center gap-1">
+                {['Côtés', 'Haut et bas', 'Étagères', 'Fond', 'Portes'].map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setName(cat)}
+                    className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                      name === cat
+                        ? 'bg-emerald-600 text-white font-medium'
+                        : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
             <input
               type="text"
-              placeholder="Ex: Côté gauche, Étagère..."
+              placeholder="Ex: Côtés, Haut et bas, Étagère, Fond..."
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-slate-950 text-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
@@ -416,159 +585,165 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
         </div>
       </form>
 
-      {/* Table des pièces à découper */}
+      {/* Table des pièces à découper articulée par catégorie (Côtés, Haut et bas, etc.) */}
       {items.length === 0 ? (
         <div className="text-center py-6 border border-dashed border-slate-700 rounded-xl text-slate-400 text-xs">
           <Tag className="w-8 h-8 mx-auto text-slate-600 mb-2" />
           Aucune pièce à découper. Ajoutez vos pièces requises ci-dessus.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-700/80">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
-              <tr>
-                <th className="py-2.5 px-3">Désignation</th>
-                <th className="py-2.5 px-3">Matière</th>
-                <th className="py-2.5 px-3">Dimensions (L × l mm)</th>
-                <th className="py-2.5 px-3 text-center">Quantité</th>
-                <th className="py-2.5 px-3 text-center">Fil du Bois</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/60 text-slate-200">
-              {items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="hover:bg-slate-750/50 transition-colors group"
-                >
-                  <td className="py-2 px-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-3 h-3 rounded-full shrink-0 shadow-sm"
-                        style={{ backgroundColor: item.color || '#3b82f6' }}
-                      />
-                      <input
-                        type="text"
-                        value={item.name}
-                        onChange={(e) =>
-                          handleUpdate(item.id, 'name', e.target.value)
-                        }
-                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-emerald-500 rounded px-1.5 py-0.5 text-xs text-white font-medium w-full max-w-[160px]"
-                      />
-                    </div>
-                  </td>
-                  <td className="py-2 px-3">
-                    <select
-                      value={item.material}
-                      onChange={(e) =>
-                        handleUpdate(item.id, 'material', e.target.value)
-                      }
-                      className="bg-slate-900 text-slate-200 border border-slate-700/80 focus:border-emerald-500 rounded px-1.5 py-0.5 text-xs w-full max-w-[160px] font-medium"
-                    >
-                      {item.material &&
-                        !sortedMaterials.includes(item.material) && (
-                          <option value={item.material}>
-                            {item.material} (hors stock)
-                          </option>
-                        )}
-                      {sortedMaterials.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="py-2 px-3 font-mono">
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        value={item.length}
-                        onChange={(e) =>
-                          handleUpdate(
-                            item.id,
-                            'length',
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-emerald-500 rounded px-1 py-0.5 w-16 text-slate-200"
-                      />
-                      <span className="text-slate-500">×</span>
-                      <input
-                        type="number"
-                        value={item.width}
-                        onChange={(e) =>
-                          handleUpdate(
-                            item.id,
-                            'width',
-                            parseInt(e.target.value) || 0
-                          )
-                        }
-                        className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-emerald-500 rounded px-1 py-0.5 w-16 text-slate-200"
-                      />
-                      <span className="text-[10px] text-slate-500">mm</span>
-                    </div>
-                  </td>
-                  <td className="py-2 px-3 text-center">
-                    <input
-                      type="number"
-                      min="1"
-                      max="999"
-                      value={item.quantity}
-                      onChange={(e) =>
-                        handleUpdate(
-                          item.id,
-                          'quantity',
-                          parseInt(e.target.value) || 1
-                        )
-                      }
-                      className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 font-mono text-center font-bold text-emerald-400 w-14"
-                    />
-                  </td>
-                  <td className="py-2 px-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleUpdate(item.id, 'canRotate', !item.canRotate)
-                      }
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                        item.canRotate
-                          ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-amber-950/70 text-amber-400 border border-amber-500/30'
-                      }`}
-                      title={
-                        item.canRotate
-                          ? 'Rotation 90° autorisée'
-                          : 'Sens strict (Respect du fil du bois)'
-                      }
-                    >
-                      <RotateCw className="w-3 h-3" />
-                      <span>{item.canRotate ? 'Libre' : 'Fil fixe'}</span>
-                    </button>
-                  </td>
-                  <td className="py-2 px-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleDuplicate(item)}
-                        className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
-                        title="Dupliquer la pièce"
+        <div className="space-y-4">
+          {groupedItems.map((group) => (
+            <div key={group.category} className="space-y-1.5">
+              {/* Titre de la catégorie (ex: Côtés, Haut et bas, etc.) */}
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+                    style={{ backgroundColor: group.color }}
+                  />
+                  <h3 className="text-xs font-bold text-slate-100 tracking-wide">
+                    {group.category}
+                  </h3>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900/90 text-slate-400 border border-slate-700/60 font-mono">
+                    {group.totalQty} pièce{group.totalQty > 1 ? 's' : ''} ({group.items.length} réf.)
+                  </span>
+                </div>
+              </div>
+
+              {/* Tableau des découpes de cette catégorie */}
+              <div className="overflow-x-auto rounded-xl border border-slate-700/80 bg-slate-900/40">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
+                    <tr>
+                      <th className="py-2.5 px-3">Matière</th>
+                      <th className="py-2.5 px-3">Dimensions (L × l mm)</th>
+                      <th className="py-2.5 px-3 text-center">Qté</th>
+                      <th className="py-2.5 px-3 text-center">Fil du bois</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/60 text-slate-200">
+                    {group.items.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="hover:bg-slate-750/50 transition-colors group"
                       >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(item.id)}
-                        className="p-1 rounded hover:bg-red-900/50 text-slate-400 hover:text-red-400 transition-colors"
-                        title="Supprimer la pièce"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                        <td className="py-2 px-3">
+                          <select
+                            value={item.material}
+                            onChange={(e) =>
+                              handleUpdate(item.id, 'material', e.target.value)
+                            }
+                            className="bg-slate-900 text-slate-200 border border-slate-700/80 focus:border-emerald-500 rounded px-1.5 py-0.5 text-xs w-full max-w-[170px] font-medium"
+                          >
+                            {item.material &&
+                              !sortedMaterials.includes(item.material) && (
+                                <option value={item.material}>
+                                  {item.material} (hors stock)
+                                </option>
+                              )}
+                            {sortedMaterials.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-2 px-3 font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              value={item.length}
+                              onChange={(e) =>
+                                handleUpdate(
+                                  item.id,
+                                  'length',
+                                  parseInt(e.target.value) || 0
+                                )
+                              }
+                              className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-emerald-500 rounded px-1 py-0.5 w-16 text-slate-200 font-semibold"
+                            />
+                            <span className="text-slate-500">×</span>
+                            <input
+                              type="number"
+                              value={item.width}
+                              onChange={(e) =>
+                                handleUpdate(
+                                  item.id,
+                                  'width',
+                                  parseInt(e.target.value) || 0
+                                )
+                              }
+                              className="bg-transparent hover:bg-slate-900 focus:bg-slate-900 border border-transparent focus:border-emerald-500 rounded px-1 py-0.5 w-16 text-slate-200 font-semibold"
+                            />
+                            <span className="text-[10px] text-slate-500">mm</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <input
+                            type="number"
+                            min="1"
+                            max="999"
+                            value={item.quantity}
+                            onChange={(e) =>
+                              handleUpdate(
+                                item.id,
+                                'quantity',
+                                parseInt(e.target.value) || 1
+                              )
+                            }
+                            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 font-mono text-center font-bold text-emerald-400 w-14"
+                          />
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleUpdate(item.id, 'canRotate', !item.canRotate)
+                            }
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                              item.canRotate
+                                ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-amber-950/70 text-amber-400 border border-amber-500/30'
+                            }`}
+                            title={
+                              item.canRotate
+                                ? 'Rotation 90° autorisée (Pas de contrainte de fil)'
+                                : 'Sens strict (Respect du fil du bois obligatoire)'
+                            }
+                          >
+                            <RotateCw className="w-3 h-3" />
+                            <span>{item.canRotate ? 'Libre' : 'Fil fixe'}</span>
+                          </button>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleDuplicate(item)}
+                              className="p-1 rounded hover:bg-slate-750 text-slate-400 hover:text-slate-200 transition-colors"
+                              title="Dupliquer la pièce"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(item.id)}
+                              className="p-1 rounded hover:bg-red-950/60 text-slate-400 hover:text-red-400 transition-colors"
+                              title="Supprimer la découpe"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
