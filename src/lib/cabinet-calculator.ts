@@ -46,12 +46,12 @@ export interface CalculatedCabinet {
 }
 
 const PIECE_COLORS = {
-  sides: '#3b82f6', // Bleu
-  topBottom: '#10b981', // Vert émeraude
-  shelf: '#f59e0b', // Ambre
-  partition: '#8b5cf6', // Violet
-  back: '#ec4899', // Rose
-  door: '#06b6d4', // Cyan
+  sides: '#dbeafe', // Bleu très clair (pastel)
+  topBottom: '#dcfce7', // Vert très clair (pastel)
+  shelf: '#fef3c7', // Ambre / Jaune très clair (pastel)
+  partition: '#f3e8ff', // Violet très clair (pastel)
+  back: '#fce7f3', // Rose très clair (pastel)
+  door: '#cffafe', // Cyan très clair (pastel)
 };
 
 /**

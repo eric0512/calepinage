@@ -259,6 +259,23 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   );
 };
 
+/**
+ * Convertit n'importe quelle couleur hexadécimale en teinte très claire (pastel)
+ * afin qu'elle apparaisse en nuance de gris clair à l'impression avec un contraste optimal.
+ */
+function toLightColorCss(hexColor?: string): string {
+  const clean = (hexColor || '#3b82f6').replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16) || 80;
+  const g = parseInt(clean.substring(2, 4), 16) || 140;
+  const b = parseInt(clean.substring(4, 6), 16) || 240;
+
+  const lr = Math.round(r * 0.18 + 255 * 0.82);
+  const lg = Math.round(g * 0.18 + 255 * 0.82);
+  const lb = Math.round(b * 0.18 + 255 * 0.82);
+
+  return `rgb(${lr}, ${lg}, ${lb})`;
+}
+
 interface SinglePanelSVGProps {
   panel: PanelResult;
   kerf: number;
@@ -530,20 +547,20 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                     onMouseLeave={() => setHoveredPiece(null)}
                     className="cursor-pointer group"
                   >
-                    {/* Rectangle de la pièce */}
+                    {/* Rectangle de la pièce avec teinte très claire (nuance de gris clair à l'impression) */}
                     <rect
                       x={px}
                       y={py}
                       width={pw}
                       height={ph}
-                      fill={piece.color}
-                      fillOpacity={isHovered ? 0.95 : 0.75}
-                      stroke={isHovered ? '#ffffff' : '#0f172a'}
-                      strokeWidth={isHovered ? '4' : '2'}
+                      fill={toLightColorCss(piece.color)}
+                      fillOpacity={isHovered ? 1 : 0.9}
+                      stroke={isHovered ? '#2563eb' : '#334155'}
+                      strokeWidth={isHovered ? '3' : '1.5'}
                       rx="3"
                     />
 
-                    {/* Cotations sur les arêtes haute et gauche, et nom au centre */}
+                    {/* Cotations sur les arêtes haute et gauche, et nom au centre en noir pur pour contraste optimal */}
                     <g className="pointer-events-none select-none">
                       {/* 1. Cote sur l'arête haute (largeur) */}
                       {pw >= 28 && (
@@ -551,11 +568,10 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                           x={px + pw / 2}
                           y={py + fontSizeDim * 1.15}
                           textAnchor="middle"
-                          fill="#ffffff"
+                          fill="#0f172a"
                           fontSize={fontSizeDim}
                           fontWeight="bold"
                           fontFamily="monospace"
-                          filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.9))"
                         >
                           {pw >= 55 ? `${topDim} mm` : `${topDim}`}
                         </text>
@@ -569,11 +585,10 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                           textAnchor="middle"
                           dominantBaseline="central"
                           transform={`rotate(-90, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
-                          fill="#ffffff"
+                          fill="#0f172a"
                           fontSize={fontSizeDim}
                           fontWeight="bold"
                           fontFamily="monospace"
-                          filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.9))"
                         >
                           {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
                         </text>
@@ -586,10 +601,9 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                           y={py + ph / 2}
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          fill="#ffffff"
+                          fill="#0f172a"
                           fontSize={fontSizeTitle}
                           fontWeight="bold"
-                          filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.9))"
                         >
                           {piece.name}
                         </text>

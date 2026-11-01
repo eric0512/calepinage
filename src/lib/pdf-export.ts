@@ -2,6 +2,23 @@ import jsPDF from 'jspdf';
 import { PanelResult } from '@/types/cutting';
 
 /**
+ * Convertit n'importe quelle couleur hexadécimale en teinte très claire (mélange à 82% de blanc)
+ * pour qu'à l'impression elle apparaisse en nuance de gris clair avec contraste texte optimal.
+ */
+function toLightColorRgb(hexColor?: string): { r: number; g: number; b: number } {
+  const clean = (hexColor || '#3b82f6').replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16) || 80;
+  const g = parseInt(clean.substring(2, 4), 16) || 140;
+  const b = parseInt(clean.substring(4, 6), 16) || 240;
+
+  const lr = Math.round(r * 0.18 + 255 * 0.82);
+  const lg = Math.round(g * 0.18 + 255 * 0.82);
+  const lb = Math.round(b * 0.18 + 255 * 0.82);
+
+  return { r: lr, g: lg, b: lb };
+}
+
+/**
  * Génère et télécharge un fichier PDF haute résolution (1 panneau par page A4 portrait),
  * avec les panneaux orientés verticalement (plus grande dimension à la verticale, plus petite à l'horizontale).
  */
@@ -173,15 +190,12 @@ export function exportCuttingPlansToPdf(
       const bw = pw * scale;
       const bh = ph * scale;
 
-      // Convertir couleur hex de la pièce en RGB
-      const hex = (piece.color || '#3b82f6').replace('#', '');
-      const r = parseInt(hex.substring(0, 2), 16) || 59;
-      const g = parseInt(hex.substring(2, 4), 16) || 130;
-      const b = parseInt(hex.substring(4, 6), 16) || 246;
+      // Convertir couleur hex de la pièce en nuance très claire (nuances de gris clair à l'impression)
+      const { r, g, b } = toLightColorRgb(piece.color);
 
       doc.setFillColor(r, g, b);
-      doc.setDrawColor(15, 23, 42); // contour sombre net
-      doc.setLineWidth(0.4);
+      doc.setDrawColor(30, 41, 59); // contour sombre net
+      doc.setLineWidth(0.35);
       doc.rect(bx, by, bw, bh, 'FD');
 
       // Cotations sur les arêtes haute et gauche, et désignation au centre
@@ -189,7 +203,8 @@ export function exportCuttingPlansToPdf(
       const leftDim = Math.round(isLandscape ? piece.length : piece.width);
 
       if (bw >= 7 && bh >= 5) {
-        doc.setTextColor(255, 255, 255);
+        // TEXTE EN NOIR PUR POUR LISIBILITÉ MAXIMALE SUR COULEURS TRÈS CLAIRES
+        doc.setTextColor(0, 0, 0);
         const dimFSize = Math.min(6.5, Math.max(3.8, bw / 9, bh / 10));
         doc.setFontSize(dimFSize);
         doc.setFont('helvetica', 'bold');

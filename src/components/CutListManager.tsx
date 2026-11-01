@@ -24,16 +24,16 @@ interface CutListManagerProps {
 }
 
 const COLOR_OPTIONS = [
-  '#3b82f6', // Bleu
-  '#10b981', // Vert
-  '#f59e0b', // Ambre
-  '#8b5cf6', // Violet
-  '#ec4899', // Rose
-  '#06b6d4', // Cyan
-  '#84cc16', // Lime
-  '#f97316', // Orange
-  '#14b8a6', // Turquoise
-  '#6366f1', // Indigo
+  '#dbeafe', // Bleu très clair
+  '#dcfce7', // Vert très clair
+  '#fef3c7', // Ambre très clair
+  '#f3e8ff', // Violet très clair
+  '#fce7f3', // Rose très clair
+  '#cffafe', // Cyan très clair
+  '#ecfccb', // Lime très clair
+  '#ffedd5', // Orange très clair
+  '#ccfbf1', // Sarcelle très clair
+  '#f1f5f9', // Gris ardoise très clair
 ];
 
 interface GroupedCutItems {

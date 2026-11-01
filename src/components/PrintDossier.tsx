@@ -9,6 +9,23 @@ interface PrintDossierProps {
   settings: CutSettings;
 }
 
+/**
+ * Convertit n'importe quelle couleur hexadécimale en teinte très claire (pastel)
+ * afin qu'elle apparaisse en nuance de gris clair à l'impression.
+ */
+function toLightColorCss(hexColor?: string): string {
+  const clean = (hexColor || '#3b82f6').replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16) || 80;
+  const g = parseInt(clean.substring(2, 4), 16) || 140;
+  const b = parseInt(clean.substring(4, 6), 16) || 240;
+
+  const lr = Math.round(r * 0.18 + 255 * 0.82);
+  const lg = Math.round(g * 0.18 + 255 * 0.82);
+  const lb = Math.round(b * 0.18 + 255 * 0.82);
+
+  return `rgb(${lr}, ${lg}, ${lb})`;
+}
+
 export const PrintDossier: React.FC<PrintDossierProps> = ({
   result,
   cutItems,
@@ -216,9 +233,9 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                             y={py}
                             width={pw}
                             height={ph}
-                            fill="#ffffff"
+                            fill={toLightColorCss(piece.color)}
                             stroke="#000000"
-                            strokeWidth="2"
+                            strokeWidth="1.5"
                           />
 
                           {/* 1. Cote sur l'arête haute (largeur) */}
