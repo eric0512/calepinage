@@ -509,12 +509,19 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 const ph = isLandscape ? piece.length : piece.width;
 
                 const isHovered = hoveredPiece?.id === piece.id;
-                // Calcul taille police proportionnelle
+                // Dimensions de la pièce sur le plan orienté
+                const topDim = Math.round(isLandscape ? piece.width : piece.length);
+                const leftDim = Math.round(isLandscape ? piece.length : piece.width);
+
+                // Tailles de police proportionnelles
                 const fontSizeTitle = Math.min(
                   36,
                   Math.max(15, pw / 10, ph / 14)
                 );
-                const fontSizeDims = fontSizeTitle * 0.75;
+                const fontSizeDim = Math.min(
+                  24,
+                  Math.max(12, pw / 16, ph / 20)
+                );
 
                 return (
                   <g
@@ -536,38 +543,58 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                       rx="3"
                     />
 
-                    {/* Étiquette & Dimensions centrées */}
-                    {pw >= 40 && ph >= 40 && (
-                      <g className="pointer-events-none select-none">
-                        {/* Ombre de texte pour lisibilité parfaite */}
+                    {/* Cotations sur les arêtes haute et gauche, et nom au centre */}
+                    <g className="pointer-events-none select-none">
+                      {/* 1. Cote sur l'arête haute (largeur) */}
+                      {pw >= 28 && (
                         <text
                           x={px + pw / 2}
-                          y={py + ph / 2 - fontSizeDims * 0.4}
+                          y={py + fontSizeDim * 1.15}
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize={fontSizeDim}
+                          fontWeight="bold"
+                          fontFamily="monospace"
+                          filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.9))"
+                        >
+                          {pw >= 55 ? `${topDim} mm` : `${topDim}`}
+                        </text>
+                      )}
+
+                      {/* 2. Cote sur l'arête gauche (hauteur, verticale) */}
+                      {ph >= 28 && (
+                        <text
+                          x={px + fontSizeDim * 1.15}
+                          y={py + ph / 2}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          transform={`rotate(-90, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
+                          fill="#ffffff"
+                          fontSize={fontSizeDim}
+                          fontWeight="bold"
+                          fontFamily="monospace"
+                          filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.9))"
+                        >
+                          {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
+                        </text>
+                      )}
+
+                      {/* 3. Nom de la pièce au centre */}
+                      {pw >= 35 && ph >= 35 && (
+                        <text
+                          x={px + pw / 2}
+                          y={py + ph / 2}
                           textAnchor="middle"
                           dominantBaseline="middle"
                           fill="#ffffff"
                           fontSize={fontSizeTitle}
                           fontWeight="bold"
-                          filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.8))"
+                          filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.9))"
                         >
                           {piece.name}
                         </text>
-                        <text
-                          x={px + pw / 2}
-                          y={py + ph / 2 + fontSizeDims * 0.9}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#f8fafc"
-                          fontSize={fontSizeDims}
-                          fontWeight="600"
-                          fontFamily="monospace"
-                          filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.8))"
-                        >
-                          {piece.length} × {piece.width} mm
-                          {piece.rotated && ' (rot)'}
-                        </text>
-                      </g>
-                    )}
+                      )}
+                    </g>
                   </g>
                 );
               })}

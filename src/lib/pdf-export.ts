@@ -184,30 +184,35 @@ export function exportCuttingPlansToPdf(
       doc.setLineWidth(0.4);
       doc.rect(bx, by, bw, bh, 'FD');
 
-      // Étiquette & Dimensions
-      if (bw >= 10 && bh >= 6) {
+      // Cotations sur les arêtes haute et gauche, et désignation au centre
+      const topDim = Math.round(isLandscape ? piece.width : piece.length);
+      const leftDim = Math.round(isLandscape ? piece.length : piece.width);
+
+      if (bw >= 7 && bh >= 5) {
         doc.setTextColor(255, 255, 255);
-        const fSize = Math.min(8, Math.max(4.5, bw / 6, bh / 6));
-        doc.setFontSize(fSize);
+        const dimFSize = Math.min(6.5, Math.max(3.8, bw / 9, bh / 10));
+        doc.setFontSize(dimFSize);
         doc.setFont('helvetica', 'bold');
 
-        // Nom de la pièce
-        const maxChars = Math.floor(bw / 1.8);
-        const displayName =
-          piece.name.length > maxChars
-            ? piece.name.substring(0, maxChars) + '…'
-            : piece.name;
-        doc.text(displayName, bx + bw / 2, by + bh / 2 - 1, { align: 'center' });
+        // 1. Cote sur l'arête haute (largeur de la pièce)
+        const topText = bw >= 16 ? `${topDim} mm` : `${topDim}`;
+        doc.text(topText, bx + bw / 2, by + dimFSize * 0.9 + 0.6, { align: 'center' });
 
-        // Cotes L × l
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(fSize * 0.85);
-        doc.text(
-          `${piece.length} × ${piece.width}`,
-          bx + bw / 2,
-          by + bh / 2 + fSize * 0.7,
-          { align: 'center' }
-        );
+        // 2. Cote sur l'arête gauche (hauteur de la pièce, orientée à 90°)
+        const leftText = bh >= 16 ? `${leftDim} mm` : `${leftDim}`;
+        doc.text(leftText, bx + dimFSize * 0.9 + 0.6, by + bh / 2, { align: 'center', angle: 90 });
+
+        // 3. Désignation de la pièce au centre
+        if (bw >= 12 && bh >= 9) {
+          const titleFSize = Math.min(8.5, Math.max(4.5, bw / 6, bh / 6));
+          doc.setFontSize(titleFSize);
+          const maxChars = Math.floor(bw / 1.8);
+          const displayName =
+            piece.name.length > maxChars
+              ? piece.name.substring(0, maxChars) + '…'
+              : piece.name;
+          doc.text(displayName, bx + bw / 2, by + bh / 2 + 1, { align: 'center' });
+        }
       }
     });
 

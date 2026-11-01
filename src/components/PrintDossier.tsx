@@ -197,10 +197,18 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                       const pw = isLandscape ? piece.width : piece.length;
                       const ph = isLandscape ? piece.length : piece.width;
 
+                      const topDim = Math.round(isLandscape ? piece.width : piece.length);
+                      const leftDim = Math.round(isLandscape ? piece.length : piece.width);
+
                       const fSize = Math.min(
                         36,
                         Math.max(16, pw / 12, ph / 15)
                       );
+                      const fSizeDim = Math.min(
+                        24,
+                        Math.max(12, pw / 16, ph / 20)
+                      );
+
                       return (
                         <g key={piece.id}>
                           <rect
@@ -212,31 +220,52 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                             stroke="#000000"
                             strokeWidth="2"
                           />
-                          {pw >= 40 && ph >= 40 && (
-                            <>
-                              <text
-                                x={px + pw / 2}
-                                y={py + ph / 2 - 8}
-                                textAnchor="middle"
-                                dominantBaseline="middle"
-                                fill="#000000"
-                                fontSize={fSize}
-                                fontWeight="bold"
-                              >
-                                {piece.name}
-                              </text>
-                              <text
-                                x={px + pw / 2}
-                                y={py + ph / 2 + 14}
-                                textAnchor="middle"
-                                dominantBaseline="middle"
-                                fill="#000000"
-                                fontSize={fSize * 0.75}
-                                fontFamily="monospace"
-                              >
-                                {piece.length} × {piece.width} mm
-                              </text>
-                            </>
+
+                          {/* 1. Cote sur l'arête haute (largeur) */}
+                          {pw >= 28 && (
+                            <text
+                              x={px + pw / 2}
+                              y={py + fSizeDim * 1.15}
+                              textAnchor="middle"
+                              fill="#000000"
+                              fontSize={fSizeDim}
+                              fontWeight="bold"
+                              fontFamily="monospace"
+                            >
+                              {pw >= 55 ? `${topDim} mm` : `${topDim}`}
+                            </text>
+                          )}
+
+                          {/* 2. Cote sur l'arête gauche (hauteur, verticale) */}
+                          {ph >= 28 && (
+                            <text
+                              x={px + fSizeDim * 1.15}
+                              y={py + ph / 2}
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              transform={`rotate(-90, ${px + fSizeDim * 1.15}, ${py + ph / 2})`}
+                              fill="#000000"
+                              fontSize={fSizeDim}
+                              fontWeight="bold"
+                              fontFamily="monospace"
+                            >
+                              {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
+                            </text>
+                          )}
+
+                          {/* 3. Nom de la pièce au centre */}
+                          {pw >= 35 && ph >= 35 && (
+                            <text
+                              x={px + pw / 2}
+                              y={py + ph / 2}
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              fill="#000000"
+                              fontSize={fSize}
+                              fontWeight="bold"
+                            >
+                              {piece.name}
+                            </text>
                           )}
                         </g>
                       );
