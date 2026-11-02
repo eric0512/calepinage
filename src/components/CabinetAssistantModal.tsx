@@ -14,11 +14,16 @@ import {
   CheckCircle2,
   ArrowRight,
   AlertTriangle,
+  Star,
+  BookmarkPlus,
+  Trash2,
+  FileText,
 } from 'lucide-react';
 import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
   CabinetConfig,
   BackType,
+  AssemblyType,
   calculateCabinetPieces,
   parseCabinetPromptWithNLP,
   extractThicknessFromMaterialName,
@@ -32,6 +37,70 @@ interface CabinetAssistantModalProps {
   availableMaterials: string[];
   stockPanels?: StockPanel[];
   workshopStock?: WorkshopItem[];
+}
+
+export interface CustomCabinetPreset {
+  id: string;
+  name: string;
+  prompt: string;
+  config: CabinetConfig;
+  createdAt: number;
+}
+
+/**
+ * Génère automatiquement un texte de prompt complet et clair à partir des paramètres du meuble
+ */
+export function generatePromptFromConfig(c: CabinetConfig): string {
+  const parts: string[] = [];
+  parts.push(`Je veux un caisson de ${c.height} de haut, ${c.width} de large et ${c.depth} de profondeur`);
+  parts.push(`en ${c.material || 'Mélaminé'} (épaisseur ${c.thickness} mm)`);
+
+  if (c.partitionsCount > 0) {
+    parts.push(`avec ${c.partitionsCount} séparation centrale au milieu`);
+  }
+
+  if (c.shelvesCount > 0) {
+    if (c.partitionsCount > 0) {
+      parts.push(`${c.shelvesCount} étagères de chaque côté (retrait ${c.shelfRecess || 20} mm)`);
+    } else {
+      parts.push(`${c.shelvesCount} étagère(s) intérieure(s)`);
+    }
+  }
+
+  if (c.assemblyType === 'bottom_inside_top_over') {
+    const debords: string[] = [];
+    if (c.topOverhangSides) debords.push(`${c.topOverhangSides} mm sur les côtés`);
+    if (c.topOverhangFront) debords.push(`${c.topOverhangFront} mm sur l'avant`);
+    parts.push(
+      `le plateau du bas sera encastré entre les côtés, le plateau du haut sera posé sur les côtés${
+        debords.length > 0 ? ` avec un débord de ${debords.join(' et ')}` : ''
+      }`
+    );
+  } else if (c.assemblyType === 'sides_full') {
+    parts.push(`haut et bas à l'intérieur entre les côtés`);
+  } else if (c.assemblyType === 'top_bottom_full') {
+    parts.push(`dessus et dessous filants (côtés à l'intérieur)`);
+  }
+
+  if (c.backType === 'groove') {
+    parts.push(`fond en ${c.backMaterial || 'MDF'} de ${c.backThickness} mm encastré`);
+  } else if (c.backType === 'applique') {
+    parts.push(`fond en applique arrière (${c.backMaterial || `MDF ${c.backThickness} mm`})`);
+  } else {
+    parts.push(`sans fond`);
+  }
+
+  if (c.doors === 'one_door') {
+    parts.push(`1 porte battante en applique`);
+  } else if (c.doors === 'two_doors') {
+    parts.push(`2 portes battantes en applique`);
+  }
+
+  if (c.cabinetCount && c.cabinetCount > 1) {
+    parts.push(`quantité : ${c.cabinetCount} caissons`);
+  }
+
+  return parts.join(', ') + '.';
 }
 
 const DEFAULT_CONFIG: CabinetConfig = {
@@ -124,14 +193,71 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     };
   });
 
-  // Prompt IA
+  // Prompt IA & Presets Personnalisés
   const [aiPrompt, setAiPrompt] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
 
+  // Modèles préprogrammés par l'utilisateur (Persistés en LocalStorage)
+  const [customPresets, setCustomPresets] = useState<CustomCabinetPreset[]>([]);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [showGuidedTemplate, setShowGuidedTemplate] = useState(false);
+
   useEffect(() => {
     setMounted(true);
+    try {
+      const saved = localStorage.getItem('calepinage_user_cabinet_presets');
+      if (saved) {
+        setCustomPresets(JSON.parse(saved));
+      }
+    } catch {
+      // ignore
+    }
   }, []);
+
+  // Sauvegarder la configuration actuelle comme modèle préprogrammé
+  const handleSaveCurrentAsPreset = (nameToSave: string) => {
+    const trimmed = nameToSave.trim() || config.name || 'Mon Modèle Caisson';
+    const newPreset: CustomCabinetPreset = {
+      id: `preset-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: trimmed,
+      prompt: generatePromptFromConfig(config),
+      config: { ...config, name: trimmed },
+      createdAt: Date.now(),
+    };
+    const updated = [newPreset, ...customPresets.filter((p) => p.name !== trimmed)];
+    setCustomPresets(updated);
+    try {
+      localStorage.setItem('calepinage_user_cabinet_presets', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+    setIsSavingPreset(false);
+    setNewPresetName('');
+    setAiSuccessMessage(`⭐ Modèle préprogrammé "${trimmed}" enregistré pour tous vos projets !`);
+  };
+
+  // Supprimer un modèle personnalisé
+  const handleDeletePreset = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = customPresets.filter((p) => p.id !== id);
+    setCustomPresets(updated);
+    try {
+      localStorage.setItem('calepinage_user_cabinet_presets', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  };
+
+  // Charger un modèle personnalisé préprogrammé
+  const handleApplyCustomPreset = (preset: CustomCabinetPreset) => {
+    setConfig({ ...preset.config });
+    if (preset.prompt) {
+      setAiPrompt(preset.prompt);
+    }
+    setAiSuccessMessage(`Modèle "${preset.name}" chargé avec succès !`);
+  };
 
   // Synchroniser la matière et l'épaisseur par défaut si disponible
   useEffect(() => {
@@ -341,32 +467,81 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           </button>
         </div>
 
-        {/* Barre d'onglets : Visuel Paramétrique vs Commande IA */}
-        <div className="flex border-b border-slate-800 bg-slate-950/60 px-5 pt-3 gap-3">
-          <button
-            type="button"
-            onClick={() => setActiveTab('visual')}
-            className={`pb-3 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'visual'
-                ? 'border-amber-500 text-amber-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Sliders className="w-4 h-4" />
-            <span>1. Configuration Visuelle &amp; Assemblage</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('ai')}
-            className={`pb-3 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all ${
-              activeTab === 'ai'
-                ? 'border-amber-500 text-amber-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>2. Assistant Prompt IA (Texte libre)</span>
-          </button>
+        {/* Barre d'onglets : Visuel Paramétrique vs Commande IA + Bouton Sauvegarder Modèle */}
+        <div className="flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-950/60 px-5 pt-3 gap-2">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab('visual')}
+              className={`pb-3 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all ${
+                activeTab === 'visual'
+                  ? 'border-amber-500 text-amber-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sliders className="w-4 h-4" />
+              <span>1. Configuration Visuelle (Champs directs)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('ai')}
+              className={`pb-3 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all ${
+                activeTab === 'ai'
+                  ? 'border-amber-500 text-amber-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>2. Assistant Prompt IA &amp; Gabarits</span>
+            </button>
+          </div>
+
+          {/* Bouton d'enregistrement de modèle préprogrammé */}
+          <div className="pb-2">
+            {!isSavingPreset ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setNewPresetName(config.name || 'Mon Caisson Modèle');
+                  setIsSavingPreset(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold transition-all shadow-sm"
+                title="Enregistrer la configuration actuelle pour la réutiliser dans tous vos projets futurs"
+              >
+                <BookmarkPlus className="w-3.5 h-3.5 text-amber-400" />
+                <span>Enregistrer comme modèle préprogrammé</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-slate-900 border border-amber-500/60 p-1 rounded-lg">
+                <input
+                  type="text"
+                  value={newPresetName}
+                  onChange={(e) => setNewPresetName(e.target.value)}
+                  placeholder="Nom du modèle..."
+                  className="bg-slate-800 text-white px-2 py-0.5 rounded text-xs focus:outline-none w-36 sm:w-48"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveCurrentAsPreset(newPresetName);
+                    if (e.key === 'Escape') setIsSavingPreset(false);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSaveCurrentAsPreset(newPresetName)}
+                  className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-xs"
+                >
+                  Sauvegarder
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSavingPreset(false)}
+                  className="px-1.5 py-0.5 text-slate-400 hover:text-white text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Bandeau d'état des stocks connectés à l'IA */}
@@ -390,24 +565,170 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
         {/* Corps de la modale scrollable */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-          {/* VUE 1 : ASSISTANT PROMPT IA */}
+          {/* VUE 1 : ASSISTANT PROMPT IA & GABARITS */}
           {activeTab === 'ai' && (
             <div className="space-y-4">
-              <div className="bg-slate-850 p-4 rounded-2xl border border-slate-700/80">
-                <label className="block text-xs font-bold text-white mb-1.5 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span>Décrivez le meuble ou caisson que vous souhaitez réaliser :</span>
-                </label>
-                <p className="text-[11px] text-slate-400 mb-3">
-                  Indiquez vos dimensions extérieures (H × L × P), l&apos;épaisseur du bois, le positionnement des planches (haut/bas à l&apos;intérieur ou chapeaux filants), le nombre d&apos;étagères, etc.
-                </p>
+              {/* Option Gabarit Préprogrammé (Remplir les cases pour générer le prompt) */}
+              <div className="bg-slate-850 p-4 rounded-2xl border border-slate-700/80 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    <span>Décrivez votre meuble ou utilisez un gabarit préprogrammé :</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowGuidedTemplate(!showGuidedTemplate)}
+                    className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1.5 self-start sm:self-auto bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/30 transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>{showGuidedTemplate ? 'Fermer le gabarit' : '📋 Remplir les cases (Gabarit guidé)'}</span>
+                  </button>
+                </div>
+
+                {/* Volet Gabarit Guidé */}
+                {showGuidedTemplate && (
+                  <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-150 text-xs">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5" />
+                        <span>Gabarit de prompt préprogrammé</span>
+                      </span>
+                      <span className="text-[11px] text-slate-400">
+                        Remplissez simplement les cases ci-dessous
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">Hauteur (mm) :</label>
+                        <input
+                          type="number"
+                          value={config.height}
+                          onChange={(e) => setConfig({ ...config, height: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">Largeur (mm) :</label>
+                        <input
+                          type="number"
+                          value={config.width}
+                          onChange={(e) => setConfig({ ...config, width: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">Profondeur (mm) :</label>
+                        <input
+                          type="number"
+                          value={config.depth}
+                          onChange={(e) => setConfig({ ...config, depth: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">Séparation au milieu :</label>
+                        <select
+                          value={config.partitionsCount}
+                          onChange={(e) => setConfig({ ...config, partitionsCount: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white"
+                        >
+                          <option value={0}>Aucune</option>
+                          <option value={1}>1 séparation centrale</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">Étagères par côté :</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="10"
+                          value={config.shelvesCount}
+                          onChange={(e) => setConfig({ ...config, shelvesCount: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">Mode d&apos;assemblage :</label>
+                        <select
+                          value={config.assemblyType}
+                          onChange={(e) => setConfig({ ...config, assemblyType: e.target.value as AssemblyType })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white"
+                        >
+                          <option value="bottom_inside_top_over">Bas encastré / Dessus posé</option>
+                          <option value="sides_full">Haut &amp; Bas intérieurs</option>
+                          <option value="top_bottom_full">Dessus/Dessous filants</option>
+                        </select>
+                      </div>
+
+                      {config.assemblyType === 'bottom_inside_top_over' && (
+                        <>
+                          <div>
+                            <label className="text-[11px] text-purple-300 block mb-1">Débord côtés (mm) :</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={config.topOverhangSides || 0}
+                              onChange={(e) => setConfig({ ...config, topOverhangSides: parseInt(e.target.value) || 0 })}
+                              className="w-full bg-slate-800 border border-purple-500/50 rounded px-2 py-1 text-white font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] text-purple-300 block mb-1">Débord avant (mm) :</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={config.topOverhangFront || 0}
+                              onChange={(e) => setConfig({ ...config, topOverhangFront: parseInt(e.target.value) || 0 })}
+                              className="w-full bg-slate-800 border border-purple-500/50 rounded px-2 py-1 text-white font-mono"
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">Fond du caisson :</label>
+                        <select
+                          value={config.backType}
+                          onChange={(e) => setConfig({ ...config, backType: e.target.value as BackType })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white"
+                        >
+                          <option value="groove">Encastré (rainure)</option>
+                          <option value="applique">En applique arrière</option>
+                          <option value="none">Sans fond</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const generated = generatePromptFromConfig(config);
+                          setAiPrompt(generated);
+                          setShowGuidedTemplate(false);
+                          handleAnalyzePrompt(generated);
+                        }}
+                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Générer le prompt &amp; Appliquer</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="relative">
                   <textarea
                     rows={3}
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Ex: Je veux un caisson de cuisine de 720 de haut, 600 de large et 560 de profondeur en 18mm, haut et bas à l'intérieur, avec 1 étagère en retrait et un fond de 8mm..."
+                    placeholder="Ex: Je veux un caisson de 700 de haut, 1000 de large et 450 de profondeur avec séparation au milieu et 2 étagères de chaque côté, bas encastré, haut posé avec débord de 2 cm..."
                     className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                   />
                   <button
@@ -438,10 +759,59 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 )}
               </div>
 
+              {/* Mes modèles préprogrammés personnalisés (Sauvegardés par l'utilisateur) */}
+              {customPresets.length > 0 && (
+                <div className="bg-slate-850 p-4 rounded-2xl border border-amber-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                      <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                      <span>Mes Modèles Préprogrammés ({customPresets.length})</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Disponibles dans tous vos projets
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {customPresets.map((preset) => (
+                      <div
+                        key={preset.id}
+                        onClick={() => handleApplyCustomPreset(preset)}
+                        className="text-left p-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-500/30 hover:border-amber-400 transition-all text-xs cursor-pointer group flex items-start justify-between gap-2"
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="font-bold text-white group-hover:text-amber-300 transition-colors truncate flex items-center gap-1.5">
+                            <Star className="w-3 h-3 text-amber-400 shrink-0 fill-amber-400" />
+                            <span>{preset.name}</span>
+                          </div>
+                          <p className="text-[11px] font-mono text-amber-400/90">
+                            {preset.config.height} × {preset.config.width} × {preset.config.depth} mm
+                            {preset.config.partitionsCount > 0 && ' • Séparation'}
+                            {preset.config.topOverhangSides ? ` • Débord ${preset.config.topOverhangSides}mm` : ''}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {preset.config.material} ({preset.config.thickness}mm)
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeletePreset(preset.id, e)}
+                          title="Supprimer ce modèle"
+                          className="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-slate-800 transition-colors shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Exemples rapides en 1 clic */}
               <div>
                 <p className="text-xs font-semibold text-slate-400 mb-2">
-                  Ou essayez l&apos;un de ces modèles types en 1 clic :
+                  Ou chargez un modèle standard d&apos;exemple :
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {PROMPT_PRESETS.map((p, idx) => (
@@ -470,6 +840,29 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Colonne Gauche : Formulaire de paramétrage (7 colonnes) */}
             <div className="lg:col-span-7 space-y-5">
+              {/* Raccourcis modèles préprogrammés (si enregistrés) */}
+              {customPresets.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                  <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1 shrink-0">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>Modèles rapides :</span>
+                  </span>
+                  {customPresets.map((pr) => (
+                    <button
+                      key={pr.id}
+                      type="button"
+                      onClick={() => handleApplyCustomPreset(pr)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-850 hover:bg-slate-800 border border-amber-500/30 hover:border-amber-400 text-slate-200 hover:text-white shrink-0 text-[11px] font-medium flex items-center gap-1 transition-all shadow-sm"
+                    >
+                      <span>{pr.name}</span>
+                      <span className="text-amber-400 font-mono text-[10px]">
+                        ({pr.config.height}×{pr.config.width})
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Nom du meuble, Matière et Nbre de caissons (alignés sur la même ligne) */}
               <div className="bg-slate-850 p-3.5 rounded-2xl border border-slate-800">
                 <div className="grid grid-cols-12 gap-2 sm:gap-2.5 items-end">
