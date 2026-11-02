@@ -1,3 +1,4 @@
+import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-labels';
 import jsPDF from 'jspdf';
 import { PanelResult } from '@/types/cutting';
 
@@ -75,15 +76,22 @@ export function exportCuttingPlansToPdf(
       marginTop + 12.5
     );
 
-    // Métriques (Rendement, trait de scie, nb pièces)
+    // Meubles de destination
+    const panelCabinets = getDistinctCabinets(panel.placedPieces.map((p) => p.name));
+    const isMixedPanel = panelCabinets.length > 1;
+    const destInfo = isMixedPanel
+      ? `  |  Destinations : ${panelCabinets.join(' + ')}`
+      : panelCabinets.length === 1
+        ? `  |  Meuble : ${panelCabinets[0]}`
+        : '';
+
+    // Métriques (Rendement, trait de scie, nb pièces, destinations)
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105); // slate-600
     doc.text(
       `Rendement : ${panel.efficiencyPercentage}%  |  Trait de scie : ${kerf.toFixed(
         1
-      )} mm  |  Pièces : ${panel.placedPieces.length}  |  Chutes atelier : ${
-        panel.offcuts.filter((o) => o.reusable).length
-      }`,
+      )} mm  |  Pièces : ${panel.placedPieces.length}${destInfo}`,
       marginX + 5,
       marginTop + 18
     );
@@ -217,16 +225,42 @@ export function exportCuttingPlansToPdf(
         const leftText = bh >= 16 ? `${leftDim} mm` : `${leftDim}`;
         doc.text(leftText, bx + dimFSize * 0.9 + 0.6, by + bh / 2, { align: 'center', angle: 90 });
 
-        // 3. Désignation de la pièce au centre
+        // 3. Désignation et meuble de destination au centre
+        const pieceCabinet = getPieceCabinet(piece.name);
+        const piecePart = getPiecePart(piece.name);
+
         if (bw >= 12 && bh >= 9) {
           const titleFSize = Math.min(8.5, Math.max(4.5, bw / 6, bh / 6));
-          doc.setFontSize(titleFSize);
-          const maxChars = Math.floor(bw / 1.8);
-          const displayName =
-            piece.name.length > maxChars
-              ? piece.name.substring(0, maxChars) + '…'
-              : piece.name;
-          doc.text(displayName, bx + bw / 2, by + bh / 2 + 1, { align: 'center' });
+
+          if (isMixedPanel && pieceCabinet && bh >= 14) {
+            const cabFSize = Math.max(3.8, titleFSize * 0.78);
+            doc.setFontSize(cabFSize);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(49, 46, 129); // Indigo foncé lisible
+            const maxCabChars = Math.floor(bw / 1.7);
+            const displayCab = `[${pieceCabinet.length > maxCabChars ? pieceCabinet.substring(0, maxCabChars - 1) + '…' : pieceCabinet}]`;
+            doc.text(displayCab, bx + bw / 2, by + bh / 2 - 1.2, { align: 'center' });
+
+            doc.setFontSize(titleFSize);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0); // Noir pur
+            const maxPartChars = Math.floor(bw / 1.8);
+            const displayPart =
+              piecePart.length > maxPartChars
+                ? piecePart.substring(0, maxPartChars) + '…'
+                : piecePart;
+            doc.text(displayPart, bx + bw / 2, by + bh / 2 + 2.5, { align: 'center' });
+          } else {
+            doc.setFontSize(titleFSize);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 0, 0);
+            const maxChars = Math.floor(bw / 1.8);
+            const displayName =
+              piece.name.length > maxChars
+                ? piece.name.substring(0, maxChars) + '…'
+                : piece.name;
+            doc.text(displayName, bx + bw / 2, by + bh / 2 + 1, { align: 'center' });
+          }
         }
       }
     });

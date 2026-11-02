@@ -13,6 +13,7 @@ import {
   FileDown,
 } from 'lucide-react';
 import { exportCuttingPlansToPdf } from '@/lib/pdf-export';
+import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-labels';
 
 interface CuttingVisualizerProps {
   panels: PanelResult[];
@@ -304,6 +305,10 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
   const svgWidth = panelWidthDisplay + margin * 2;
   const svgHeight = panelHeightDisplay + margin * 2;
 
+  // Meubles de destination présents sur ce panneau
+  const panelCabinets = getDistinctCabinets(panel.placedPieces.map((p) => p.name));
+  const isMixedPanel = panelCabinets.length > 1;
+
   return (
     <div className="bg-slate-900 border border-slate-700/80 rounded-xl p-4 shadow-inner">
       {/* En-tête obligatoire du panneau : dimensions d'origine, matière, efficacité */}
@@ -329,6 +334,15 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
           <span className="font-mono text-slate-300 font-semibold">
             {panel.panelLength} × {panel.panelWidth} mm (Vertical {panelHeightDisplay} × Horizontal {panelWidthDisplay} mm)
           </span>
+          {isMixedPanel ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+              <span>🎯 Meubles partagés : {panelCabinets.join(' + ')}</span>
+            </span>
+          ) : panelCabinets.length === 1 ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center gap-1">
+              <span>Meuble : {panelCabinets[0]}</span>
+            </span>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3 font-mono text-[11px]">
@@ -523,6 +537,8 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 const ph = isLandscape ? piece.length : piece.width;
 
                 const isHovered = hoveredPiece?.id === piece.id;
+                const pieceCabinet = getPieceCabinet(piece.name);
+                const piecePart = getPiecePart(piece.name);
                 // Dimensions de la pièce sur le plan orienté
                 const topDim = Math.round(isLandscape ? piece.width : piece.length);
                 const leftDim = Math.round(isLandscape ? piece.length : piece.width);
@@ -544,6 +560,9 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                     onMouseLeave={() => setHoveredPiece(null)}
                     className="cursor-pointer group"
                   >
+                    <title>
+                      {pieceCabinet ? `Destination : ${pieceCabinet}\nPièce : ${piecePart}\nDimensions : ${Math.round(piece.length)} × ${Math.round(piece.width)} mm` : `${piece.name} (${Math.round(piece.length)} × ${Math.round(piece.width)} mm)`}
+                    </title>
                     {/* Rectangle de la pièce avec teinte très claire (nuance de gris clair à l'impression) */}
                     <rect
                       x={px}
@@ -591,7 +610,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                         </text>
                       )}
 
-                      {/* 3. Nom de la pièce au centre */}
+                      {/* 3. Nom de la pièce et destination au centre */}
                       {pw >= 35 && ph >= 35 && (
                         <text
                           x={px + pw / 2}
@@ -602,7 +621,29 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                           fontSize={fontSizeTitle}
                           fontWeight="bold"
                         >
-                          {piece.name}
+                          {isMixedPanel && pieceCabinet && ph >= 55 ? (
+                            <>
+                              <tspan
+                                x={px + pw / 2}
+                                dy="-0.6em"
+                                fontSize={Math.max(10, fontSizeTitle * 0.72)}
+                                fill="#312e81"
+                                fontWeight="800"
+                              >
+                                [{pieceCabinet}]
+                              </tspan>
+                              <tspan
+                                x={px + pw / 2}
+                                dy="1.25em"
+                                fontSize={fontSizeTitle}
+                                fill="#0f172a"
+                              >
+                                {piecePart}
+                              </tspan>
+                            </>
+                          ) : (
+                            piece.name
+                          )}
                         </text>
                       )}
                     </g>

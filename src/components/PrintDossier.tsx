@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-labels';
 import { OptimizationResult, CutItem, CutSettings } from '@/types/cutting';
 
 interface PrintDossierProps {
@@ -103,6 +104,8 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
 
         {result.panels.map((panel, idx) => {
           const isLandscape = panel.panelLength > panel.panelWidth;
+          const panelCabinets = getDistinctCabinets(panel.placedPieces.map((p) => p.name));
+          const isMixedPanel = panelCabinets.length > 1;
           const panelW = isLandscape ? panel.panelWidth : panel.panelLength; // petite dimension (horizontale)
           const panelH = isLandscape ? panel.panelLength : panel.panelWidth; // grande dimension (verticale)
 
@@ -126,6 +129,11 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                   </span>
                 </div>
                 <div className="font-mono">
+                  {isMixedPanel && (
+                    <span className="mr-3 font-sans font-bold text-indigo-700">
+                      🎯 Destinations : {panelCabinets.join(' + ')}
+                    </span>
+                  )}
                   Rendement : <strong>{panel.efficiencyPercentage}%</strong> | Pièces :{' '}
                   <strong>{panel.placedPieces.length}</strong>
                 </div>
@@ -210,6 +218,8 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                     {/* Pièces */}
                     {panel.placedPieces.map((piece) => {
                       const px = isLandscape ? piece.y : piece.x;
+                      const pieceCabinet = getPieceCabinet(piece.name);
+                      const piecePart = getPiecePart(piece.name);
                       const py = isLandscape ? piece.x : piece.y;
                       const pw = isLandscape ? piece.width : piece.length;
                       const ph = isLandscape ? piece.length : piece.width;
@@ -270,7 +280,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                             </text>
                           )}
 
-                          {/* 3. Nom de la pièce au centre */}
+                          {/* 3. Nom de la pièce et destination au centre */}
                           {pw >= 35 && ph >= 35 && (
                             <text
                               x={px + pw / 2}
@@ -281,7 +291,29 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                               fontSize={fSize}
                               fontWeight="bold"
                             >
-                              {piece.name}
+                              {isMixedPanel && pieceCabinet && ph >= 55 ? (
+                                <>
+                                  <tspan
+                                    x={px + pw / 2}
+                                    dy="-0.6em"
+                                    fontSize={Math.max(10, fSize * 0.75)}
+                                    fill="#1e1b4b"
+                                    fontWeight="800"
+                                  >
+                                    [{pieceCabinet}]
+                                  </tspan>
+                                  <tspan
+                                    x={px + pw / 2}
+                                    dy="1.25em"
+                                    fontSize={fSize}
+                                    fill="#000000"
+                                  >
+                                    {piecePart}
+                                  </tspan>
+                                </>
+                              ) : (
+                                piece.name
+                              )}
                             </text>
                           )}
                         </g>

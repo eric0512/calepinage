@@ -7,7 +7,6 @@ import {
   Layers,
   Box,
   Plus,
-  Play,
   X,
   Sliders,
   Send,
@@ -157,7 +156,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   isOpen,
   onClose,
   onAddPieces,
-  onAddAndOptimize,
   availableMaterials,
   stockPanels = [],
   workshopStock = [],
@@ -420,19 +418,10 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     return Array.from(missing);
   }, [calculated.cutItems, stockPanels, workshopStock]);
 
-  // Injection des pièces calculées dans la liste de débit
+  // Injection des pièces calculées dans la liste de débit (sans optimisation :
+  // le calepinage se lance depuis le projet une fois tous les caissons saisis)
   const handleInjectPieces = () => {
     onAddPieces(calculated.cutItems);
-    onClose();
-  };
-
-  // Injection des pièces et lancement immédiat du calepinage
-  const handleInjectAndOptimize = () => {
-    if (onAddAndOptimize) {
-      onAddAndOptimize(calculated.cutItems);
-    } else {
-      onAddPieces(calculated.cutItems);
-    }
     onClose();
   };
 
@@ -1744,19 +1733,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             <button
               type="button"
               onClick={handleInjectPieces}
-              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 font-medium text-xs transition-colors flex items-center justify-center gap-1.5"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs transition-all shadow-lg active:scale-95"
+              title="Ajoute les coupes de ce caisson à la liste de débit. L'optimisation se lance ensuite depuis le projet, une fois tous les caissons saisis."
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Ajouter au débit</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleInjectAndOptimize}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs transition-all shadow-lg active:scale-95"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Ajouter &amp; Optimiser</span>
+              <span>Ajouter ce caisson au projet</span>
             </button>
           </div>
         </div>

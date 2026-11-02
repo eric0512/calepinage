@@ -70,6 +70,15 @@ const CATEGORY_PRIORITY = [
 
 export function getPieceCategory(name: string): string {
   if (!name || !name.trim()) return 'Autres pièces';
+
+  // Si la pièce est rattachée à un meuble ("Meuble bas 500 - Côtés"),
+  // on catégorise uniquement sur la partie après le meuble (évite que "Meuble bas" soit classé en "Haut et bas")
+  if (name.includes(' - ')) {
+    const parts = name.split(' - ');
+    const lastPart = parts[parts.length - 1].trim();
+    if (lastPart) return getPieceCategory(lastPart);
+  }
+
   const clean = name.toLowerCase().trim();
 
   if (/^pi[èe]ce(\s*\d+)?$/i.test(clean) || clean === 'sans nom' || clean === 'divers') {
@@ -147,13 +156,28 @@ export function getPieceCategory(name: string): string {
     return 'Traverses & Renforts';
   }
 
-  if (name.includes(' - ')) {
-    const parts = name.split(' - ');
-    const lastPart = parts[parts.length - 1].trim();
-    if (lastPart) return getPieceCategory(lastPart);
-  }
-
   return name.trim();
+}
+
+/** Libellé utilisé pour les pièces non rattachées à un meuble */
+export const UNASSIGNED_CABINET_LABEL = 'Pièces diverses';
+
+/**
+ * Extrait le nom du meuble de destination d'une pièce.
+ * Ex : "Meuble bas de 500 - Côtés" -> "Meuble bas de 500"
+ */
+export function getCabinetName(name: string): string {
+  if (!name || !name.includes(' - ')) return UNASSIGNED_CABINET_LABEL;
+  const parts = name.split(' - ');
+  parts.pop();
+  const cabinet = parts.join(' - ').trim();
+  return cabinet || UNASSIGNED_CABINET_LABEL;
+}
+
+interface CabinetGroup {
+  cabinet: string;
+  totalQty: number;
+  groups: GroupedCutItems[];
 }
 
 export const CutListManager: React.FC<CutListManagerProps> = ({
@@ -163,7 +187,6 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   allAvailableMaterials,
   stockPanels,
   workshopStock,
-  onRequestOptimize,
 }) => {
   // Matières disponibles en stock triées par ordre alphabétique
   const sortedMaterials = React.useMemo(() => {
@@ -172,44 +195,86 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
     );
   }, [availableMaterials]);
 
-  // Regroupement articulé des pièces par catégorie (Côtés, Haut et bas, Étagères, Fond, etc.)
-  const groupedItems = React.useMemo(() => {
-    const map = new Map<string, CutItem[]>();
-
+  // Regroupement : 1) par meuble (ordre de saisie), 2) par catégorie (Côtés, Haut et bas, Étagères, Fond...) et matière
+  const cabinetGroups = React.useMemo(() => {
+    const cabinetMap = new Map<string, CutItem[]>();
     items.forEach((item) => {
-      const cat = getPieceCategory(item.name);
-      if (!map.has(cat)) {
-        map.set(cat, []);
-      }
-      map.get(cat)!.push(item);
+      const cab = getCabinetName(item.name);
+      if (!cabinetMap.has(cab)) cabinetMap.set(cab, []);
+      cabinetMap.get(cab)!.push(item);
     });
 
-    const groups: GroupedCutItems[] = [];
-    map.forEach((catItems, category) => {
-      const totalQty = catItems.reduce((acc, it) => acc + it.quantity, 0);
-      const color =
-        CATEGORY_COLORS[category] ||
-        catItems[0]?.color ||
-        '#64748b';
-      const materials = Array.from(
-        new Set(
-          catItems
-            .map((it) => it.material?.trim())
-            .filter((m): m is string => Boolean(m))
-        )
-      );
-      groups.push({ category, materials, color, items: catItems, totalQty });
+    const result: CabinetGroup[] = [];
+    cabinetMap.forEach((cabItems, cabinet) => {
+      // Clé = catégorie + matière, pour afficher "Côtés ; MDF 19mm" et "Fond ; MDF 8mm" séparément
+      const map = new Map<string, { category: string; material: string; items: CutItem[] }>();
+      cabItems.forEach((item) => {
+        const cat = getPieceCategory(item.name);
+        const mat = item.material?.trim() || '';
+        const key = `${cat}__${mat}`;
+        if (!map.has(key)) map.set(key, { category: cat, material: mat, items: [] });
+        map.get(key)!.items.push(item);
+      });
+
+      const groups: GroupedCutItems[] = [];
+      map.forEach(({ category, material: mat, items: catItems }) => {
+        const totalQty = catItems.reduce((acc, it) => acc + it.quantity, 0);
+        const color = CATEGORY_COLORS[category] || catItems[0]?.color || '#64748b';
+        groups.push({
+          category,
+          materials: mat ? [mat] : [],
+          color,
+          items: catItems,
+          totalQty,
+        });
+      });
+
+      groups.sort((a, b) => {
+        const idxA = CATEGORY_PRIORITY.indexOf(a.category);
+        const idxB = CATEGORY_PRIORITY.indexOf(b.category);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.category.localeCompare(b.category, 'fr');
+      });
+
+      result.push({
+        cabinet,
+        totalQty: cabItems.reduce((acc, it) => acc + it.quantity, 0),
+        groups,
+      });
     });
 
-    return groups.sort((a, b) => {
-      const idxA = CATEGORY_PRIORITY.indexOf(a.category);
-      const idxB = CATEGORY_PRIORITY.indexOf(b.category);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.category.localeCompare(b.category, 'fr');
+    // Les pièces diverses (non rattachées à un meuble) en dernier
+    return result.sort((a, b) => {
+      if (a.cabinet === UNASSIGNED_CABINET_LABEL) return 1;
+      if (b.cabinet === UNASSIGNED_CABINET_LABEL) return -1;
+      return 0;
     });
   }, [items]);
+
+  // Ajout des coupes d'un caisson : garantit un nom de meuble unique dans le projet
+  const handleAddCabinetPieces = (newPieces: CutItem[]) => {
+    if (newPieces.length === 0) return;
+    const existing = new Set(items.map((it) => getCabinetName(it.name)));
+    const baseName = getCabinetName(newPieces[0].name);
+    let finalName = baseName;
+    if (baseName !== UNASSIGNED_CABINET_LABEL && existing.has(baseName)) {
+      let n = 2;
+      while (existing.has(`${baseName} (${n})`)) n++;
+      finalName = `${baseName} (${n})`;
+    }
+    const renamed =
+      finalName === baseName
+        ? newPieces
+        : newPieces.map((p) => ({
+            ...p,
+            name: p.name.startsWith(`${baseName} - `)
+              ? `${finalName} - ${p.name.slice(baseName.length + 3)}`
+              : p.name,
+          }));
+    onChange([...items, ...renamed]);
+  };
 
   // État local d'ajout rapide (tous les champs vides par défaut pour un nouveau projet)
   const [name, setName] = useState('');
@@ -498,44 +563,57 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           Aucune pièce à découper. Ajoutez vos pièces requises ci-dessus.
         </div>
       ) : (
-        <div className="space-y-4">
-          {groupedItems.map((group) => (
-            <div key={group.category} className="space-y-1.5">
-              {/* Titre de la catégorie avec la matière à droite (ex: Côtés ; Mélaminé Blanc 18mm) */}
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
-                    style={{ backgroundColor: group.color }}
-                  />
-                  <h3 className="text-xs font-bold text-slate-100 tracking-wide flex items-center gap-1.5">
-                    <span>{group.category}</span>
-                    {group.materials.length > 0 && (
-                      <span className="text-slate-300 font-medium">
-                        ; <span className="text-emerald-400 font-semibold">{group.materials.join(', ')}</span>
-                      </span>
-                    )}
-                  </h3>
-                </div>
+        <div className="space-y-5">
+          {cabinetGroups.map((cab) => (
+            <div
+              key={cab.cabinet}
+              className="rounded-2xl border border-slate-700/70 bg-slate-900/30 p-2 sm:p-3 space-y-3"
+            >
+              {/* Nom du meuble du projet (ex : Meuble bas de 500) */}
+              <div className="flex items-center justify-between gap-2 px-1 pb-1.5 border-b border-slate-700/60">
+                <h3 className="text-sm font-bold text-amber-400 tracking-wide flex items-center gap-1.5 min-w-0">
+                  <Tag className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{cab.cabinet}</span>
+                </h3>
+                <span className="text-[11px] text-slate-400 font-mono shrink-0">
+                  {cab.totalQty} pce{cab.totalQty > 1 ? 's' : ''}
+                </span>
               </div>
 
-              {/* Tableau des découpes de cette catégorie (optimisé sans défilement horizontal mobile) */}
-              <div className="overflow-x-auto rounded-xl border border-slate-700/80 bg-slate-900/40">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
-                    <tr>
-                      <th className="py-2 px-1.5 sm:px-3 text-left">
-                        Dimensions <span className="text-[10px] text-slate-500 font-normal hidden sm:inline">(L × l mm)</span>
-                      </th>
-                      <th className="py-2 px-1 text-center w-12 sm:w-16">Qté</th>
-                      <th className="py-2 px-1 text-center w-10 sm:w-20" title="Sens du fil du bois">
-                        Fil<span className="hidden sm:inline"> du bois</span>
-                      </th>
-                      <th className="py-2 px-1.5 sm:px-3 text-right w-16 sm:w-20">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700/60 text-slate-200">
-                    {group.items.map((item) => (
+              {cab.groups.map((group) => (
+                <div
+                  key={`${cab.cabinet}-${group.category}-${group.materials.join(',')}`}
+                  className="overflow-x-auto rounded-xl border border-slate-700/80 bg-slate-900/40"
+                >
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
+                      <tr>
+                        {/* Titre de la catégorie + matière à la place de "Dimensions" (ex : Côtés ; MDF 19mm) */}
+                        <th className="py-2 px-1.5 sm:px-3 text-left">
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+                              style={{ backgroundColor: group.color }}
+                            />
+                            <span className="font-bold text-slate-100 truncate">
+                              {group.category}
+                              {group.materials.length > 0 && (
+                                <span className="text-slate-300 font-medium">
+                                  {' '}; <span className="text-emerald-400 font-semibold">{group.materials.join(', ')}</span>
+                                </span>
+                              )}
+                            </span>
+                          </span>
+                        </th>
+                        <th className="py-2 px-1 text-center w-12 sm:w-16">Qté</th>
+                        <th className="py-2 px-1 text-center w-10 sm:w-20" title="Sens du fil du bois">
+                          Fil<span className="hidden sm:inline"> du bois</span>
+                        </th>
+                        <th className="py-2 px-1.5 sm:px-3 text-right w-16 sm:w-20">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/60 text-slate-200">
+                      {group.items.map((item) => (
                       <tr
                         key={item.id}
                         className="hover:bg-slate-750/50 transition-colors group"
@@ -632,24 +710,17 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                   </tbody>
                 </table>
               </div>
+              ))}
             </div>
           ))}
         </div>
       )}
 
-      {/* Modal Assistant Caisson & Mobilier IA */}
+      {/* Modal Assistant Caisson & Mobilier IA : ajoute uniquement les coupes (pas d'optimisation automatique) */}
       <CabinetAssistantModal
         isOpen={showCabinetModal}
         onClose={() => setShowCabinetModal(false)}
-        onAddPieces={(newPieces) => {
-          onChange([...items, ...newPieces]);
-        }}
-        onAddAndOptimize={(newPieces) => {
-          onChange([...items, ...newPieces]);
-          if (onRequestOptimize) {
-            onRequestOptimize(newPieces);
-          }
-        }}
+        onAddPieces={handleAddCabinetPieces}
         availableMaterials={
           allAvailableMaterials && allAvailableMaterials.length > 0
             ? allAvailableMaterials
