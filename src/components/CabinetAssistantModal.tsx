@@ -56,7 +56,11 @@ export function generatePromptFromConfig(c: CabinetConfig): string {
   parts.push(`en ${c.material || 'Mélaminé'} (épaisseur ${c.thickness} mm)`);
 
   if (c.partitionsCount > 0) {
-    parts.push(`avec ${c.partitionsCount} séparation centrale au milieu`);
+    if (c.partitionsCount === 1) {
+      parts.push(`avec 1 séparation centrale au milieu (2 compartiments)`);
+    } else {
+      parts.push(`avec ${c.partitionsCount} séparations verticales (${c.partitionsCount + 1} compartiments)`);
+    }
   }
 
   if (c.shelvesCount > 0) {
@@ -628,14 +632,24 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       </div>
 
                       <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">Séparation au milieu :</label>
+                        <label className="text-[11px] text-slate-300 block mb-1">
+                          Séparations (jusqu&apos;à 4) :
+                        </label>
                         <select
                           value={config.partitionsCount}
-                          onChange={(e) => setConfig({ ...config, partitionsCount: parseInt(e.target.value) || 0 })}
+                          onChange={(e) =>
+                            setConfig({
+                              ...config,
+                              partitionsCount: Math.min(4, Math.max(0, parseInt(e.target.value) || 0)),
+                            })
+                          }
                           className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white"
                         >
-                          <option value={0}>Aucune</option>
-                          <option value={1}>1 séparation centrale</option>
+                          <option value={0}>0 - Aucune (1 compartiment)</option>
+                          <option value={1}>1 séparation (2 compartiments)</option>
+                          <option value={2}>2 séparations (3 compartiments)</option>
+                          <option value={3}>3 séparations (4 compartiments)</option>
+                          <option value={4}>4 séparations (5 compartiments)</option>
                         </select>
                       </div>
 
@@ -1210,14 +1224,61 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 )}
               </div>
 
-              {/* Étagères & Fond */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-850 p-4 rounded-2xl border border-slate-800">
-                {/* Étagères */}
+              {/* Séparations, Étagères & Fond */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-850 p-4 rounded-2xl border border-slate-800">
+                {/* 1. Séparations verticales (0 à 4) */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-white">
+                      Séparations (0 à 4) :
+                    </label>
+                    <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfig({
+                            ...config,
+                            partitionsCount: Math.max(0, config.partitionsCount - 1),
+                          })
+                        }
+                        className="text-slate-400 hover:text-white font-bold px-1"
+                      >
+                        -
+                      </button>
+                      <span className="font-mono font-bold text-purple-400 text-xs px-1">
+                        {config.partitionsCount}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfig({
+                            ...config,
+                            partitionsCount: Math.min(4, config.partitionsCount + 1),
+                          })
+                        }
+                        className="text-slate-400 hover:text-white font-bold px-1"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800">
+                    {config.partitionsCount === 0 ? (
+                      <span>1 seul grand compartiment</span>
+                    ) : (
+                      <span className="text-purple-300 font-medium">
+                        {config.partitionsCount} montant{config.partitionsCount > 1 ? 's' : ''} = {config.partitionsCount + 1} compartiments
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Étagères */}
+                <div className="space-y-2 sm:border-l sm:border-slate-800 sm:pl-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-white">
                       {config.partitionsCount > 0
-                        ? `Étagères par côté (${config.shelvesCount * (config.partitionsCount + 1)} total) :`
+                        ? `Étagères / côté (${config.shelvesCount * (config.partitionsCount + 1)} total) :`
                         : 'Étagère(s) intérieure(s) :'}
                     </label>
                     <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5">
@@ -1272,7 +1333,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   )}
                 </div>
 
-                {/* Fond de caisson */}
+                {/* 3. Fond de caisson */}
                 <div className="space-y-2 sm:border-l sm:border-slate-800 sm:pl-3">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-white">
@@ -1459,37 +1520,67 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       </>
                     )}
 
-                    {/* Séparation verticale intermédiaire au centre */}
-                    {config.partitionsCount > 0 && (
-                      <rect
-                        x="114"
-                        y="27"
-                        width="12"
-                        height="146"
-                        fill="#f3e8ff"
-                        stroke="#8b5cf6"
-                        strokeWidth="1"
-                        rx="1.5"
-                      />
-                    )}
+                    {/* Séparations verticales intermédiaires (de 1 à 4) */}
+                    {config.partitionsCount > 0 &&
+                      Array.from({ length: config.partitionsCount }).map((_, pIdx) => {
+                        const P = config.partitionsCount;
+                        const partThickness = P >= 3 ? 6 : 8;
+                        const totalInteriorW = 166;
+                        const compW = (totalInteriorW - P * partThickness) / (P + 1);
+                        const partX = 37 + (pIdx + 1) * compW + pIdx * partThickness;
 
-                    {/* Étagères intérieures (adaptées si séparation au centre) */}
+                        return (
+                          <rect
+                            key={`part-${pIdx}`}
+                            x={partX}
+                            y="27"
+                            width={partThickness}
+                            height="146"
+                            fill="#f3e8ff"
+                            stroke="#8b5cf6"
+                            strokeWidth="1"
+                            rx="1.5"
+                          />
+                        );
+                      })}
+
+                    {/* Étagères intérieures réparties dans chaque compartiment */}
                     {Array.from({ length: Math.min(3, config.shelvesCount) }).map((_, i) => {
                       const step = 146 / (Math.min(3, config.shelvesCount) + 1);
                       const y = 27 + step * (i + 1);
-                      if (config.partitionsCount > 0) {
+                      const P = config.partitionsCount;
+
+                      if (P > 0) {
+                        const numComp = P + 1;
+                        const partThickness = P >= 3 ? 6 : 8;
+                        const totalInteriorW = 166;
+                        const compW = (totalInteriorW - P * partThickness) / numComp;
+
                         return (
-                          <g key={i}>
-                            {/* Compartiment gauche */}
-                            <rect x="37" y={y} width="77" height="7" fill="#fef3c7" stroke="#f59e0b" strokeWidth="0.8" rx="1.5" />
-                            {/* Compartiment droit */}
-                            <rect x="126" y={y} width="77" height="7" fill="#fef3c7" stroke="#f59e0b" strokeWidth="0.8" rx="1.5" />
+                          <g key={`shelves-row-${i}`}>
+                            {Array.from({ length: numComp }).map((__, cIdx) => {
+                              const compX = 37 + cIdx * (compW + partThickness);
+                              return (
+                                <rect
+                                  key={`shelf-${i}-${cIdx}`}
+                                  x={compX}
+                                  y={y}
+                                  width={compW}
+                                  height="6"
+                                  fill="#fef3c7"
+                                  stroke="#f59e0b"
+                                  strokeWidth="0.8"
+                                  rx="1"
+                                />
+                              );
+                            })}
                           </g>
                         );
                       }
+
                       return (
                         <rect
-                          key={i}
+                          key={`shelf-full-${i}`}
                           x="37"
                           y={y}
                           width="166"

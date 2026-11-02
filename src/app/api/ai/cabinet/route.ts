@@ -63,7 +63,7 @@ Tu dois analyser la description en langage naturel d'un meuble ou caisson et en 
   "backThickness": number (épaisseur du fond en mm, ex: 9 si fond en MDF de 9mm),
   "shelvesCount": number (nombre d'étagères par compartiment, ex: 2 si 2 étagères de chaque côté de la séparation),
   "shelfRecess": number (retrait de façade des étagères en mm, défaut: 20),
-  "partitionsCount": number (séparations verticales, ex: 1 si séparation au milieu),
+  "partitionsCount": number (séparations verticales intérieures, de 0 à 4. Ex: 1 si séparation au milieu, 2 pour deux montants intermédiaires, jusqu'à 4),
   "doors": "none" | "one_door" | "two_doors",
   "material": "string (matière choisie en priorité dans les stocks de l'utilisateur pour le caisson)",
   "backMaterial": "string (matière spécifique du fond avec son épaisseur, ex: 'MDF 9mm' si fond en mdf de 9 mm)",

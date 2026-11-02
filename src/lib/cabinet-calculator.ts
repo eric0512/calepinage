@@ -21,7 +21,7 @@ export interface CabinetConfig {
   backThickness: number; // Épaisseur du fond (mm, ex: 8 ou 10)
   shelvesCount: number; // Nombre d'étagères par compartiment
   shelfRecess: number; // Retrait de l'étagère par rapport à la façade (mm, ex: 20)
-  partitionsCount: number; // Séparations verticales (0 ou 1)
+  partitionsCount: number; // Séparations verticales (de 0 à 4)
   doors: DoorsType; // Portes en applique
   material: string; // Matière principale
   backMaterial?: string; // Matière du fond
@@ -206,16 +206,27 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   const interiorHeight = height - 2 * thickness;
   const interiorDepth = backType === 'applique' ? depth : depth - backThickness;
 
-  // 3. Séparation verticale (Montant central intermédiaire)
+  // 3. Séparations verticales (Montants intermédiaires, de 1 à 4)
   if (partitionsCount > 0) {
     const partitionHeight = interiorHeight;
     const partitionFormula = `Hauteur intérieure : ${height} - (2 × ${thickness}) = ${partitionHeight} mm`;
     const partitionQty = partitionsCount * cabinetCount;
 
     pieces.push({
-      role: cabinetCount > 1 ? `Séparation verticale (${partitionQty} pcs pour ${cabinetCount} caissons)` : 'Séparation verticale centrale',
-      description: `${config.name} - Séparation centrale`,
-      formula: cabinetCount > 1 ? `${partitionFormula} [${partitionsCount} × ${cabinetCount} = ${partitionQty} pcs]` : partitionFormula,
+      role:
+        partitionsCount > 1
+          ? `Séparations verticales (${partitionQty} pcs pour ${cabinetCount} caisson${cabinetCount > 1 ? 's' : ''})`
+          : cabinetCount > 1
+          ? `Séparation verticale (${partitionQty} pcs pour ${cabinetCount} caissons)`
+          : 'Séparation verticale centrale',
+      description:
+        partitionsCount > 1
+          ? `${config.name} - Séparations (${partitionsCount})`
+          : `${config.name} - Séparation centrale`,
+      formula:
+        cabinetCount > 1
+          ? `${partitionFormula} [${partitionsCount} × ${cabinetCount} = ${partitionQty} pcs]`
+          : partitionFormula,
       length: Math.max(partitionHeight, structuralDepth),
       width: Math.min(partitionHeight, structuralDepth),
       quantity: partitionQty,
@@ -230,9 +241,11 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     let shelfFormula = `Largeur intérieure : ${width} - (2 × ${thickness}) = ${shelfWidth} mm`;
 
     if (partitionsCount > 0) {
-      // Étagère divisée par le montant intermédiaire
+      // Étagère divisée par les montants intermédiaires
       shelfWidth = Math.floor((interiorWidth - partitionsCount * thickness) / (partitionsCount + 1));
-      shelfFormula = `Compartiment : (${interiorWidth} - ${thickness}) / 2 = ${shelfWidth} mm`;
+      shelfFormula = `Compartiment (${partitionsCount + 1}) : (${interiorWidth} - ${
+        partitionsCount > 1 ? `${partitionsCount}×${thickness}` : thickness
+      }) / ${partitionsCount + 1} = ${shelfWidth} mm`;
     }
 
     const shelfDepth = Math.max(50, structuralDepth - shelfRecess);
@@ -241,9 +254,10 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const totalShelvesQty = shelvesPerCabinet * cabinetCount;
 
     pieces.push({
-      role: partitionsCount > 0
-        ? `Étagères (${shelvesCount} par côté × ${compartmentsCount} compartiments = ${shelvesPerCabinet} pcs)`
-        : `Étagère(s) (${shelvesCount} pcs) [Retrait ${shelfRecess} mm]`,
+      role:
+        partitionsCount > 0
+          ? `Étagères (${shelvesCount} par compartiment × ${compartmentsCount} = ${shelvesPerCabinet} pcs)`
+          : `Étagère(s) (${shelvesCount} pcs) [Retrait ${shelfRecess} mm]`,
       description: `${config.name} - Étagère`,
       formula: cabinetCount > 1
         ? `${shelfFormula} × Profondeur (${structuralDepth} - ${shelfRecess} = ${shelfDepth} mm) [${shelvesPerCabinet} × ${cabinetCount} = ${totalShelvesQty} pcs]`
@@ -593,13 +607,26 @@ export function parseCabinetPromptWithNLP(
     }
   }
 
-  // 6. Séparation verticale
-  if (
+  // 6. Séparations verticales (de 0 à 4)
+  const partMatch = text.match(/(\d+)\s*(?:séparations?|separations?|cloisons?|montants?\s+intermédiaires?|montants?\s+intermediaires?)/i);
+  if (partMatch) {
+    const pVal = parseInt(partMatch[1], 10);
+    if (pVal >= 0 && pVal <= 4) {
+      config.partitionsCount = pVal;
+    }
+  } else if (text.includes('quatre séparations') || text.includes('4 séparations')) {
+    config.partitionsCount = 4;
+  } else if (text.includes('trois séparations') || text.includes('3 séparations')) {
+    config.partitionsCount = 3;
+  } else if (text.includes('deux séparations') || text.includes('2 séparations')) {
+    config.partitionsCount = 2;
+  } else if (
     text.includes('séparation') ||
     text.includes('separation') ||
     text.includes('cloison') ||
     text.includes('montant central') ||
-    text.includes('montant intermédiaire')
+    text.includes('montant intermédiaire') ||
+    text.includes('montant intermediaire')
   ) {
     config.partitionsCount = 1;
   }
