@@ -54,6 +54,11 @@ const DEFAULT_CONFIG: CabinetConfig = {
 
 const PROMPT_PRESETS = [
   {
+    label: 'Caisson 700×1000 avec séparation & débord',
+    prompt:
+      'Caisson de 700 de haut, 1000 de large et 450 de profondeur avec séparation au milieu et 2 étagères de chaque côté, bas encastré, haut posé avec débord de 2 cm sur les côtés et l\'avant, fond mdf 9mm encastré',
+  },
+  {
     label: 'Caisson bas cuisine 720×600',
     prompt:
       'Caisson bas de cuisine 720x600x560 en mélaminé 18mm avec haut et bas à l\'intérieur, 1 étagère retrait 20mm et un fond de 8mm',
@@ -657,7 +662,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 </div>
               </div>
 
-              {/* Type d'assemblage (Le point clé demandé par l'utilisateur !) */}
+              {/* Type d'assemblage (Le point clé en menuiserie !) */}
               <div className="bg-slate-850 p-4 rounded-2xl border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -669,7 +674,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {/* Option 1 : Montants continus (Haut/Bas à l'intérieur) */}
                   <button
                     type="button"
@@ -682,17 +687,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs font-bold text-white">
-                        Haut &amp; Bas à l&apos;intérieur
+                        Haut &amp; Bas intérieurs
                       </span>
                       {config.assemblyType === 'sides_full' && (
                         <CheckCircle2 className="w-4 h-4 text-blue-400" />
                       )}
                     </div>
                     <p className="text-[11px] text-slate-400 leading-snug">
-                      Les côtés (montants) font toute la hauteur. Le dessus et le dessous sont pris en sandwich entre les deux côtés.
+                      Montants continus toute hauteur. Dessus et dessous encastrés entre les côtés.
                     </p>
                     <div className="mt-2 text-[10px] font-mono text-blue-300 bg-blue-900/40 px-2 py-1 rounded">
-                      Largeur haut/bas = L - (2 × {config.thickness}) = {config.width - 2 * config.thickness} mm
+                      Larg. = L - (2 × {config.thickness}) = {config.width - 2 * config.thickness} mm
                     </div>
                   </button>
 
@@ -708,20 +713,108 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs font-bold text-white">
-                        Dessus &amp; Dessous filants
+                        Dessus/Dessous filants
                       </span>
                       {config.assemblyType === 'top_bottom_full' && (
                         <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                       )}
                     </div>
                     <p className="text-[11px] text-slate-400 leading-snug">
-                      Le dessus et le dessous font toute la largeur. Les côtés viennent s&apos;insérer entre le haut et le bas.
+                      Le dessus et le dessous font toute la largeur. Côtés pris en sandwich.
                     </p>
                     <div className="mt-2 text-[10px] font-mono text-emerald-300 bg-emerald-900/40 px-2 py-1 rounded">
-                      Hauteur côtés = H - (2 × {config.thickness}) = {config.height - 2 * config.thickness} mm
+                      Haut. côtés = H - (2 × {config.thickness}) = {config.height - 2 * config.thickness} mm
+                    </div>
+                  </button>
+
+                  {/* Option 3 : Bas encastré & Dessus posé avec débord */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setConfig({
+                        ...config,
+                        assemblyType: 'bottom_inside_top_over',
+                        topOverhangSides: config.topOverhangSides ?? 20,
+                        topOverhangFront: config.topOverhangFront ?? 20,
+                      })
+                    }
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      config.assemblyType === 'bottom_inside_top_over'
+                        ? 'bg-purple-950/50 border-purple-500 ring-1 ring-purple-500 shadow-md'
+                        : 'bg-slate-900 border-slate-700/80 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-white">
+                        Bas encastré &amp; Dessus posé
+                      </span>
+                      {config.assemblyType === 'bottom_inside_top_over' && (
+                        <CheckCircle2 className="w-4 h-4 text-purple-400" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Bas intérieur entre montants. Plateau haut posé sur les côtés avec débords.
+                    </p>
+                    <div className="mt-2 text-[10px] font-mono text-purple-300 bg-purple-900/40 px-2 py-1 rounded">
+                      Haut posé = {config.width + 2 * (config.topOverhangSides || 0)} × {config.depth + (config.topOverhangFront || 0)} mm
                     </div>
                   </button>
                 </div>
+
+                {/* Réglage précis des débords si plateau haut posé */}
+                {config.assemblyType === 'bottom_inside_top_over' && (
+                  <div className="bg-slate-900/90 border border-purple-500/30 rounded-xl p-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-slate-300 font-medium block mb-1">
+                        Débord côtés (gauche &amp; droite) :
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="200"
+                          step="1"
+                          value={config.topOverhangSides || 0}
+                          onChange={(e) =>
+                            setConfig({
+                              ...config,
+                              topOverhangSides: parseInt(e.target.value, 10) || 0,
+                            })
+                          }
+                          className="w-24 bg-slate-800 border border-slate-700 rounded px-2.5 py-1 text-white font-mono text-xs focus:border-purple-500 focus:outline-none"
+                        />
+                        <span className="text-slate-400 text-[11px]">
+                          mm (+{2 * (config.topOverhangSides || 0)} mm sur la largeur)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-slate-300 font-medium block mb-1">
+                        Débord avant (façade) :
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="200"
+                          step="1"
+                          value={config.topOverhangFront || 0}
+                          onChange={(e) =>
+                            setConfig({
+                              ...config,
+                              topOverhangFront: parseInt(e.target.value, 10) || 0,
+                            })
+                          }
+                          className="w-24 bg-slate-800 border border-slate-700 rounded px-2.5 py-1 text-white font-mono text-xs focus:border-purple-500 focus:outline-none"
+                        />
+                        <span className="text-slate-400 text-[11px]">
+                          mm (+{config.topOverhangFront || 0} mm sur la profondeur)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Étagères & Fond */}
@@ -730,7 +823,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-white">
-                      Étagère(s) intérieure(s) :
+                      {config.partitionsCount > 0
+                        ? `Étagères par côté (${config.shelvesCount * (config.partitionsCount + 1)} total) :`
+                        : 'Étagère(s) intérieure(s) :'}
                     </label>
                     <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5">
                       <button
@@ -922,52 +1017,97 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   viewBox="0 0 240 200"
                   className="w-full max-w-[240px] h-44 border border-slate-800/80 rounded-xl bg-slate-900/60 p-2 shadow-inner"
                 >
-                  {/* Légende couleurs */}
+                  {/* Légende couleurs & Wireframe */}
                   <g className="text-[8px] font-mono select-none">
                     {config.assemblyType === 'sides_full' ? (
                       /* Côtés continus pleine hauteur */
                       <>
                         {/* Côté Gauche */}
-                        <rect x="25" y="15" width="12" height="170" fill="#3b82f6" rx="2" />
+                        <rect x="25" y="15" width="12" height="170" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
                         {/* Côté Droit */}
-                        <rect x="203" y="15" width="12" height="170" fill="#3b82f6" rx="2" />
+                        <rect x="203" y="15" width="12" height="170" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
                         {/* Dessus intérieur */}
-                        <rect x="37" y="15" width="166" height="12" fill="#10b981" rx="2" />
+                        <rect x="37" y="15" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
                         {/* Dessous intérieur */}
-                        <rect x="37" y="173" width="166" height="12" fill="#10b981" rx="2" />
+                        <rect x="37" y="173" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
+                      </>
+                    ) : config.assemblyType === 'bottom_inside_top_over' ? (
+                      /* Mixte : Bas encastré & Dessus posé avec éventuel débord */
+                      <>
+                        {/* Plateau du haut posé sur les côtés (avec débord visualisé) */}
+                        <rect
+                          x={(config.topOverhangSides || 0) > 0 ? 15 : 25}
+                          y="15"
+                          width={(config.topOverhangSides || 0) > 0 ? 210 : 190}
+                          height="12"
+                          fill="#dcfce7"
+                          stroke="#10b981"
+                          strokeWidth="1.2"
+                          rx="2"
+                        />
+                        {/* Côté Gauche (sous le dessus) */}
+                        <rect x="25" y="27" width="12" height="158" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
+                        {/* Côté Droit (sous le dessus) */}
+                        <rect x="203" y="27" width="12" height="158" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
+                        {/* Dessous encastré entre côtés */}
+                        <rect x="37" y="173" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
                       </>
                     ) : (
                       /* Dessus/Dessous continus */
                       <>
                         {/* Dessus continu */}
-                        <rect x="25" y="15" width="190" height="12" fill="#10b981" rx="2" />
+                        <rect x="25" y="15" width="190" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
                         {/* Dessous continu */}
-                        <rect x="25" y="173" width="190" height="12" fill="#10b981" rx="2" />
+                        <rect x="25" y="173" width="190" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
                         {/* Côté Gauche intérieur */}
-                        <rect x="25" y="27" width="12" height="146" fill="#3b82f6" rx="2" />
+                        <rect x="25" y="27" width="12" height="146" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
                         {/* Côté Droit intérieur */}
-                        <rect x="203" y="27" width="12" height="146" fill="#3b82f6" rx="2" />
+                        <rect x="203" y="27" width="12" height="146" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
                       </>
                     )}
 
-                    {/* Étagères intérieures */}
-                    {Array.from({ length: Math.min(3, config.shelvesCount) }).map(
-                      (_, i) => {
-                        const step = 146 / (Math.min(3, config.shelvesCount) + 1);
-                        const y = 27 + step * (i + 1);
+                    {/* Séparation verticale intermédiaire au centre */}
+                    {config.partitionsCount > 0 && (
+                      <rect
+                        x="114"
+                        y="27"
+                        width="12"
+                        height="146"
+                        fill="#f3e8ff"
+                        stroke="#8b5cf6"
+                        strokeWidth="1"
+                        rx="1.5"
+                      />
+                    )}
+
+                    {/* Étagères intérieures (adaptées si séparation au centre) */}
+                    {Array.from({ length: Math.min(3, config.shelvesCount) }).map((_, i) => {
+                      const step = 146 / (Math.min(3, config.shelvesCount) + 1);
+                      const y = 27 + step * (i + 1);
+                      if (config.partitionsCount > 0) {
                         return (
-                          <rect
-                            key={i}
-                            x="37"
-                            y={y}
-                            width="166"
-                            height="8"
-                            fill="#f59e0b"
-                            rx="1.5"
-                          />
+                          <g key={i}>
+                            {/* Compartiment gauche */}
+                            <rect x="37" y={y} width="77" height="7" fill="#fef3c7" stroke="#f59e0b" strokeWidth="0.8" rx="1.5" />
+                            {/* Compartiment droit */}
+                            <rect x="126" y={y} width="77" height="7" fill="#fef3c7" stroke="#f59e0b" strokeWidth="0.8" rx="1.5" />
+                          </g>
                         );
                       }
-                    )}
+                      return (
+                        <rect
+                          key={i}
+                          x="37"
+                          y={y}
+                          width="166"
+                          height="7"
+                          fill="#fef3c7"
+                          stroke="#f59e0b"
+                          strokeWidth="0.8"
+                          rx="1.5"
+                        />
+                      );
+                    })}
 
                     {/* Fond arrière représenté par trame */}
                     {config.backType !== 'none' && (
@@ -977,16 +1117,18 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         width="166"
                         height="146"
                         fill="none"
-                        stroke="#ec4899"
-                        strokeWidth="1.5"
+                        stroke="#fce7f3"
+                        strokeWidth="1.2"
                         strokeDasharray="4 3"
-                        opacity="0.6"
+                        opacity="0.8"
                       />
                     )}
 
                     {/* Cotes de repère */}
-                    <text x="120" y="10" fill="#94a3b8" textAnchor="middle">
-                      L = {config.width} mm
+                    <text x="120" y="9" fill="#94a3b8" textAnchor="middle">
+                      {config.assemblyType === 'bottom_inside_top_over' && (config.topOverhangSides || 0) > 0
+                        ? `L corps = ${config.width} (Haut = ${config.width + 2 * (config.topOverhangSides || 0)} mm)`
+                        : `L = ${config.width} mm`}
                     </text>
                     <text
                       x="10"

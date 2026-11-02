@@ -104,22 +104,20 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             <button
               type="button"
               onClick={() => setViewMode('single')}
-              className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-                viewMode === 'single'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md font-medium transition-colors ${viewMode === 'single'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-400 hover:text-white'
+                }`}
             >
               Vue Panneau
             </button>
             <button
               type="button"
               onClick={() => setViewMode('all')}
-              className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-                viewMode === 'all'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-2.5 py-1 rounded-md font-medium transition-colors ${viewMode === 'all'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-400 hover:text-white'
+                }`}
             >
               Tous les panneaux
             </button>
@@ -178,11 +176,10 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                 key={p.panelId + idx}
                 type="button"
                 onClick={() => setSelectedPanelIdx(idx)}
-                className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  selectedPanelIdx === idx
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                }`}
+                className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${selectedPanelIdx === idx
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                  }`}
               >
                 <span>Panneau {p.panelIndex}</span>
                 <span className="text-[10px] opacity-75">
@@ -460,8 +457,8 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                         hoveredOffcut?.id === offcut.id
                           ? 0.9
                           : offcut.reusable
-                          ? 0.7
-                          : 0.4
+                            ? 0.7
+                            : 0.4
                       }
                     />
 

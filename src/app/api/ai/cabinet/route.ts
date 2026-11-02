@@ -52,26 +52,34 @@ export async function POST(req: NextRequest) {
 Tu dois analyser la description en langage naturel d'un meuble ou caisson et en extraire les paramètres structurés au format JSON exact suivant :
 {
   "name": "string (ex: Caisson bas, Dressing...)",
-  "height": number (hauteur totale extérieure en mm, défaut: 720),
-  "width": number (largeur totale extérieure en mm, défaut: 600),
-  "depth": number (profondeur totale extérieure en mm, défaut: 560),
-  "thickness": number (épaisseur des panneaux en mm, défaut: 18),
-  "assemblyType": "sides_full" (si haut et bas sont à l'intérieur entre les côtés) ou "top_bottom_full" (si les côtés sont pris entre le dessus et le dessous),
-  "backType": "applique" | "groove" | "none",
-  "backThickness": number (épaisseur du fond en mm, défaut: 8),
-  "shelvesCount": number (nombre d'étagères, défaut: 0),
+  "height": number (hauteur totale extérieure en mm, défaut: 720. Ex: 700 de haut = 700),
+  "width": number (largeur totale extérieure du corps en mm, défaut: 600. Ex: 1000 de large = 1000),
+  "depth": number (profondeur totale extérieure du corps en mm, défaut: 560. Ex: 450 de profondeur = 450),
+  "thickness": number (épaisseur des panneaux de structure en mm, défaut: 18),
+  "assemblyType": "sides_full" (si haut et bas sont à l'intérieur entre les côtés) | "top_bottom_full" (si les côtés sont pris entre le dessus et le dessous) | "bottom_inside_top_over" (si le plateau du bas est encastré entre les côtés et le plateau du haut est posé sur les côtés, avec ou sans débord),
+  "topOverhangSides": number (débord latéral du plateau du haut en mm de chaque côté, ex: 20 pour 2 cm de débord sur les côtés),
+  "topOverhangFront": number (débord avant du plateau du haut en mm, ex: 20 pour 2 cm de débord sur l'avant),
+  "backType": "applique" | "groove" (utiliser 'groove' si le fond est encastré ou en rainure) | "none",
+  "backThickness": number (épaisseur du fond en mm, ex: 9 si fond en MDF de 9mm),
+  "shelvesCount": number (nombre d'étagères par compartiment, ex: 2 si 2 étagères de chaque côté de la séparation),
   "shelfRecess": number (retrait de façade des étagères en mm, défaut: 20),
-  "partitionsCount": number (séparations verticales, 0 ou 1),
+  "partitionsCount": number (séparations verticales, ex: 1 si séparation au milieu),
   "doors": "none" | "one_door" | "two_doors",
-  "material": "string (matière choisie en priorité dans les stocks de l'utilisateur)",
-  "backMaterial": "string (matière spécifique du fond avec son épaisseur, ex: 'MDF 8mm' ou 'Isorel 3mm' choisie en priorité dans le stock atelier ou saisi)",
+  "material": "string (matière choisie en priorité dans les stocks de l'utilisateur pour le caisson)",
+  "backMaterial": "string (matière spécifique du fond avec son épaisseur, ex: 'MDF 9mm' si fond en mdf de 9 mm)",
   "cabinetCount": number (nombre de caissons identiques souhaités, défaut: 1)
 }
+
+RÈGLES D'INTERPRÉTATION MÉTIER :
+1. "700 de haut, 1000 de large et 450 de profondeur" -> height=700, width=1000, depth=450.
+2. "plateau du bas encastré entre les côtés" et "plateau du haut posé sur les côtés avec débord de 2 cm sur les côtés et l'avant" -> assemblyType="bottom_inside_top_over", topOverhangSides=20, topOverhangFront=20.
+3. "séparation au milieu et 2 étagères de chaque côté" -> partitionsCount=1, shelvesCount=2.
+4. "fond en mdf de 9 mm encastré" -> backType="groove", backThickness=9, backMaterial="MDF 9mm".
 
 RÈGLE IMPÉRATIVE SUR LES STOCKS :
 Tu DOIS utiliser en priorité les matières et épaisseurs RÉELLEMENT DISPONIBLES dans le stock de l'utilisateur (stock atelier et stock saisi ci-dessous).
 Si une matière du stock correspond à l'épaisseur souhaitée (ou s'en rapproche), utilise son intitulé exact !
-Pour le fond ("backMaterial"), recherche en priorité les chutes minces (ex: 8mm, 5mm, 3mm) présentes dans le stock atelier ou saisi.
+Pour le fond ("backMaterial"), recherche en priorité les chutes minces (ex: 9mm, 8mm, 5mm, 3mm) présentes dans le stock atelier ou saisi.
 
 INVENTAIRE DES STOCKS DISPONIBLES :
 ${inventoryContext || "Aucun stock préalablement saisi"}

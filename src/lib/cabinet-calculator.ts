@@ -1,6 +1,9 @@
 import { CutItem } from '@/types/cutting';
 
-export type AssemblyType = 'sides_full' | 'top_bottom_full';
+export type AssemblyType =
+  | 'sides_full' // Montants continus (Haut et Bas intérieurs)
+  | 'top_bottom_full' // Dessus et Dessous filants (Côtés intérieurs)
+  | 'bottom_inside_top_over'; // Bas encastré entre côtés, Dessus posé sur côtés (avec ou sans débord)
 export type BackType = 'none' | 'applique' | 'groove';
 export type DoorsType = 'none' | 'one_door' | 'two_doors';
 
@@ -10,10 +13,13 @@ export interface CabinetConfig {
   width: number; // Largeur extérieure (mm)
   depth: number; // Profondeur extérieure (mm)
   thickness: number; // Épaisseur des panneaux principaux (mm, ex: 18 ou 19)
-  assemblyType: AssemblyType; // 'sides_full' (haut/bas à l'intérieur) ou 'top_bottom_full' (côtés à l'intérieur)
+  assemblyType: AssemblyType; // Type d'assemblage
+  topOverhangSides?: number; // Débord latéral du plateau haut (gauche et droite, en mm, ex: 20)
+  topOverhangFront?: number; // Débord avant du plateau haut (en mm, ex: 20)
+  topOverhangBack?: number; // Débord arrière du plateau haut (en mm, défaut: 0)
   backType: BackType; // Fond : aucun, applique arrière, ou en rainure
   backThickness: number; // Épaisseur du fond (mm, ex: 8 ou 10)
-  shelvesCount: number; // Nombre d'étagères
+  shelvesCount: number; // Nombre d'étagères par compartiment
   shelfRecess: number; // Retrait de l'étagère par rapport à la façade (mm, ex: 20)
   partitionsCount: number; // Séparations verticales (0 ou 1)
   doors: DoorsType; // Portes en applique
@@ -102,13 +108,16 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   if (assemblyType === 'top_bottom_full') {
     sideHeight = height - 2 * thickness;
     sideFormula = `${height} - (2 × ${thickness}) = ${sideHeight} mm (Côtés intérieurs)`;
+  } else if (assemblyType === 'bottom_inside_top_over') {
+    sideHeight = height - thickness;
+    sideFormula = `${height} - ${thickness} = ${sideHeight} mm (Sous plateau supérieur, bas encastré)`;
   }
 
   const sidesQty = 2 * cabinetCount;
   pieces.push({
     role: cabinetCount > 1 ? `Côtés (${sidesQty} pcs pour ${cabinetCount} caissons)` : 'Côtés (Gauche & Droit)',
     description: `${config.name} - Côtés`,
-    formula: cabinetCount > 1 ? `${sideFormula} (2 × ${cabinetCount} = ${sidesQty} pcs)` : sideFormula,
+    formula: cabinetCount > 1 ? `${sideFormula} [2 × ${cabinetCount} = ${sidesQty} pcs]` : sideFormula,
     length: Math.max(sideHeight, structuralDepth),
     width: Math.min(sideHeight, structuralDepth),
     quantity: sidesQty,
@@ -116,26 +125,81 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     color: PIECE_COLORS.sides,
   });
 
-  // 2. Haut et Bas (Dessus et Dessous)
-  let topBottomWidth = width;
-  let topBottomFormula = `${width} mm (Pleine largeur extérieure)`;
+  // 2. Haut et Bas (Plateau Dessus et Plateau Dessous - Calculés distinctement)
+  const overhangSides = config.topOverhangSides || 0;
+  const overhangFront = config.topOverhangFront || 0;
+  const overhangBack = config.topOverhangBack || 0;
 
-  if (assemblyType === 'sides_full') {
-    topBottomWidth = width - 2 * thickness;
-    topBottomFormula = `${width} - (2 × ${thickness}) = ${topBottomWidth} mm (Haut/Bas intérieurs)`;
+  if (assemblyType === 'bottom_inside_top_over') {
+    // Plateau du haut posé sur les côtés avec éventuels débords
+    const topWidth = width + 2 * overhangSides;
+    const topDepth = depth + overhangFront + overhangBack;
+    const topQty = 1 * cabinetCount;
+    const topFormula =
+      overhangSides > 0 || overhangFront > 0
+        ? `Posé sur côtés : ${width} mm ${overhangSides ? `+ (2×${overhangSides}mm débord côtés) = ${topWidth} mm` : ''} × ${depth} mm ${overhangFront ? `+ ${overhangFront}mm débord avant = ${topDepth} mm` : ''}`
+        : `Posé sur côtés : Pleine largeur extérieure ${width} × ${depth} mm`;
+
+    pieces.push({
+      role: cabinetCount > 1 ? `Plateau haut (${topQty} pcs pour ${cabinetCount} caissons)` : 'Plateau haut (Dessus posé)',
+      description: `${config.name} - Plateau du haut`,
+      formula: cabinetCount > 1 ? `${topFormula} [1 × ${cabinetCount} = ${topQty} pcs]` : topFormula,
+      length: Math.max(topWidth, topDepth),
+      width: Math.min(topWidth, topDepth),
+      quantity: topQty,
+      material,
+      color: PIECE_COLORS.topBottom,
+    });
+
+    // Plateau du bas encastré entre les côtés
+    const bottomWidth = width - 2 * thickness;
+    const bottomDepth = depth;
+    const bottomQty = 1 * cabinetCount;
+    const bottomFormula = `Encastré entre côtés : ${width} - (2 × ${thickness}) = ${bottomWidth} mm × ${bottomDepth} mm`;
+
+    pieces.push({
+      role: cabinetCount > 1 ? `Plateau bas (${bottomQty} pcs pour ${cabinetCount} caissons)` : 'Plateau bas (Dessous encastré)',
+      description: `${config.name} - Plateau du bas`,
+      formula: cabinetCount > 1 ? `${bottomFormula} [1 × ${cabinetCount} = ${bottomQty} pcs]` : bottomFormula,
+      length: Math.max(bottomWidth, bottomDepth),
+      width: Math.min(bottomWidth, bottomDepth),
+      quantity: bottomQty,
+      material,
+      color: PIECE_COLORS.topBottom,
+    });
+  } else {
+    // Cas standards : 'sides_full' ou 'top_bottom_full'
+    let topBottomWidth = width;
+    let topBottomFormula = `${width} mm (Pleine largeur extérieure)`;
+
+    if (assemblyType === 'sides_full') {
+      topBottomWidth = width - 2 * thickness;
+      topBottomFormula = `${width} - (2 × ${thickness}) = ${topBottomWidth} mm (Encastré intérieur)`;
+    }
+
+    const singleQty = 1 * cabinetCount;
+    pieces.push({
+      role: cabinetCount > 1 ? `Plateau haut (${singleQty} pcs pour ${cabinetCount} caissons)` : 'Plateau haut (Dessus)',
+      description: `${config.name} - Plateau du haut`,
+      formula: cabinetCount > 1 ? `${topBottomFormula} [1 × ${cabinetCount} = ${singleQty} pcs]` : topBottomFormula,
+      length: Math.max(topBottomWidth, structuralDepth),
+      width: Math.min(topBottomWidth, structuralDepth),
+      quantity: singleQty,
+      material,
+      color: PIECE_COLORS.topBottom,
+    });
+
+    pieces.push({
+      role: cabinetCount > 1 ? `Plateau bas (${singleQty} pcs pour ${cabinetCount} caissons)` : 'Plateau bas (Dessous)',
+      description: `${config.name} - Plateau du bas`,
+      formula: cabinetCount > 1 ? `${topBottomFormula} [1 × ${cabinetCount} = ${singleQty} pcs]` : topBottomFormula,
+      length: Math.max(topBottomWidth, structuralDepth),
+      width: Math.min(topBottomWidth, structuralDepth),
+      quantity: singleQty,
+      material,
+      color: PIECE_COLORS.topBottom,
+    });
   }
-
-  const topBottomQty = 2 * cabinetCount;
-  pieces.push({
-    role: cabinetCount > 1 ? `Haut & Bas (${topBottomQty} pcs pour ${cabinetCount} caissons)` : 'Haut & Bas (Dessus & Dessous)',
-    description: `${config.name} - Dessus / Dessous`,
-    formula: cabinetCount > 1 ? `${topBottomFormula} (2 × ${cabinetCount} = ${topBottomQty} pcs)` : topBottomFormula,
-    length: Math.max(topBottomWidth, structuralDepth),
-    width: Math.min(topBottomWidth, structuralDepth),
-    quantity: topBottomQty,
-    material,
-    color: PIECE_COLORS.topBottom,
-  });
 
   // Dimensions intérieures brutes
   const interiorWidth = width - 2 * thickness;
@@ -149,9 +213,9 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const partitionQty = partitionsCount * cabinetCount;
 
     pieces.push({
-      role: 'Séparation verticale',
+      role: cabinetCount > 1 ? `Séparation verticale (${partitionQty} pcs pour ${cabinetCount} caissons)` : 'Séparation verticale centrale',
       description: `${config.name} - Séparation centrale`,
-      formula: cabinetCount > 1 ? `${partitionFormula} (${partitionsCount} × ${cabinetCount} = ${partitionQty} pcs)` : partitionFormula,
+      formula: cabinetCount > 1 ? `${partitionFormula} [${partitionsCount} × ${cabinetCount} = ${partitionQty} pcs]` : partitionFormula,
       length: Math.max(partitionHeight, structuralDepth),
       width: Math.min(partitionHeight, structuralDepth),
       quantity: partitionQty,
@@ -172,11 +236,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     }
 
     const shelfDepth = Math.max(50, structuralDepth - shelfRecess);
-    const shelvesPerCabinet = partitionsCount > 0 ? shelvesCount * (partitionsCount + 1) : shelvesCount;
+    const compartmentsCount = partitionsCount > 0 ? partitionsCount + 1 : 1;
+    const shelvesPerCabinet = shelvesCount * compartmentsCount;
     const totalShelvesQty = shelvesPerCabinet * cabinetCount;
 
     pieces.push({
-      role: `Étagère(s) [Retrait ${shelfRecess} mm]`,
+      role: partitionsCount > 0
+        ? `Étagères (${shelvesCount} par côté × ${compartmentsCount} compartiments = ${shelvesPerCabinet} pcs)`
+        : `Étagère(s) (${shelvesCount} pcs) [Retrait ${shelfRecess} mm]`,
       description: `${config.name} - Étagère`,
       formula: cabinetCount > 1
         ? `${shelfFormula} × Profondeur (${structuralDepth} - ${shelfRecess} = ${shelfDepth} mm) [${shelvesPerCabinet} × ${cabinetCount} = ${totalShelvesQty} pcs]`
@@ -213,7 +280,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     pieces.push({
       role: `Fond (rainure encastrée) [${resolvedBackMaterial}]`,
-      description: `${config.name} - Fond rainure`,
+      description: `${config.name} - Fond encastré`,
       formula: cabinetCount > 1
         ? `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
         : `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm - Matière : ${resolvedBackMaterial})`,
@@ -308,48 +375,98 @@ export function parseCabinetPromptWithNLP(
     }
   }
 
-  // 1. Détection des 3 dimensions (ex: 800x600x400 ou 800 * 600 * 400 ou 800 × 600 × 400)
-  const dims3Match = text.match(/(\d{2,4})\s*(?:x|\*|×)\s*(\d{2,4})\s*(?:x|\*|×)\s*(\d{2,4})/);
+  // 1. Détection des 3 dimensions
+  // A. Format "700x1000x450" ou "700 x 1000 x 450" ou "700*1000*450"
+  const dims3Match = text.match(/(\d{2,4})\s*(?:x|\*|×)\s*(\d{2,4})\s*(?:x|\*|×)\s*(\d{2,4})/i);
   if (dims3Match) {
     const d1 = parseInt(dims3Match[1], 10);
     const d2 = parseInt(dims3Match[2], 10);
     const d3 = parseInt(dims3Match[3], 10);
-
-    // Heuristique courante en menuiserie : Hauteur (souvent la plus grande), Largeur, Profondeur
-    // Si l'utilisateur a écrit H x L x P ou L x H x P
-    if (d1 >= d2 && d2 >= d3) {
-      config.height = d1;
-      config.width = d2;
-      config.depth = d3;
-    } else {
-      config.height = d1;
-      config.width = d2;
-      config.depth = d3;
-    }
+    config.height = d1;
+    config.width = d2;
+    config.depth = d3;
   } else {
-    // Recherche par mots-clés : hauteur, largeur, profondeur
-    const hMatch = text.match(/(?:hauteur|haut|h)\s*(?:de|:|=)?\s*(\d{2,4})/);
-    const wMatch = text.match(/(?:largeur|large|l)\s*(?:de|:|=)?\s*(\d{2,4})/);
-    const dMatch = text.match(/(?:profondeur|prof|p)\s*(?:de|:|=)?\s*(\d{2,4})/);
+    // B. Recherche robuste avec nombre AVANT ou APRÈS les mots-clés
+    // Exemples : "700 de haut", "700mm de haut", "hauteur 700", "700 haut", "70 cm de haut"
+    // Hauteur
+    const hMatch =
+      text.match(/(\d{2,4})\s*(?:mm|cm)?\s*(?:de\s+)?(?:haut(?:eur)?|h\b)/i) ||
+      text.match(/(?:hauteur|haut|h)\s*(?:de|:|=)?\s*(\d{2,4})\s*(?:mm|cm)?/i);
+    if (hMatch) {
+      let val = parseInt(hMatch[1], 10);
+      if (val < 100 && (text.includes(`${val} cm`) || text.includes(`${val}cm`))) val *= 10;
+      config.height = val;
+    }
 
-    if (hMatch) config.height = parseInt(hMatch[1], 10);
-    if (wMatch) config.width = parseInt(wMatch[1], 10);
-    if (dMatch) config.depth = parseInt(dMatch[1], 10);
+    // Largeur
+    const wMatch =
+      text.match(/(\d{2,4})\s*(?:mm|cm)?\s*(?:de\s+)?(?:large(?:ur)?|l\b)/i) ||
+      text.match(/(?:largeur|large|l)\s*(?:de|:|=)?\s*(\d{2,4})\s*(?:mm|cm)?/i);
+    if (wMatch) {
+      let val = parseInt(wMatch[1], 10);
+      if (val < 100 && (text.includes(`${val} cm`) || text.includes(`${val}cm`))) val *= 10;
+      config.width = val;
+    }
+
+    // Profondeur
+    const dMatch =
+      text.match(/(\d{2,4})\s*(?:mm|cm)?\s*(?:de\s+)?(?:prof(?:ondeur)?|p\b)/i) ||
+      text.match(/(?:profondeur|prof|p)\s*(?:de|:|=)?\s*(\d{2,4})\s*(?:mm|cm)?/i);
+    if (dMatch) {
+      let val = parseInt(dMatch[1], 10);
+      if (val < 100 && (text.includes(`${val} cm`) || text.includes(`${val}cm`))) val *= 10;
+      config.depth = val;
+    }
   }
 
-  // 2. Détection de l'épaisseur du bois (ex: en 18mm, 19 mm, épaisseur 18)
-  const thickMatch = text.match(/(?:épaisseur|epaisseur|en)\s*(\d{1,2})\s*(?:mm)?/);
-  if (thickMatch) {
-    const val = parseInt(thickMatch[1], 10);
+  // 2. Détection de l'épaisseur du bois des panneaux principaux (en évitant le fond !)
+  // Ex: "en 18mm", "épaisseur 19mm", "panneaux de 18", mais PAS "fond de 9mm" !
+  const mainThickMatch = text.match(/(?:épaisseur|epaisseur|panneaux?\s+de)\s*(\d{1,2})\s*(?:mm)?/i);
+  if (mainThickMatch) {
+    const val = parseInt(mainThickMatch[1], 10);
     if (val >= 10 && val <= 40) {
       config.thickness = val;
     }
+  } else {
+    const enThickMatch = text.match(/\ben\s+(\d{1,2})\s*(?:mm)?\b/i);
+    if (enThickMatch) {
+      const idx = enThickMatch.index || 0;
+      const surrounding = text.slice(Math.max(0, idx - 15), idx + 25);
+      if (!surrounding.includes('fond') && !surrounding.includes('mdf')) {
+        const val = parseInt(enThickMatch[1], 10);
+        if (val >= 12 && val <= 40) {
+          config.thickness = val;
+        }
+      }
+    }
   }
 
-  // 3. Type d'assemblage
-  // "haut et bas à l'intérieur" / "montants filants" -> 'sides_full'
-  // "côtés à l'intérieur" / "dessus dessous filants" -> 'top_bottom_full'
-  if (
+  // 3. Type d'assemblage & Débords
+  const isBottomInside =
+    text.includes('bas sera encastré') ||
+    text.includes('bas sera encastre') ||
+    text.includes('bas encastré') ||
+    text.includes('bas encastre') ||
+    text.includes("bas à l'intérieur") ||
+    text.includes('bas a l interieur') ||
+    text.includes('bas entre les cotés') ||
+    text.includes('bas entre les côtés');
+
+  const isTopOver =
+    text.includes('haut sera posé') ||
+    text.includes('haut sera pose') ||
+    text.includes('haut posé') ||
+    text.includes('haut pose') ||
+    text.includes('dessus posé') ||
+    text.includes('dessus pose') ||
+    text.includes('sur les côtés') ||
+    text.includes('sur les cotés') ||
+    text.includes('débord') ||
+    text.includes('debord');
+
+  if (isBottomInside && isTopOver) {
+    config.assemblyType = 'bottom_inside_top_over';
+  } else if (
     text.includes("haut et bas à l'intérieur") ||
     text.includes("haut et bas à l interieur") ||
     text.includes('haut et bas dedans') ||
@@ -367,37 +484,78 @@ export function parseCabinetPromptWithNLP(
     text.includes('chapeau filant')
   ) {
     config.assemblyType = 'top_bottom_full';
+  } else if (isTopOver) {
+    config.assemblyType = 'bottom_inside_top_over';
+  }
+
+  // Détection des débords du plateau supérieur (ex: "debord de 2 cm sur les cotés et l'avant")
+  const debordMatch = text.match(/(?:débord|debord)\s*(?:de\s+)?(\d+(?:[.,]\d+)?)\s*(cm|mm)?/i);
+  if (debordMatch) {
+    const rawVal = parseFloat(debordMatch[1].replace(',', '.'));
+    const unit = debordMatch[2]?.toLowerCase();
+    const valMm = unit === 'cm' || (!unit && rawVal <= 5) ? Math.round(rawVal * 10) : Math.round(rawVal);
+
+    if (valMm > 0 && valMm <= 200) {
+      const hasSides = /c[oô]t[eé]/i.test(text) || /lat[eé]ral/i.test(text);
+      const hasFront = /avant/i.test(text) || /fa[cç]ade/i.test(text);
+
+      if (hasSides) {
+        config.topOverhangSides = valMm;
+      }
+      if (hasFront) {
+        config.topOverhangFront = valMm;
+      }
+      if (!config.topOverhangSides && !config.topOverhangFront) {
+        config.topOverhangSides = valMm;
+        config.topOverhangFront = valMm;
+      }
+    }
   }
 
   // 4. Nombre d'étagères
-  const shelvesMatch = text.match(/(\d+)\s*(?:étagère|etagere|rayonnage|tablette)s?/);
-  if (shelvesMatch) {
-    config.shelvesCount = parseInt(shelvesMatch[1], 10);
-  } else if (text.includes('une étagère') || text.includes('1 étagère')) {
-    config.shelvesCount = 1;
-  } else if (text.includes('deux étagères') || text.includes('2 étagères')) {
-    config.shelvesCount = 2;
+  // A. Étagères par côté / compartiment (ex: "2 etageres de chaque cotés", "2 étagères par côté")
+  const shelvesPerSideMatch = text.match(
+    /(\d+)\s*(?:étagère|etagere|rayonnage|tablette)s?\s*(?:de\s+chaque\s+côt[ée]s?|par\s+côt[ée]|par\s+compartiment)/i
+  );
+  if (shelvesPerSideMatch) {
+    config.shelvesCount = parseInt(shelvesPerSideMatch[1], 10);
+  } else {
+    const shelvesMatch = text.match(/(\d+)\s*(?:étagère|etagere|rayonnage|tablette)s?/i);
+    if (shelvesMatch) {
+      config.shelvesCount = parseInt(shelvesMatch[1], 10);
+    } else if (text.includes('une étagère') || text.includes('1 étagère')) {
+      config.shelvesCount = 1;
+    } else if (text.includes('deux étagères') || text.includes('2 étagères')) {
+      config.shelvesCount = 2;
+    }
   }
 
   // 5. Fond du meuble
   if (text.includes('sans fond') || text.includes('pas de fond')) {
     config.backType = 'none';
-  } else if (text.includes('rainure') || text.includes('rainuré')) {
+  } else if (
+    text.includes('rainure') ||
+    text.includes('rainuré') ||
+    text.includes('encastré') ||
+    text.includes('encastre') ||
+    text.includes('feuillure')
+  ) {
     config.backType = 'groove';
   } else if (text.includes('fond') || text.includes('applique')) {
     config.backType = 'applique';
   }
 
   // Détection de la matière et de l'épaisseur du fond
-  // Exemples : "fond de mdf 8mm", "fond en mdf 8mm", "fond mdf 8", "fond isorel 3mm", "fond de 8mm", "fond 8mm"
-  const backPattern = /fond\s*(?:de|en)?\s*([a-zA-ZÀ-ÿ\s]+)?\s*(\d{1,2})\s*(?:mm)?/i;
+  // Exemples : "fond sera en mdf de 9 mm encastré", "fond en mdf 9mm", "fond mdf 9", "fond de 8mm", "fond 8mm"
+  const backPattern =
+    /(?:fond\s*(?:sera)?\s*(?:de|en)?\s*([a-zA-ZÀ-ÿ\s]+)?\s*(\d{1,2})\s*(?:mm)?)|(?:([a-zA-ZÀ-ÿ]+)\s*(?:de)?\s*(\d{1,2})\s*(?:mm)?\s*(?:pour\s+le|en)?\s*fond)/i;
   const backMatch = text.match(backPattern);
   if (backMatch) {
-    const rawBackMat = (backMatch[1] || '').trim();
-    const thickVal = parseInt(backMatch[2], 10);
+    const rawBackMat = (backMatch[1] || backMatch[3] || '').trim();
+    const thickVal = parseInt(backMatch[2] || backMatch[4], 10);
     if (thickVal >= 3 && thickVal <= 30) {
       config.backThickness = thickVal;
-      // 1. Chercher d'abord dans les chutes atelier ou le stock saisi si une matière correspond à cette épaisseur
+      // Chercher d'abord dans les chutes atelier ou le stock saisi si une matière correspond à cette épaisseur
       const matchingStockBack =
         workshopStock.find((w) => extractThicknessFromMaterialName(w.material) === thickVal) ||
         stockPanels.find((p) => extractThicknessFromMaterialName(p.material) === thickVal);
@@ -419,7 +577,6 @@ export function parseCabinetPromptWithNLP(
       }
     }
   } else if (config.backType !== 'none') {
-    // Si fond demandé sans préciser, vérifier si des chutes minces existent en stock atelier ou saisi
     const thinStock =
       workshopStock.find((w) => {
         const th = extractThicknessFromMaterialName(w.material);
@@ -441,7 +598,8 @@ export function parseCabinetPromptWithNLP(
     text.includes('séparation') ||
     text.includes('separation') ||
     text.includes('cloison') ||
-    text.includes('montant central')
+    text.includes('montant central') ||
+    text.includes('montant intermédiaire')
   ) {
     config.partitionsCount = 1;
   }
