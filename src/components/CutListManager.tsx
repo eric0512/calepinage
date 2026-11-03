@@ -394,10 +394,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           <button
             type="button"
             onClick={() => setShowCabinetModal(true)}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 rounded-xl transition-all shadow-sm active:scale-95"
+            className="btn-assistant-caisson flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold text-amber-950 bg-amber-400 hover:bg-amber-300 border border-amber-500/90 shadow-sm dark:text-amber-300 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:border-amber-500/40 rounded-xl transition-all active:scale-95"
             title="Assistant Caisson IA : calculer automatiquement les cotes selon les dimensions extérieures et l'assemblage"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <Sparkles className="w-3.5 h-3.5 text-amber-950 dark:text-amber-400" />
             <span>Assistant Caisson IA</span>
           </button>
         </div>

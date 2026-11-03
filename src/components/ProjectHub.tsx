@@ -270,7 +270,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
         {/* Modal Création Nouveau Projet */}
         {showNewModal && (
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl">
+            <div role="dialog" aria-modal="true" className="modal-box bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
                   <FolderPlus className="w-5 h-5" />

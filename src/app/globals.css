@@ -191,10 +191,94 @@ html.light svg line[stroke="#94a3b8"] {
   stroke: #64748b !important;
 }
 
-/* Modales */
+/* ==========================================================================
+   FENÊTRES MODALES EN VERSION CLAIRE (LIGHT MODE)
+   Filet de couleur gris foncé sur le contour de toutes les modales
+   ========================================================================== */
+
+/* Arrière-plan assombri des modales en mode clair */
 html.light .fixed.inset-0.bg-slate-950\/80,
-html.light .fixed.inset-0.bg-black\/60 {
-  background-color: rgba(15, 23, 42, 0.45) !important;
+html.light .fixed.inset-0.bg-slate-950\/85,
+html.light .fixed.inset-0.bg-black\/60,
+html.light .fixed.inset-0[class*="bg-slate-950"],
+html.light .fixed.inset-0[class*="bg-black"],
+html:not(.dark) .fixed.inset-0.bg-slate-950\/80,
+html:not(.dark) .fixed.inset-0.bg-slate-950\/85,
+html:not(.dark) .fixed.inset-0.bg-black\/60,
+html:not(.dark) .fixed.inset-0[class*="bg-slate-950"],
+html:not(.dark) .fixed.inset-0[class*="bg-black"] {
+  background-color: rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(6px) !important;
+}
+
+/* Filet de couleur gris foncé autour de toutes les fenêtres modales */
+html.light .modal-box,
+html:not(.dark) .modal-box,
+html.light [role="dialog"],
+html:not(.dark) [role="dialog"],
+html.light .fixed.inset-0 > div:not([class*="fixed"]),
+html:not(.dark) .fixed.inset-0 > div:not([class*="fixed"]) {
+  border: 1.5px solid #334155 !important; /* Filet gris foncé net (slate-700) */
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35), 0 0 0 1px #334155 !important;
+}
+
+/* ==========================================================================
+   BOUTON ASSISTANT CAISSON IA EN MODE CLAIR
+   Contraste et lisibilité maximale
+   ========================================================================== */
+html.light .btn-assistant-caisson,
+html:not(.dark) .btn-assistant-caisson,
+html.light button.btn-assistant-caisson,
+html:not(.dark) button.btn-assistant-caisson {
+  background-color: #fbbf24 !important; /* Fond ambre doré éclatant */
+  color: #451a03 !important; /* Texte ambre très foncé quasi-noir */
+  border-color: #d97706 !important; /* Bordure ambre soutenue */
+  font-weight: 800 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.15) !important;
+}
+
+html.light .btn-assistant-caisson:hover,
+html:not(.dark) .btn-assistant-caisson:hover,
+html.light button.btn-assistant-caisson:hover,
+html:not(.dark) button.btn-assistant-caisson:hover {
+  background-color: #f59e0b !important;
+  color: #451a03 !important;
+}
+
+html.light .btn-assistant-caisson svg,
+html:not(.dark) .btn-assistant-caisson svg {
+  color: #451a03 !important;
+  stroke: #451a03 !important;
+}
+
+/* Éléments et badges ambre en mode clair pour lisibilité optimale */
+html.light .text-amber-300,
+html:not(.dark) .text-amber-300,
+html.light .text-amber-400,
+html:not(.dark) .text-amber-400 {
+  color: #b45309 !important; /* amber-700 : foncé et très lisible */
+}
+
+html.light .bg-amber-500\/10,
+html:not(.dark) .bg-amber-500\/10,
+html.light .bg-amber-500\/15,
+html:not(.dark) .bg-amber-500\/15,
+html.light .bg-amber-500\/20,
+html:not(.dark) .bg-amber-500\/20 {
+  background-color: #fef3c7 !important; /* amber-100 doux et net */
+}
+
+html.light .border-amber-500\/20,
+html:not(.dark) .border-amber-500\/20,
+html.light .border-amber-500\/30,
+html:not(.dark) .border-amber-500\/30,
+html.light .border-amber-500\/40,
+html:not(.dark) .border-amber-500\/40,
+html.light .border-amber-500\/50,
+html:not(.dark) .border-amber-500\/50,
+html.light .border-amber-500\/60,
+html:not(.dark) .border-amber-500\/60 {
+  border-color: #f59e0b !important;
 }
 
 @media print {
