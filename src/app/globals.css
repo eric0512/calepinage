@@ -501,6 +501,48 @@ html:not(.dark) .fixed.inset-0 > div:not([class*="fixed"]) {
   box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35), 0 0 0 1px #334155 !important;
 }
 
+/* Bouton Assistant IA (identique à la photo jointe en mode sombre et en mode clair) */
+.btn-assistant-ia-photo,
+html.dark .btn-assistant-ia-photo,
+html.light .btn-assistant-ia-photo,
+html:not(.dark) .btn-assistant-ia-photo,
+html.light button.btn-assistant-ia-photo,
+html:not(.dark) button.btn-assistant-ia-photo {
+  background-image: none !important;
+  background-color: #352e20 !important;
+  border: 1px solid #85621e !important;
+  color: #fcd34d !important;
+  font-weight: 800 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.25) !important;
+}
+
+.btn-assistant-ia-photo:hover,
+html.dark .btn-assistant-ia-photo:hover,
+html.light .btn-assistant-ia-photo:hover,
+html:not(.dark) .btn-assistant-ia-photo:hover,
+html.light button.btn-assistant-ia-photo:hover,
+html:not(.dark) button.btn-assistant-ia-photo:hover {
+  background-image: none !important;
+  background-color: #433926 !important;
+  border-color: #a17624 !important;
+  color: #fde68a !important;
+}
+
+.btn-assistant-ia-photo span,
+html.dark .btn-assistant-ia-photo span,
+html.light .btn-assistant-ia-photo span,
+html:not(.dark) .btn-assistant-ia-photo span {
+  color: #fcd34d !important;
+}
+
+.btn-assistant-ia-photo svg,
+html.dark .btn-assistant-ia-photo svg,
+html.light .btn-assistant-ia-photo svg,
+html:not(.dark) .btn-assistant-ia-photo svg {
+  color: #fbbf24 !important;
+  stroke: #fbbf24 !important;
+}
+
 @media print {
   @page {
     size: A4 portrait;

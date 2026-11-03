@@ -9,7 +9,6 @@ import {
   Copy,
   RotateCw,
   Tag,
-  Sparkles,
 } from 'lucide-react';
 import { CabinetAssistantModal } from '@/components/CabinetAssistantModal';
 
@@ -21,6 +20,8 @@ interface CutListManagerProps {
   stockPanels?: StockPanel[];
   workshopStock?: WorkshopItem[];
   onRequestOptimize?: (newItems?: CutItem[]) => void;
+  isCabinetModalOpen?: boolean;
+  onCloseCabinetModal?: () => void;
 }
 
 const COLOR_OPTIONS = [
@@ -187,6 +188,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   allAvailableMaterials,
   stockPanels,
   workshopStock,
+  isCabinetModalOpen = false,
+  onCloseCabinetModal,
 }) => {
   // Matières disponibles en stock triées par ordre alphabétique
   const sortedMaterials = React.useMemo(() => {
@@ -283,7 +286,6 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   const [width, setWidth] = useState<number | ''>('');
   const [quantity, setQuantity] = useState<number | ''>('');
   const [canRotate, setCanRotate] = useState<boolean>(true);
-  const [showCabinetModal, setShowCabinetModal] = useState<boolean>(false);
 
   // Synchroniser la matière sélectionnée avec les matières disponibles dans le stock
   React.useEffect(() => {
@@ -389,18 +391,7 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           </div>
         </div>
 
-        {/* Action : Assistant Caisson IA */}
-        <div className="flex items-center">
-          <button
-            type="button"
-            onClick={() => setShowCabinetModal(true)}
-            className="btn-assistant-caisson flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold text-amber-950 bg-amber-400 hover:bg-amber-300 border border-amber-500/90 shadow-sm dark:text-amber-300 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:border-amber-500/40 rounded-xl transition-all active:scale-95"
-            title="Assistant Caisson IA : calculer automatiquement les cotes selon les dimensions extérieures et l'assemblage"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-950 dark:text-amber-400" />
-            <span>Assistant Caisson IA</span>
-          </button>
-        </div>
+
       </div>
 
       {/* Formulaire d'ajout rapide de pièce */}
@@ -718,8 +709,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
 
       {/* Modal Assistant Caisson & Mobilier IA : ajoute uniquement les coupes (pas d'optimisation automatique) */}
       <CabinetAssistantModal
-        isOpen={showCabinetModal}
-        onClose={() => setShowCabinetModal(false)}
+        isOpen={isCabinetModalOpen}
+        onClose={() => onCloseCabinetModal?.()}
         onAddPieces={handleAddCabinetPieces}
         availableMaterials={
           allAvailableMaterials && allAvailableMaterials.length > 0

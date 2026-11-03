@@ -32,7 +32,7 @@ import {
   MissingStockModal,
   MissingMaterialInfo,
 } from '@/components/MissingStockModal';
-import { Play, Layers, ListPlus, FolderOpen } from 'lucide-react';
+import { Play, Layers, ListPlus, FolderOpen, Sparkles } from 'lucide-react';
 
 export default function Home() {
   // Vue active : 'hub' (écran d'accueil nouveau/existant) ou 'editor' (l'atelier de coupe)
@@ -53,6 +53,7 @@ export default function Home() {
   const [savedProjects, setSavedProjects] = useState<SavedProject[]>([]);
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
+  const [showCabinetModal, setShowCabinetModal] = useState<boolean>(false);
 
   // Onglet mobile
   const [mobileTab, setMobileTab] = useState<'input' | 'results'>('input');
@@ -721,8 +722,8 @@ export default function Home() {
 
       {/* Contenu Principal de l'Atelier */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-5 print:hidden">
-        {/* Bandeau du Titre du Projet (clairement visible entre le haut de page et les paramètres de coupe) */}
-        <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl px-4 py-3.5 sm:px-5 sm:py-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Bandeau du Titre du Projet avec bouton Assistant IA à droite */}
+        <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl px-4 py-3.5 sm:px-5 sm:py-4 shadow-sm flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
               <FolderOpen className="w-5 h-5" />
@@ -737,13 +738,17 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs shrink-0">
-            <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 font-mono font-semibold text-slate-200">
-              {stockPanels.reduce((s, p) => s + p.quantity, 0)} panneau(x) en stock
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 font-mono font-semibold text-slate-200">
-              {cutItems.reduce((s, i) => s + i.quantity, 0)} pièce(s) à débiter
-            </span>
+          {/* Bouton Assistant IA à droite du titre du projet (identique à la photo jointe) */}
+          <div className="flex items-center shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowCabinetModal(true)}
+              className="btn-assistant-ia-photo inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-sm active:scale-95"
+              title="Assistant IA : calculer automatiquement les cotes d'un caisson selon les dimensions extérieures et l'assemblage"
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span>Assistant IA</span>
+            </button>
           </div>
         </div>
         {/* Boutons d'onglets pour navigation sur mobile (placés tout en haut sur mobile) */}
@@ -809,6 +814,8 @@ export default function Home() {
               allAvailableMaterials={allAvailableMaterials}
               stockPanels={stockPanels}
               workshopStock={workshopStock}
+              isCabinetModalOpen={showCabinetModal}
+              onCloseCabinetModal={() => setShowCabinetModal(false)}
               onRequestOptimize={(newPieces) =>
                 handleOptimize(newPieces ? [...cutItems, ...newPieces] : cutItems)
               }
