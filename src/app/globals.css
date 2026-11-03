@@ -44,39 +44,25 @@ input[type='number'] {
    STYLE DU THÈME CLAIR (LIGHT MODE) — PALETTE HARMONISÉE & SOBRE (ARDOISE)
    ========================================================================== */
 
-/* 1. Arrière-plans principaux et cartes */
+/* 1. Arrière-plans principaux et cartes (couvre TOUTES les variantes d'opacité /60, /70, /80, /90...) */
 html.light body,
 html:not(.dark) body {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
 }
 
-html.light .bg-slate-950,
-html:not(.dark) .bg-slate-950,
-html.light .bg-slate-950\/60,
-html:not(.dark) .bg-slate-950\/60 {
+html.light [class*="bg-slate-950"]:not(.fixed),
+html:not(.dark) [class*="bg-slate-950"]:not(.fixed) {
   background-color: #f1f5f9 !important;
+  color: #0f172a !important;
 }
 
-html.light .bg-slate-900,
-html:not(.dark) .bg-slate-900,
-html.light .bg-slate-900\/30,
-html:not(.dark) .bg-slate-900\/30,
-html.light .bg-slate-900\/40,
-html:not(.dark) .bg-slate-900\/40,
-html.light .bg-slate-900\/60,
-html:not(.dark) .bg-slate-900\/60,
-html.light .bg-slate-900\/70,
-html:not(.dark) .bg-slate-900\/70,
-html.light .bg-slate-900\/80,
-html:not(.dark) .bg-slate-900\/80,
-html.light .bg-slate-900\/90,
-html:not(.dark) .bg-slate-900\/90,
-html.light .bg-slate-900\/95,
-html:not(.dark) .bg-slate-900\/95,
-html.light .bg-slate-900\/98,
-html:not(.dark) .bg-slate-900\/98 {
+html.light [class*="bg-slate-900"]:not(.fixed):not(button),
+html:not(.dark) [class*="bg-slate-900"]:not(.fixed):not(button),
+html.light [class*="bg-slate-850"]:not(.fixed):not(button),
+html:not(.dark) [class*="bg-slate-850"]:not(.fixed):not(button) {
   background-color: #f8fafc !important;
+  color: #0f172a !important;
 }
 
 html.light header.bg-slate-900,
@@ -88,49 +74,27 @@ html:not(.dark) .modal-box.bg-slate-800 {
   background-color: #ffffff !important;
 }
 
-html.light .bg-slate-850,
-html:not(.dark) .bg-slate-850 {
-  background-color: #f8fafc !important;
-}
-
-html.light .bg-slate-800,
-html:not(.dark) .bg-slate-800,
-html.light .bg-slate-800\/80,
-html:not(.dark) .bg-slate-800\/80,
-html.light .bg-slate-800\/90,
-html:not(.dark) .bg-slate-800\/90 {
+html.light [class*="bg-slate-800"]:not(.fixed):not(button),
+html:not(.dark) [class*="bg-slate-800"]:not(.fixed):not(button) {
   background-color: #ffffff !important;
   box-shadow: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.06);
 }
 
-html.light .bg-slate-750,
-html:not(.dark) .bg-slate-750,
-html.light .bg-slate-750\/50,
-html:not(.dark) .bg-slate-750\/50,
-html.light .bg-slate-700,
-html:not(.dark) .bg-slate-700,
-html.light .bg-slate-700\/40,
-html:not(.dark) .bg-slate-700\/40,
-html.light .bg-slate-700\/60,
-html:not(.dark) .bg-slate-700\/60,
-html.light .bg-slate-700\/80,
-html:not(.dark) .bg-slate-700\/80 {
+html.light [class*="bg-slate-750"]:not(.fixed):not(button),
+html:not(.dark) [class*="bg-slate-750"]:not(.fixed):not(button),
+html.light [class*="bg-slate-700"]:not(.fixed):not(button),
+html:not(.dark) [class*="bg-slate-700"]:not(.fixed):not(button) {
   background-color: #f1f5f9 !important;
+  color: #0f172a !important;
 }
 
 /* 2. Séparateurs et Bordures nettes en gris ardoise clair */
-html.light .border-slate-800,
-html:not(.dark) .border-slate-800,
-html.light .border-slate-800\/80,
-html:not(.dark) .border-slate-800\/80,
-html.light .border-slate-700,
-html:not(.dark) .border-slate-700,
-html.light .border-slate-700\/60,
-html:not(.dark) .border-slate-700\/60,
-html.light .border-slate-700\/70,
-html:not(.dark) .border-slate-700\/70,
-html.light .border-slate-700\/80,
-html:not(.dark) .border-slate-700\/80 {
+html.light [class*="border-slate-800"],
+html:not(.dark) [class*="border-slate-800"],
+html.light [class*="border-slate-700"],
+html:not(.dark) [class*="border-slate-700"],
+html.light [class*="border-slate-600"],
+html:not(.dark) [class*="border-slate-600"] {
   border-color: #cbd5e1 !important;
 }
 
@@ -147,12 +111,22 @@ html:not(.dark) .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
 html.light .text-white,
 html:not(.dark) .text-white,
 html.light .text-slate-100,
-html:not(.dark) .text-slate-100 {
+html:not(.dark) .text-slate-100,
+html.light .hover\:text-white:hover,
+html:not(.dark) .hover\:text-white:hover,
+html.light .group:hover .group-hover\:text-white,
+html:not(.dark) .group:hover .group-hover\:text-white,
+html.light .group:hover .group-hover\:text-amber-300,
+html:not(.dark) .group:hover .group-hover\:text-amber-300,
+html.light .group:hover .group-hover\:text-amber-400,
+html:not(.dark) .group:hover .group-hover\:text-amber-400 {
   color: #0f172a !important;
 }
 
 html.light .text-slate-200,
-html:not(.dark) .text-slate-200 {
+html:not(.dark) .text-slate-200,
+html.light .hover\:text-slate-200:hover,
+html:not(.dark) .hover\:text-slate-200:hover {
   color: #1e293b !important;
 }
 
@@ -167,12 +141,14 @@ html:not(.dark) .text-slate-400 {
 }
 
 html.light .text-slate-500,
-html:not(.dark) .text-slate-500 {
+html:not(.dark) .text-slate-500,
+html.light .text-slate-600,
+html:not(.dark) .text-slate-600 {
   color: #64748b !important;
 }
 
 /* Unification de TOUS les textes colorés (jaune, vert, turquoise, bleu, violet, rose)
-   en Gris Anthracite Foncé (#0f172a) pour une lisibilité parfaite (notamment Stock Atelier) */
+   en Gris Anthracite Foncé (#0f172a) pour une lisibilité parfaite */
 html.light .text-teal-200,
 html:not(.dark) .text-teal-200,
 html.light .text-teal-300,
@@ -218,29 +194,49 @@ html:not(.dark) table thead th span.rounded-full {
   background-color: #475569 !important;
 }
 
-/* 4. Unification des boîtes d'icônes, badges et bandeaux translucides en gris ardoise sobre */
+/* 4. Unification des boîtes d'icônes, badges et bandeaux translucides (500/, 900, 950) en gris ardoise sobre */
 html.light [class*="bg-amber-500/"],
 html:not(.dark) [class*="bg-amber-500/"],
+html.light [class*="bg-amber-900"],
+html:not(.dark) [class*="bg-amber-900"],
 html.light [class*="bg-amber-950"],
 html:not(.dark) [class*="bg-amber-950"],
 html.light [class*="bg-blue-500/"],
 html:not(.dark) [class*="bg-blue-500/"],
+html.light [class*="bg-blue-900"],
+html:not(.dark) [class*="bg-blue-900"],
 html.light [class*="bg-blue-950"],
 html:not(.dark) [class*="bg-blue-950"],
 html.light [class*="bg-teal-500/"],
 html:not(.dark) [class*="bg-teal-500/"],
+html.light [class*="bg-teal-900"],
+html:not(.dark) [class*="bg-teal-900"],
 html.light [class*="bg-teal-950"],
 html:not(.dark) [class*="bg-teal-950"],
 html.light [class*="bg-emerald-500/"],
 html:not(.dark) [class*="bg-emerald-500/"],
+html.light [class*="bg-emerald-900"],
+html:not(.dark) [class*="bg-emerald-900"],
 html.light [class*="bg-emerald-950"],
 html:not(.dark) [class*="bg-emerald-950"],
 html.light [class*="bg-indigo-500/"],
 html:not(.dark) [class*="bg-indigo-500/"],
+html.light [class*="bg-indigo-900"],
+html:not(.dark) [class*="bg-indigo-900"],
+html.light [class*="bg-indigo-950"],
+html:not(.dark) [class*="bg-indigo-950"],
 html.light [class*="bg-purple-500/"],
 html:not(.dark) [class*="bg-purple-500/"],
+html.light [class*="bg-purple-900"],
+html:not(.dark) [class*="bg-purple-900"],
+html.light [class*="bg-purple-950"],
+html:not(.dark) [class*="bg-purple-950"],
 html.light [class*="bg-red-500/"],
-html:not(.dark) [class*="bg-red-500/"] {
+html:not(.dark) [class*="bg-red-500/"],
+html.light [class*="bg-red-900"],
+html:not(.dark) [class*="bg-red-900"],
+html.light [class*="bg-red-950"],
+html:not(.dark) [class*="bg-red-950"] {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
@@ -265,6 +261,14 @@ html:not(.dark) [class*="border-purple-500"],
 html.light [class*="border-red-500"],
 html:not(.dark) [class*="border-red-500"] {
   border-color: #cbd5e1 !important;
+}
+
+/* Cartes de mode d'assemblage sélectionnées dans l'assistant caisson */
+html.light button[class*="ring-1"],
+html:not(.dark) button[class*="ring-1"] {
+  background-color: #e2e8f0 !important;
+  border-color: #334155 !important;
+  --tw-ring-color: #334155 !important;
 }
 
 /* 5. Harmonisation de TOUS les boutons d'action en Anthracite sobre (#1e293b) avec texte blanc */
@@ -368,27 +372,27 @@ html:not(.dark) .bg-teal-600\/90 span.rounded-full {
 }
 
 /* 6. Boutons secondaires neutres */
-html.light button.bg-slate-900,
-html:not(.dark) button.bg-slate-900,
-html.light button.bg-slate-800,
-html:not(.dark) button.bg-slate-800,
-html.light button.bg-slate-700,
-html:not(.dark) button.bg-slate-700,
-html.light button.bg-slate-700\/80,
-html:not(.dark) button.bg-slate-700\/80 {
+html.light button[class*="bg-slate-900"],
+html:not(.dark) button[class*="bg-slate-900"],
+html.light button[class*="bg-slate-850"],
+html:not(.dark) button[class*="bg-slate-850"],
+html.light button[class*="bg-slate-800"],
+html:not(.dark) button[class*="bg-slate-800"],
+html.light button[class*="bg-slate-700"],
+html:not(.dark) button[class*="bg-slate-700"] {
   background-color: #f8fafc !important;
   color: #0f172a !important;
   border: 1px solid #cbd5e1 !important;
 }
 
-html.light button.bg-slate-900:hover,
-html:not(.dark) button.bg-slate-900:hover,
-html.light button.bg-slate-800:hover,
-html:not(.dark) button.bg-slate-800:hover,
-html.light button.bg-slate-700:hover,
-html:not(.dark) button.bg-slate-700:hover,
-html.light button.bg-slate-700\/80:hover,
-html:not(.dark) button.bg-slate-700\/80:hover {
+html.light button[class*="bg-slate-900"]:hover,
+html:not(.dark) button[class*="bg-slate-900"]:hover,
+html.light button[class*="bg-slate-850"]:hover,
+html:not(.dark) button[class*="bg-slate-850"]:hover,
+html.light button[class*="bg-slate-800"]:hover,
+html:not(.dark) button[class*="bg-slate-800"]:hover,
+html.light button[class*="bg-slate-700"]:hover,
+html:not(.dark) button[class*="bg-slate-700"]:hover {
   background-color: #e2e8f0 !important;
   color: #0f172a !important;
 }
@@ -429,9 +433,15 @@ html.light .hover\:bg-slate-850:hover,
 html:not(.dark) .hover\:bg-slate-850:hover,
 html.light .hover\:bg-slate-800:hover,
 html:not(.dark) .hover\:bg-slate-800:hover,
+html.light .hover\:bg-slate-750:hover,
+html:not(.dark) .hover\:bg-slate-750:hover,
 html.light .hover\:bg-slate-750\/50:hover,
-html:not(.dark) .hover\:bg-slate-750\/50:hover {
-  background-color: #f8fafc !important;
+html:not(.dark) .hover\:bg-slate-750\/50:hover,
+html.light .hover\:bg-slate-700:hover,
+html:not(.dark) .hover\:bg-slate-700:hover,
+html.light .hover\:bg-slate-700\/80:hover,
+html:not(.dark) .hover\:bg-slate-700\/80:hover {
+  background-color: #f1f5f9 !important;
 }
 
 /* 8. Visualiseur SVG plans de coupe */
