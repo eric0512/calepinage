@@ -32,7 +32,7 @@ import {
   MissingStockModal,
   MissingMaterialInfo,
 } from '@/components/MissingStockModal';
-import { Play, Layers, ListPlus } from 'lucide-react';
+import { Play, Layers, ListPlus, FolderOpen } from 'lucide-react';
 
 export default function Home() {
   // Vue active : 'hub' (écran d'accueil nouveau/existant) ou 'editor' (l'atelier de coupe)
@@ -720,7 +720,32 @@ export default function Home() {
       )}
 
       {/* Contenu Principal de l'Atelier */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 print:hidden">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-5 print:hidden">
+        {/* Bandeau du Titre du Projet (clairement visible entre le haut de page et les paramètres de coupe) */}
+        <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl px-4 py-3.5 sm:px-5 sm:py-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+              <FolderOpen className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <span className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Projet en cours
+              </span>
+              <h1 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
+                {projectName}
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs shrink-0">
+            <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 font-mono font-semibold text-slate-200">
+              {stockPanels.reduce((s, p) => s + p.quantity, 0)} panneau(x) en stock
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 font-mono font-semibold text-slate-200">
+              {cutItems.reduce((s, i) => s + i.quantity, 0)} pièce(s) à débiter
+            </span>
+          </div>
+        </div>
         {/* Boutons d'onglets pour navigation sur mobile (placés tout en haut sur mobile) */}
         <div className="flex lg:hidden bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
           <button
