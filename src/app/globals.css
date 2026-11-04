@@ -543,6 +543,69 @@ html:not(.dark) .btn-assistant-ia-photo svg {
   stroke: #fbbf24 !important;
 }
 
+/* Onglets de l'Assistant IA identiques au sélecteur Photo 1 (pilule orange/ambre sur fond sombre) */
+.ai-tab-pill-container,
+html.dark .ai-tab-pill-container,
+html.light .ai-tab-pill-container,
+html:not(.dark) .ai-tab-pill-container {
+  background-color: #0f172a !important;
+  border: 1px solid #1e293b !important;
+}
+
+.ai-tab-pill-active,
+html.dark .ai-tab-pill-active,
+html.light .ai-tab-pill-active,
+html:not(.dark) .ai-tab-pill-active,
+html.light button.ai-tab-pill-active,
+html:not(.dark) button.ai-tab-pill-active {
+  background-image: none !important;
+  background-color: #d97706 !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+}
+
+.ai-tab-pill-active span,
+.ai-tab-pill-active svg,
+html.light .ai-tab-pill-active span,
+html:not(.dark) .ai-tab-pill-active span,
+html.light .ai-tab-pill-active svg,
+html:not(.dark) .ai-tab-pill-active svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.ai-tab-pill-inactive,
+html.dark .ai-tab-pill-inactive,
+html.light .ai-tab-pill-inactive,
+html:not(.dark) .ai-tab-pill-inactive,
+html.light button.ai-tab-pill-inactive,
+html:not(.dark) button.ai-tab-pill-inactive {
+  background-image: none !important;
+  background-color: transparent !important;
+  color: #94a3b8 !important;
+  border-color: transparent !important;
+}
+
+.ai-tab-pill-inactive span,
+.ai-tab-pill-inactive svg,
+html.light .ai-tab-pill-inactive span,
+html:not(.dark) .ai-tab-pill-inactive span,
+html.light .ai-tab-pill-inactive svg,
+html:not(.dark) .ai-tab-pill-inactive svg {
+  color: #94a3b8 !important;
+  stroke: #94a3b8 !important;
+}
+
+.ai-tab-pill-inactive:hover span,
+.ai-tab-pill-inactive:hover svg,
+html.light .ai-tab-pill-inactive:hover span,
+html:not(.dark) .ai-tab-pill-inactive:hover span,
+html.light .ai-tab-pill-inactive:hover svg,
+html:not(.dark) .ai-tab-pill-inactive:hover svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
 @media print {
   @page {
     size: A4 portrait;

@@ -461,36 +461,36 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         </div>
 
         {/* Barre d'onglets : Visuel Paramétrique vs Commande IA + Bouton Sauvegarder Modèle */}
-        <div className="flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-950/60 px-5 pt-3 gap-2">
-          <div className="flex gap-3">
+        <div className="flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-950/60 px-4 sm:px-5 py-2.5 gap-2.5">
+          <div className="ai-tab-pill-container flex flex-1 min-w-[280px] bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('visual')}
-              className={`pb-3 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all ${
+              className={`flex-1 py-2 px-2.5 sm:px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                 activeTab === 'visual'
-                  ? 'border-amber-500 text-amber-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'ai-tab-pill-active bg-amber-600 text-white'
+                  : 'ai-tab-pill-inactive text-slate-400 hover:text-white'
               }`}
             >
-              <Sliders className="w-4 h-4" />
+              <Sliders className="w-4 h-4 shrink-0" />
               <span>1. Configuration Visuelle (Champs directs)</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('ai')}
-              className={`pb-3 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition-all ${
+              className={`flex-1 py-2 px-2.5 sm:px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                 activeTab === 'ai'
-                  ? 'border-amber-500 text-amber-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'ai-tab-pill-active bg-amber-600 text-white'
+                  : 'ai-tab-pill-inactive text-slate-400 hover:text-white'
               }`}
             >
-              <Sparkles className="w-4 h-4 text-amber-400" />
+              <Sparkles className="w-4 h-4 shrink-0" />
               <span>2. Assistant Prompt IA &amp; Gabarits</span>
             </button>
           </div>
 
           {/* Bouton d'enregistrement de modèle préprogrammé */}
-          <div className="pb-2">
+          <div>
             {!isSavingPreset ? (
               <button
                 type="button"
