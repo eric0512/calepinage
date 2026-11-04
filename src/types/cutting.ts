@@ -33,6 +33,35 @@ export interface WorkshopItem {
   quantity: number;
 }
 
+export type AssemblyType =
+  | 'sides_full' // Montants continus (Haut et Bas intérieurs)
+  | 'top_bottom_full' // Dessus et Dessous filants (Côtés intérieurs)
+  | 'bottom_inside_top_over'; // Bas encastré entre côtés, Dessus posé sur côtés (avec ou sans débord)
+export type BackType = 'none' | 'applique' | 'groove';
+export type DoorsType = 'none' | 'one_door' | 'two_doors';
+
+export interface CabinetConfig {
+  name: string;
+  height: number; // Hauteur extérieure (mm)
+  width: number; // Largeur extérieure (mm)
+  depth: number; // Profondeur extérieure (mm)
+  thickness: number; // Épaisseur des panneaux principaux (mm, ex: 18 ou 19)
+  assemblyType: AssemblyType; // Type d'assemblage
+  topOverhangSides?: number; // Débord latéral du plateau haut (gauche et droite, en mm, ex: 20)
+  topOverhangFront?: number; // Débord avant du plateau haut (en mm, ex: 20)
+  topOverhangBack?: number; // Débord arrière du plateau haut (en mm, défaut: 0)
+  backType: BackType; // Fond : aucun, applique arrière, ou en rainure
+  backThickness: number; // Épaisseur du fond (mm, ex: 8 ou 10)
+  shelvesCount: number; // Nombre d'étagères par compartiment
+  shelfRecess: number; // Retrait de l'étagère par rapport à la façade (mm, ex: 20)
+  partitionsCount: number; // Séparations verticales (de 0 à 4)
+  doors: DoorsType; // Portes en applique
+  material: string; // Matière principale
+  backMaterial?: string; // Matière du fond
+  doorMaterial?: string; // Matière des portes
+  cabinetCount?: number; // Nombre de caissons identiques à fabriquer
+}
+
 export interface CutItem {
   id: string;
   name: string; // Étiquette / Nom de la pièce
@@ -43,6 +72,7 @@ export interface CutItem {
   quantity: number; // Quantité requise
   canRotate: boolean; // Autoriser rotation (si le sens du fil du bois le permet)
   color?: string; // Couleur d'identification visuelle
+  cabinetConfig?: CabinetConfig; // Configuration et dimensions du caisson associé
 }
 
 export interface PlacedPiece {

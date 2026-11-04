@@ -816,8 +816,8 @@ export default function Home() {
               workshopStock={workshopStock}
               isCabinetModalOpen={showCabinetModal}
               onCloseCabinetModal={() => setShowCabinetModal(false)}
-              onRequestOptimize={(newPieces) =>
-                handleOptimize(newPieces ? [...cutItems, ...newPieces] : cutItems)
+              onRequestOptimize={(updatedItems) =>
+                handleOptimize(updatedItems || cutItems)
               }
             />
 

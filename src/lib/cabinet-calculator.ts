@@ -1,33 +1,12 @@
-import { CutItem } from '@/types/cutting';
+import {
+  CutItem,
+  AssemblyType,
+  BackType,
+  DoorsType,
+  CabinetConfig,
+} from '@/types/cutting';
 
-export type AssemblyType =
-  | 'sides_full' // Montants continus (Haut et Bas intérieurs)
-  | 'top_bottom_full' // Dessus et Dessous filants (Côtés intérieurs)
-  | 'bottom_inside_top_over'; // Bas encastré entre côtés, Dessus posé sur côtés (avec ou sans débord)
-export type BackType = 'none' | 'applique' | 'groove';
-export type DoorsType = 'none' | 'one_door' | 'two_doors';
-
-export interface CabinetConfig {
-  name: string;
-  height: number; // Hauteur extérieure (mm)
-  width: number; // Largeur extérieure (mm)
-  depth: number; // Profondeur extérieure (mm)
-  thickness: number; // Épaisseur des panneaux principaux (mm, ex: 18 ou 19)
-  assemblyType: AssemblyType; // Type d'assemblage
-  topOverhangSides?: number; // Débord latéral du plateau haut (gauche et droite, en mm, ex: 20)
-  topOverhangFront?: number; // Débord avant du plateau haut (en mm, ex: 20)
-  topOverhangBack?: number; // Débord arrière du plateau haut (en mm, défaut: 0)
-  backType: BackType; // Fond : aucun, applique arrière, ou en rainure
-  backThickness: number; // Épaisseur du fond (mm, ex: 8 ou 10)
-  shelvesCount: number; // Nombre d'étagères par compartiment
-  shelfRecess: number; // Retrait de l'étagère par rapport à la façade (mm, ex: 20)
-  partitionsCount: number; // Séparations verticales (de 0 à 4)
-  doors: DoorsType; // Portes en applique
-  material: string; // Matière principale
-  backMaterial?: string; // Matière du fond
-  doorMaterial?: string; // Matière des portes
-  cabinetCount?: number; // Nombre de caissons identiques à fabriquer
-}
+export type { AssemblyType, BackType, DoorsType, CabinetConfig };
 
 export interface CabinetPieceCalculation {
   role: string;
@@ -351,6 +330,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     quantity: p.quantity,
     canRotate: true,
     color: p.color,
+    cabinetConfig: { ...config },
   }));
 
   return {
@@ -363,6 +343,297 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       depth: interiorDepth,
     },
   };
+}
+
+/**
+ * Reconstruit ou récupère la configuration (et les dimensions extérieures H × L × P)
+ * d'un caisson à partir de ses pièces dans la liste de débit.
+ */
+export function inferCabinetConfigFromItems(
+  cabinetName: string,
+  cabItems: CutItem[]
+): CabinetConfig {
+  const withConfig = cabItems.find((it) => it.cabinetConfig);
+  if (withConfig?.cabinetConfig) {
+    return {
+      ...withConfig.cabinetConfig,
+      name: cabinetName,
+    };
+  }
+
+  const getRolePart = (fullName: string) => {
+    if (fullName.includes(' - ')) {
+      const parts = fullName.split(' - ');
+      return parts[parts.length - 1].toLowerCase().trim();
+    }
+    return fullName.toLowerCase().trim();
+  };
+
+  const sides = cabItems.filter((it) => {
+    const r = getRolePart(it.name);
+    return (
+      (r.includes('côté') || r.includes('cote') || r.includes('montant') || r.includes('flanc')) &&
+      !r.includes('séparat') &&
+      !r.includes('separat') &&
+      !r.includes('central')
+    );
+  });
+
+  const topBottom = cabItems.filter((it) => {
+    const r = getRolePart(it.name);
+    return (
+      r.includes('haut') ||
+      r.includes('bas') ||
+      r.includes('dessus') ||
+      r.includes('dessous') ||
+      r.includes('chapeau') ||
+      r.includes('plancher') ||
+      r.includes('base') ||
+      r.includes('horizontal')
+    );
+  });
+
+  const shelves = cabItems.filter((it) => {
+    const r = getRolePart(it.name);
+    return r.includes('étagère') || r.includes('etagere') || r.includes('tablette');
+  });
+
+  const backs = cabItems.filter((it) => {
+    const r = getRolePart(it.name);
+    return (
+      (r.includes('fond') || r.includes('dos') || r.includes('arrière') || r.includes('arriere')) &&
+      !r.includes('horizontal')
+    );
+  });
+
+  const partitions = cabItems.filter((it) => {
+    const r = getRolePart(it.name);
+    return (
+      r.includes('séparation') ||
+      r.includes('separation') ||
+      r.includes('cloison') ||
+      r.includes('central')
+    );
+  });
+
+  const doors = cabItems.filter((it) => {
+    const r = getRolePart(it.name);
+    return r.includes('porte') || r.includes('battant') || r.includes('façade') || r.includes('facade');
+  });
+
+  const mainMat =
+    sides[0]?.material ||
+    topBottom[0]?.material ||
+    cabItems[0]?.material ||
+    'MDF 18mm';
+  const thickness = extractThicknessFromMaterialName(mainMat) || 18;
+
+  let height = 720;
+  let width = 600;
+  let depth = 560;
+  let assemblyType: AssemblyType = 'sides_full';
+  let topOverhangSides = 0;
+  let topOverhangFront = 0;
+
+  if (sides.length > 0 && topBottom.length > 0) {
+    const s = sides[0];
+    const tb = topBottom[topBottom.length - 1];
+    let sideH = Math.max(s.length, s.width);
+    if (Math.abs(s.length - tb.length) <= 2 || Math.abs(s.length - tb.width) <= 2) {
+      depth = s.length;
+      sideH = s.width;
+    } else if (Math.abs(s.width - tb.length) <= 2 || Math.abs(s.width - tb.width) <= 2) {
+      depth = s.width;
+      sideH = s.length;
+    } else {
+      sideH = Math.max(s.length, s.width);
+      depth = Math.min(s.length, s.width);
+    }
+
+    const bottomW = Math.abs(tb.length - depth) <= 2 ? tb.width : tb.length;
+
+    if (topBottom.length >= 2) {
+      const topIt = topBottom[0];
+      const topW =
+        Math.abs(topIt.length - depth) <= 2
+          ? topIt.width
+          : Math.max(topIt.length, topIt.width);
+      const topD = topIt.length === topW ? topIt.width : topIt.length;
+      if (topW > bottomW + 2) {
+        assemblyType = 'bottom_inside_top_over';
+        height = sideH + thickness;
+        width = bottomW + 2 * thickness;
+        topOverhangSides = Math.max(0, Math.round((topW - width) / 2));
+        topOverhangFront = Math.max(0, Math.round(topD - depth));
+      } else {
+        assemblyType = 'sides_full';
+        height = sideH;
+        width = bottomW + 2 * thickness;
+      }
+    } else {
+      assemblyType = 'sides_full';
+      height = sideH;
+      width = bottomW + 2 * thickness;
+    }
+  } else if (sides.length > 0) {
+    height = Math.max(sides[0].length, sides[0].width);
+    depth = Math.min(sides[0].length, sides[0].width);
+  } else if (cabItems.length > 0) {
+    height = Math.max(...cabItems.map((i) => i.length));
+    width = Math.max(...cabItems.map((i) => i.width));
+    depth = Math.min(...cabItems.map((i) => i.width));
+  }
+
+  const sidesTotalQty = sides.reduce((sum, it) => sum + it.quantity, 0);
+  const cabinetCount = sidesTotalQty >= 2 ? Math.max(1, Math.round(sidesTotalQty / 2)) : 1;
+  const partitionsTotalQty = partitions.reduce((sum, it) => sum + it.quantity, 0);
+  const partitionsCount = Math.min(4, Math.max(0, Math.round(partitionsTotalQty / cabinetCount)));
+
+  const shelvesTotalQty = shelves.reduce((sum, it) => sum + it.quantity, 0);
+  const compartments = partitionsCount + 1;
+  const shelvesCount =
+    shelvesTotalQty > 0
+      ? Math.max(1, Math.round(shelvesTotalQty / (compartments * cabinetCount)))
+      : 0;
+
+  let shelfRecess = 20;
+  if (shelves[0]) {
+    const sMin = Math.min(shelves[0].length, shelves[0].width);
+    const sMax = Math.max(shelves[0].length, shelves[0].width);
+    const candidateDepth = Math.abs(depth - sMin) < Math.abs(depth - sMax) ? sMin : sMax;
+    if (depth > candidateDepth && depth - candidateDepth <= 150) {
+      shelfRecess = depth - candidateDepth;
+    }
+  }
+
+  let backType: BackType = 'none';
+  let backMaterial = 'MDF 8mm';
+  let backThickness = 8;
+  if (backs.length > 0) {
+    const bName = backs[0].name.toLowerCase();
+    backType =
+      bName.includes('encastr') || bName.includes('rainur') ? 'groove' : 'applique';
+    backMaterial = backs[0].material || 'MDF 8mm';
+    backThickness = extractThicknessFromMaterialName(backMaterial) || 8;
+  }
+
+  let doorsType: DoorsType = 'none';
+  if (doors.length > 0) {
+    const doorsQty = doors.reduce((sum, it) => sum + it.quantity, 0);
+    doorsType = doorsQty / cabinetCount >= 2 ? 'two_doors' : 'one_door';
+  }
+
+  return {
+    name: cabinetName,
+    height,
+    width,
+    depth,
+    thickness,
+    assemblyType,
+    topOverhangSides,
+    topOverhangFront,
+    backType,
+    backThickness,
+    shelvesCount,
+    shelfRecess,
+    partitionsCount,
+    doors: doorsType,
+    material: mainMat,
+    backMaterial,
+    doorMaterial: doors[0]?.material || mainMat,
+    cabinetCount,
+  };
+}
+
+/**
+ * Recalcule les pièces d'un caisson existant suite à la modification de ses dimensions extérieures (H, L, P),
+ * en préservant les identifiants et préférences de fil (canRotate) de chaque pièce.
+ */
+export function recalculateCabinetItems(
+  cabItems: CutItem[],
+  updatedConfig: CabinetConfig
+): CutItem[] {
+  const prevConfig = inferCabinetConfigFromItems(updatedConfig.name, cabItems);
+  const calculated = calculateCabinetPieces(updatedConfig);
+  const usedOldIds = new Set<string>();
+
+  const updatedGenerated = calculated.cutItems.map((genItem) => {
+    const match = cabItems.find(
+      (old) => !usedOldIds.has(old.id) && old.name === genItem.name
+    );
+    if (match) {
+      usedOldIds.add(match.id);
+      return {
+        ...genItem,
+        id: match.id,
+        canRotate: match.canRotate,
+        color: match.color || genItem.color,
+        cabinetConfig: { ...updatedConfig },
+      };
+    }
+    return {
+      ...genItem,
+      cabinetConfig: { ...updatedConfig },
+    };
+  });
+
+  // Cas principal : caisson généré par l'Assistant IA (les noms de pièces correspondent)
+  if (usedOldIds.size > 0) {
+    const leftoverCustom = cabItems
+      .filter((old) => !usedOldIds.has(old.id))
+      .map((old) => ({
+        ...old,
+        cabinetConfig: { ...updatedConfig },
+      }));
+    return [...updatedGenerated, ...leftoverCustom];
+  }
+
+  // Cas alternatif (pièces saisies manuellement ou issues d'un modèle libre) : application des écarts ΔH, ΔL, ΔP
+  const dH = updatedConfig.height - prevConfig.height;
+  const dW = updatedConfig.width - prevConfig.width;
+  const dD = updatedConfig.depth - prevConfig.depth;
+
+  return cabItems.map((item) => {
+    const n = item.name.toLowerCase();
+    let l = item.length;
+    let w = item.width;
+    const isHFirst = Math.abs(l - prevConfig.height) <= Math.abs(w - prevConfig.height);
+    const isWFirst = Math.abs(l - prevConfig.width) <= Math.abs(w - prevConfig.width);
+
+    if (n.includes('côté') || n.includes('cote') || n.includes('montant') || n.includes('séparation') || n.includes('separation')) {
+      if (isHFirst) {
+        l = Math.max(10, l + dH);
+        w = Math.max(10, w + dD);
+      } else {
+        w = Math.max(10, w + dH);
+        l = Math.max(10, l + dD);
+      }
+    } else if (n.includes('fond') || n.includes('dos') || n.includes('porte') || n.includes('battant')) {
+      if (isHFirst) {
+        l = Math.max(10, l + dH);
+        w = Math.max(10, w + dW);
+      } else {
+        w = Math.max(10, w + dH);
+        l = Math.max(10, l + dW);
+      }
+    } else {
+      // Haut, bas, étagères, traverses
+      if (isWFirst) {
+        l = Math.max(10, l + dW);
+        w = Math.max(10, w + dD);
+      } else {
+        w = Math.max(10, w + dW);
+        l = Math.max(10, l + dD);
+      }
+    }
+
+    return {
+      ...item,
+      length: Math.max(l, w),
+      width: Math.min(l, w),
+      cabinetConfig: { ...updatedConfig },
+    };
+  });
 }
 
 /**
