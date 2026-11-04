@@ -561,25 +561,43 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           {/* VUE 1 : ASSISTANT PROMPT IA & GABARITS */}
           {activeTab === 'ai' && (
             <div className="space-y-4">
-              {/* Option Gabarit Préprogrammé (Remplir les cases pour générer le prompt) */}
+              {/* Zone IA avec 2 onglets : 1) Description libre, 2) Remplir les cases */}
               <div className="bg-slate-850 p-4 rounded-2xl border border-slate-700/80 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="text-xs font-bold text-white flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span>Décrivez votre meuble ou utilisez un gabarit préprogrammé :</span>
-                  </label>
+                <label className="text-xs font-bold text-white flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>Décrivez votre meuble ou utilisez un gabarit préprogrammé :</span>
+                </label>
+
+                {/* Sélecteur à 2 onglets : Description vs Remplir les cases */}
+                <div className="ai-tab-pill-container flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
                   <button
                     type="button"
-                    onClick={() => setShowGuidedTemplate(!showGuidedTemplate)}
-                    className="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1.5 self-start sm:self-auto bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/30 transition-colors"
+                    onClick={() => setShowGuidedTemplate(false)}
+                    className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                      !showGuidedTemplate
+                        ? 'ai-tab-pill-active bg-amber-600 text-white'
+                        : 'ai-tab-pill-inactive text-slate-400 hover:text-white'
+                    }`}
                   >
-                    <FileText className="w-3.5 h-3.5" />
-                    <span>{showGuidedTemplate ? 'Fermer le gabarit' : '📋 Remplir les cases (Gabarit guidé)'}</span>
+                    <Sparkles className="w-4 h-4 shrink-0" />
+                    <span>Description du meuble</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGuidedTemplate(true)}
+                    className={`flex-1 py-2 px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                      showGuidedTemplate
+                        ? 'ai-tab-pill-active bg-amber-600 text-white'
+                        : 'ai-tab-pill-inactive text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4 shrink-0" />
+                    <span>Remplir les cases</span>
                   </button>
                 </div>
 
-                {/* Volet Gabarit Guidé */}
-                {showGuidedTemplate && (
+                {/* ONGLET 2 : Remplir les cases (Gabarit guidé) */}
+                {showGuidedTemplate ? (
                   <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-150 text-xs">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                       <span className="font-bold text-amber-300 flex items-center gap-1.5">
@@ -724,35 +742,36 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       </button>
                     </div>
                   </div>
+                ) : (
+                  /* ONGLET 1 : Description libre du meuble */
+                  <div className="relative animate-in fade-in duration-150">
+                    <textarea
+                      rows={3}
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      placeholder="Ex: Je veux un caisson de 700 de haut, 1000 de large et 450 de profondeur avec séparation au milieu et 2 étagères de chaque côté, bas encastré, haut posé avec débord de 2 cm..."
+                      className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAnalyzePrompt()}
+                      disabled={isAnalyzing || !aiPrompt.trim()}
+                      className="mt-2 w-full sm:w-auto sm:absolute sm:bottom-3 sm:right-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isAnalyzing ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                          <span>Analyse en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5 text-slate-950" />
+                          <span>Analyser et configurer</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
-
-                <div className="relative">
-                  <textarea
-                    rows={3}
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Ex: Je veux un caisson de 700 de haut, 1000 de large et 450 de profondeur avec séparation au milieu et 2 étagères de chaque côté, bas encastré, haut posé avec débord de 2 cm..."
-                    className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleAnalyzePrompt()}
-                    disabled={isAnalyzing || !aiPrompt.trim()}
-                    className="mt-2 w-full sm:w-auto sm:absolute sm:bottom-3 sm:right-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {isAnalyzing ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                        <span>Analyse en cours...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5 text-slate-950" />
-                        <span>Analyser et configurer</span>
-                      </>
-                    )}
-                  </button>
-                </div>
 
                 {aiSuccessMessage && (
                   <div className="mt-3 p-2.5 bg-emerald-950/70 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs font-semibold flex items-center gap-2">
