@@ -587,34 +587,39 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {/* LIGNE 1 : Hauteur, Largeur et Profondeur toujours sur la même ligne */}
+                    <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
                       <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">Hauteur (mm) :</label>
+                        <label className="text-[11px] text-slate-300 block mb-1 truncate">Hauteur (mm) :</label>
                         <input
                           type="number"
                           value={config.height}
                           onChange={(e) => setConfig({ ...config, height: parseInt(e.target.value) || 0 })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono"
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono text-center"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">Largeur (mm) :</label>
+                        <label className="text-[11px] text-slate-300 block mb-1 truncate">Largeur (mm) :</label>
                         <input
                           type="number"
                           value={config.width}
                           onChange={(e) => setConfig({ ...config, width: parseInt(e.target.value) || 0 })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono"
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono text-center"
                         />
                       </div>
                       <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">Profondeur (mm) :</label>
+                        <label className="text-[11px] text-slate-300 block mb-1 truncate">Profondeur (mm) :</label>
                         <input
                           type="number"
                           value={config.depth}
                           onChange={(e) => setConfig({ ...config, depth: parseInt(e.target.value) || 0 })}
-                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono"
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white font-mono text-center"
                         />
                       </div>
+                    </div>
+
+                    {/* Autres paramètres du gabarit */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
 
                       <div>
                         <label className="text-[11px] text-slate-300 block mb-1">
