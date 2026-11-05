@@ -431,12 +431,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
       <div role="dialog" aria-modal="true" className="modal-box bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden text-white">
         {/* En-tête de la modale */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-900/95">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+        <div className="flex items-start justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-900/95 gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
               <Sparkles className="w-5 h-5" />
             </div>
-            <div>
+            <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-bold text-white tracking-wide">
                   Assistant Caisson &amp; Mobilier IA
@@ -445,24 +445,68 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   Calculateur de débit
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                Calcul automatique des cotes de coupe selon vos dimensions extérieures et l&apos;assemblage.
-              </p>
+
+              {/* Bouton d'enregistrement de modèle préprogrammé placé directement sous le titre */}
+              <div>
+                {!isSavingPreset ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPresetName(config.name || 'Mon Caisson Modèle');
+                      setIsSavingPreset(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold transition-all shadow-sm"
+                    title="Enregistrer la configuration actuelle pour la réutiliser dans tous vos projets futurs"
+                  >
+                    <BookmarkPlus className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Enregistrer comme modèle préprogrammé</span>
+                  </button>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5 bg-slate-900 border border-amber-500/60 p-1 rounded-lg">
+                    <input
+                      type="text"
+                      value={newPresetName}
+                      onChange={(e) => setNewPresetName(e.target.value)}
+                      placeholder="Nom du modèle..."
+                      className="bg-slate-800 text-white px-2 py-0.5 rounded text-xs focus:outline-none w-36 sm:w-48"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveCurrentAsPreset(newPresetName);
+                        if (e.key === 'Escape') setIsSavingPreset(false);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveCurrentAsPreset(newPresetName)}
+                      className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-xs"
+                    >
+                      Sauvegarder
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSavingPreset(false)}
+                      className="px-1.5 py-0.5 text-slate-400 hover:text-white text-xs"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Barre d'onglets : Visuel Paramétrique vs Commande IA + Bouton Sauvegarder Modèle */}
-        <div className="flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-950/60 px-4 sm:px-5 py-2.5 gap-2.5">
-          <div className="ai-tab-pill-container flex flex-1 min-w-[280px] bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+        {/* Barre d'onglets : Visuel Paramétrique vs Commande IA */}
+        <div className="border-b border-slate-800 bg-slate-950/60 px-4 sm:px-5 py-2.5">
+          <div className="ai-tab-pill-container flex w-full bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('visual')}
@@ -488,72 +532,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
               <span>2. Assistant Prompt IA &amp; Gabarits</span>
             </button>
           </div>
-
-          {/* Bouton d'enregistrement de modèle préprogrammé */}
-          <div>
-            {!isSavingPreset ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setNewPresetName(config.name || 'Mon Caisson Modèle');
-                  setIsSavingPreset(true);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold transition-all shadow-sm"
-                title="Enregistrer la configuration actuelle pour la réutiliser dans tous vos projets futurs"
-              >
-                <BookmarkPlus className="w-3.5 h-3.5 text-amber-400" />
-                <span>Enregistrer comme modèle préprogrammé</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5 bg-slate-900 border border-amber-500/60 p-1 rounded-lg">
-                <input
-                  type="text"
-                  value={newPresetName}
-                  onChange={(e) => setNewPresetName(e.target.value)}
-                  placeholder="Nom du modèle..."
-                  className="bg-slate-800 text-white px-2 py-0.5 rounded text-xs focus:outline-none w-36 sm:w-48"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveCurrentAsPreset(newPresetName);
-                    if (e.key === 'Escape') setIsSavingPreset(false);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => handleSaveCurrentAsPreset(newPresetName)}
-                  className="px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-xs"
-                >
-                  Sauvegarder
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsSavingPreset(false)}
-                  className="px-1.5 py-0.5 text-slate-400 hover:text-white text-xs"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Bandeau d'état des stocks connectés à l'IA */}
-        <div className="bg-slate-950/80 border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between text-[11px] gap-2">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-blue-300 font-medium">
-              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              <span>Stock Saisi : <strong className="text-white font-mono">{stockPanels.length}</strong> réf(s)</span>
-            </span>
-            <span className="text-slate-600">•</span>
-            <span className="flex items-center gap-1.5 text-emerald-300 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>Stock Atelier : <strong className="text-white font-mono">{workshopStock.reduce((s, w) => s + w.quantity, 0)}</strong> chute(s)</span>
-            </span>
-          </div>
-          <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 font-medium flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-400" />
-            <span>L&apos;IA priorise et utilise automatiquement vos panneaux et chutes réels</span>
-          </span>
         </div>
 
         {/* Corps de la modale scrollable */}
