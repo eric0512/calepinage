@@ -57,6 +57,11 @@ export interface CabinetConfig {
   partitionsCount: number; // Séparations verticales (de 0 à 4)
   doors: DoorsType; // Portes en applique
   material: string; // Matière principale
+  sidesMaterial?: string; // Matière spécifique des côtés
+  topMaterial?: string; // Matière spécifique du plateau du haut
+  bottomMaterial?: string; // Matière spécifique du plateau du bas
+  partitionsMaterial?: string; // Matière spécifique des séparations verticales
+  shelvesMaterial?: string; // Matière spécifique des étagères
   backMaterial?: string; // Matière du fond
   doorMaterial?: string; // Matière des portes
   cabinetCount?: number; // Nombre de caissons identiques à fabriquer
