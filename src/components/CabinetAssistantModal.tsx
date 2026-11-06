@@ -864,8 +864,32 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 {/* ONGLET 2 : Remplir les cases (Gabarit guidé) */}
                 {showGuidedTemplate ? (
                   <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-150 text-xs">
-                    <div className="flex items-center justify-end border-b border-slate-800 pb-2">
-                      <span className="text-[11px] text-amber-400 font-medium">
+                    {/* Ligne d'en-tête : Élément (réduit) à gauche, Champs obligatoires à droite */}
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-800 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-bold text-slate-300 shrink-0">
+                          Élément <span className="text-amber-400">*</span> :
+                        </label>
+                        <select
+                          required
+                          value={guidedFields.elementName}
+                          onChange={(e) =>
+                            handleGuidedFieldChange('elementName', e.target.value, true)
+                          }
+                          className={`bg-slate-800 border rounded-lg px-2.5 py-1 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 w-36 sm:w-40 ${
+                            guidedValidationError && !guidedFields.elementName.trim()
+                              ? 'border-red-500 ring-1 ring-red-500'
+                              : 'border-slate-700'
+                          }`}
+                        >
+                          <option value="">-- Choisir --</option>
+                          <option value="Caisson">Caisson</option>
+                          <option value="Façades">Façades</option>
+                          <option value="tiroir">tiroir</option>
+                        </select>
+                      </div>
+
+                      <span className="text-[11px] text-amber-400 font-medium shrink-0">
                         * Champs obligatoires
                       </span>
                     </div>
@@ -877,178 +901,152 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       </div>
                     )}
 
-                    {/* Champ "Nom de l'élément" + Champ "Nom dans la liste de débit" côte à côte */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">
-                          Nom de l&apos;élément <span className="text-amber-400">*</span> :
-                        </label>
-                        <select
-                          required
-                          value={guidedFields.elementName}
-                          onChange={(e) =>
-                            handleGuidedFieldChange('elementName', e.target.value, true)
-                          }
-                          className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 ${
-                            guidedValidationError && !guidedFields.elementName.trim()
-                              ? 'border-red-500 ring-1 ring-red-500'
-                              : 'border-slate-700'
-                          }`}
-                        >
-                          <option value="">-- Choisir un élément --</option>
-                          <option value="Caisson">Caisson</option>
-                          <option value="Façades">Façades</option>
-                          <option value="tiroir">tiroir</option>
-                        </select>
-                      </div>
+                    {/* Tous les champs suivants sont masqués à l'ouverture tant qu'aucun élément n'est sélectionné */}
+                    {guidedFields.elementName ? (
+                      <div className="space-y-3 animate-in fade-in duration-200">
+                        {/* Champ "Nom de l'élément dans la liste de débit" */}
+                        <div>
+                          <label className="text-[11px] text-slate-300 block mb-1">
+                            Nom de l&apos;élément dans la liste de débit <span className="text-amber-400">*</span> :
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder={`Ex: ${guidedFields.elementName} Cuisine`}
+                            value={guidedFields.customName}
+                            onChange={(e) =>
+                              handleGuidedFieldChange('customName', e.target.value)
+                            }
+                            className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 placeholder-slate-500 ${
+                              guidedValidationError && !guidedFields.customName.trim()
+                                ? 'border-red-500 ring-1 ring-red-500'
+                                : 'border-slate-700'
+                            }`}
+                          />
+                        </div>
 
-                      <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">
-                          Nom de l&apos;élément dans la liste de débit <span className="text-amber-400">*</span> :
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder={
-                            guidedFields.elementName
-                              ? `Ex: ${guidedFields.elementName} Cuisine`
-                              : 'Ex: Caisson Cuisine'
-                          }
-                          value={guidedFields.customName}
-                          onChange={(e) =>
-                            handleGuidedFieldChange('customName', e.target.value)
-                          }
-                          className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 placeholder-slate-500 ${
-                            guidedValidationError && !guidedFields.customName.trim()
-                              ? 'border-red-500 ring-1 ring-red-500'
-                              : 'border-slate-700'
-                          }`}
-                        />
-                      </div>
-                    </div>
+                        {/* LIGNE 1 : Hauteur, Largeur et Profondeur toujours sur la même ligne */}
+                        <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+                          <div>
+                            <label className="text-[11px] text-slate-300 block mb-1 truncate">
+                              Hauteur (mm) <span className="text-amber-400">*</span> :
+                            </label>
+                            <input
+                              type="number"
+                              required
+                              min="50"
+                              max="3000"
+                              placeholder="Ex: 700"
+                              value={guidedFields.height}
+                              onChange={(e) => handleGuidedFieldChange('height', e.target.value)}
+                              className={`w-full bg-slate-800 border rounded px-2 py-1 text-white font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
+                                guidedValidationError && !guidedFields.height.trim()
+                                  ? 'border-red-500'
+                                  : 'border-slate-700'
+                              }`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] text-slate-300 block mb-1 truncate">
+                              Largeur (mm) <span className="text-amber-400">*</span> :
+                            </label>
+                            <input
+                              type="number"
+                              required
+                              min="50"
+                              max="3000"
+                              placeholder="Ex: 1000"
+                              value={guidedFields.width}
+                              onChange={(e) => handleGuidedFieldChange('width', e.target.value)}
+                              className={`w-full bg-slate-800 border rounded px-2 py-1 text-white font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
+                                guidedValidationError && !guidedFields.width.trim()
+                                  ? 'border-red-500'
+                                  : 'border-slate-700'
+                              }`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] text-slate-300 block mb-1 truncate">
+                              Profondeur (mm) <span className="text-amber-400">*</span> :
+                            </label>
+                            <input
+                              type="number"
+                              required
+                              min="50"
+                              max="3000"
+                              placeholder="Ex: 450"
+                              value={guidedFields.depth}
+                              onChange={(e) => handleGuidedFieldChange('depth', e.target.value)}
+                              className={`w-full bg-slate-800 border rounded px-2 py-1 text-white font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
+                                guidedValidationError && !guidedFields.depth.trim()
+                                  ? 'border-red-500'
+                                  : 'border-slate-700'
+                              }`}
+                            />
+                          </div>
+                        </div>
 
-                    {/* LIGNE 1 : Hauteur, Largeur et Profondeur toujours sur la même ligne */}
-                    <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
-                      <div>
-                        <label className="text-[11px] text-slate-300 block mb-1 truncate">
-                          Hauteur (mm) <span className="text-amber-400">*</span> :
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          min="50"
-                          max="3000"
-                          placeholder="Ex: 700"
-                          value={guidedFields.height}
-                          onChange={(e) => handleGuidedFieldChange('height', e.target.value)}
-                          className={`w-full bg-slate-800 border rounded px-2 py-1 text-white font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
-                            guidedValidationError && !guidedFields.height.trim()
-                              ? 'border-red-500'
-                              : 'border-slate-700'
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-slate-300 block mb-1 truncate">
-                          Largeur (mm) <span className="text-amber-400">*</span> :
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          min="50"
-                          max="3000"
-                          placeholder="Ex: 1000"
-                          value={guidedFields.width}
-                          onChange={(e) => handleGuidedFieldChange('width', e.target.value)}
-                          className={`w-full bg-slate-800 border rounded px-2 py-1 text-white font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
-                            guidedValidationError && !guidedFields.width.trim()
-                              ? 'border-red-500'
-                              : 'border-slate-700'
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-slate-300 block mb-1 truncate">
-                          Profondeur (mm) <span className="text-amber-400">*</span> :
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          min="50"
-                          max="3000"
-                          placeholder="Ex: 450"
-                          value={guidedFields.depth}
-                          onChange={(e) => handleGuidedFieldChange('depth', e.target.value)}
-                          className={`w-full bg-slate-800 border rounded px-2 py-1 text-white font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
-                            guidedValidationError && !guidedFields.depth.trim()
-                              ? 'border-red-500'
-                              : 'border-slate-700'
-                          }`}
-                        />
-                      </div>
-                    </div>
+                        {/* Autres paramètres du gabarit */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className="text-[11px] text-slate-300 block mb-1">
+                              Séparations (jusqu&apos;à 4) <span className="text-amber-400">*</span> :
+                            </label>
+                            <select
+                              required
+                              value={guidedFields.partitionsCount}
+                              onChange={(e) =>
+                                handleGuidedFieldChange('partitionsCount', e.target.value, true)
+                              }
+                              className={`w-full bg-slate-800 border rounded px-2 py-1 text-white focus:outline-none focus:border-amber-500 ${
+                                guidedValidationError && guidedFields.partitionsCount === ''
+                                  ? 'border-red-500'
+                                  : 'border-slate-700'
+                              }`}
+                            >
+                              <option value="">-- Sélectionner --</option>
+                              <option value="0">0 - Aucune (1 compartiment)</option>
+                              <option value="1">1 séparation (2 compartiments)</option>
+                              <option value="2">2 séparations (3 compartiments)</option>
+                              <option value="3">3 séparations (4 compartiments)</option>
+                              <option value="4">4 séparations (5 compartiments)</option>
+                            </select>
+                          </div>
 
-                    {/* Autres paramètres du gabarit */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                      <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">
-                          Séparations (jusqu&apos;à 4) <span className="text-amber-400">*</span> :
-                        </label>
-                        <select
-                          required
-                          value={guidedFields.partitionsCount}
-                          onChange={(e) =>
-                            handleGuidedFieldChange('partitionsCount', e.target.value, true)
-                          }
-                          className={`w-full bg-slate-800 border rounded px-2 py-1 text-white focus:outline-none focus:border-amber-500 ${
-                            guidedValidationError && guidedFields.partitionsCount === ''
-                              ? 'border-red-500'
-                              : 'border-slate-700'
-                          }`}
-                        >
-                          <option value="">-- Sélectionner --</option>
-                          <option value="0">0 - Aucune (1 compartiment)</option>
-                          <option value="1">1 séparation (2 compartiments)</option>
-                          <option value="2">2 séparations (3 compartiments)</option>
-                          <option value="3">3 séparations (4 compartiments)</option>
-                          <option value="4">4 séparations (5 compartiments)</option>
-                        </select>
-                      </div>
+                          <div>
+                            <label className="text-[11px] text-slate-300 block mb-1">
+                              Étagères par côté <span className="text-amber-400">*</span> :
+                            </label>
+                            <input
+                              type="number"
+                              required
+                              min="0"
+                              max="10"
+                              placeholder="Ex: 2"
+                              value={guidedFields.shelvesCount}
+                              onChange={(e) =>
+                                handleGuidedFieldChange('shelvesCount', e.target.value)
+                              }
+                              className={`w-full bg-slate-800 border rounded px-2 py-1 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
+                                guidedValidationError && guidedFields.shelvesCount.trim() === ''
+                                  ? 'border-red-500'
+                                  : 'border-slate-700'
+                              }`}
+                            />
+                          </div>
 
-                      <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">
-                          Étagères par côté <span className="text-amber-400">*</span> :
-                        </label>
-                        <input
-                          type="number"
-                          required
-                          min="0"
-                          max="10"
-                          placeholder="Ex: 2"
-                          value={guidedFields.shelvesCount}
-                          onChange={(e) =>
-                            handleGuidedFieldChange('shelvesCount', e.target.value)
-                          }
-                          className={`w-full bg-slate-800 border rounded px-2 py-1 text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
-                            guidedValidationError && guidedFields.shelvesCount.trim() === ''
-                              ? 'border-red-500'
-                              : 'border-slate-700'
-                          }`}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] text-slate-300 block mb-1">
-                          Mode d&apos;assemblage <span className="text-amber-400">*</span> :
-                        </label>
-                        <select
-                          required
-                          value={guidedFields.assemblyType}
-                          onChange={(e) =>
-                            handleGuidedFieldChange('assemblyType', e.target.value, true)
-                          }
-                          className={`w-full bg-slate-800 border rounded px-2 py-1 text-white focus:outline-none focus:border-amber-500 ${
-                            guidedValidationError && !guidedFields.assemblyType
+                          <div>
+                            <label className="text-[11px] text-slate-300 block mb-1">
+                              Mode d&apos;assemblage <span className="text-amber-400">*</span> :
+                            </label>
+                            <select
+                              required
+                              value={guidedFields.assemblyType}
+                              onChange={(e) =>
+                                handleGuidedFieldChange('assemblyType', e.target.value, true)
+                              }
+                              className={`w-full bg-slate-800 border rounded px-2 py-1 text-white focus:outline-none focus:border-amber-500 ${
+                                guidedValidationError && !guidedFields.assemblyType
                               ? 'border-red-500'
                               : 'border-slate-700'
                           }`}
@@ -1150,6 +1148,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     </div>
                   </div>
                 ) : (
+                  <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80 text-center text-xs text-slate-400">
+                    👆 Veuillez sélectionner un <strong>Élément</strong> ci-dessus pour afficher et remplir ses dimensions.
+                  </div>
+                )}
+              </div>
+            ) : (
                   /* ONGLET 1 : Description libre du meuble */
                   <div className="relative animate-in fade-in duration-150">
                     <textarea
