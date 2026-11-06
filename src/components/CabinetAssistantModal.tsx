@@ -135,6 +135,7 @@ const EMPTY_CONFIG: CabinetConfig = {
 
 interface GuidedTemplateFields {
   elementName: string; // 'Caisson' | 'Façades' | 'tiroir'
+  customName: string; // Nom de chaque élément dans la liste de débit (ex: "Caisson Cuisine")
   height: string;
   width: string;
   depth: string;
@@ -148,6 +149,7 @@ interface GuidedTemplateFields {
 
 const EMPTY_GUIDED_FIELDS: GuidedTemplateFields = {
   elementName: '',
+  customName: '',
   height: '',
   width: '',
   depth: '',
@@ -245,6 +247,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   // Vérifie si tous les champs obligatoires de "Remplir les cases" sont complétés
   const isGuidedFormComplete = useCallback((gf: GuidedTemplateFields): boolean => {
     if (!gf.elementName || !gf.elementName.trim()) return false;
+    if (!gf.customName || !gf.customName.trim()) return false;
     const h = parseInt(gf.height, 10);
     const w = parseInt(gf.width, 10);
     const d = parseInt(gf.depth, 10);
@@ -280,14 +283,31 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       ...guidedFields,
       [field]: value,
     };
+
+    // Si on choisit / change "Nom de l'élément" (Caisson, Façades, tiroir) :
+    // On met automatiquement à jour le début du nom de chaque élément dans la liste de débit
+    if (field === 'elementName') {
+      const prevElement = guidedFields.elementName;
+      const prevCustom = guidedFields.customName;
+      if (!prevCustom || (prevElement && prevCustom.startsWith(prevElement))) {
+        const suffix = prevElement && prevCustom.startsWith(prevElement)
+          ? prevCustom.slice(prevElement.length)
+          : '';
+        nextGf.customName = value ? `${value}${suffix}` : '';
+      } else if (!prevCustom && value) {
+        nextGf.customName = value;
+      }
+    }
+
     setGuidedFields(nextGf);
     setGuidedValidationError(null);
 
     // Synchroniser avec config
     setConfig((prev) => {
       const next = { ...prev };
-      if (nextGf.elementName && nextGf.elementName.trim()) {
-        next.name = nextGf.elementName.trim();
+      const effectiveName = (nextGf.customName || nextGf.elementName || '').trim();
+      if (effectiveName) {
+        next.name = effectiveName;
       }
       const h = parseInt(nextGf.height, 10);
       const w = parseInt(nextGf.width, 10);
@@ -327,6 +347,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     const missing: string[] = [];
     if (!guidedFields.elementName || !guidedFields.elementName.trim()) {
       missing.push("Nom de l'élément");
+    }
+    if (!guidedFields.customName || !guidedFields.customName.trim()) {
+      missing.push("Nom dans la liste de débit");
     }
     const h = parseInt(guidedFields.height, 10);
     const w = parseInt(guidedFields.width, 10);
@@ -428,7 +451,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const handleApplyCustomPreset = (preset: CustomCabinetPreset) => {
     setConfig({ ...preset.config });
     setGuidedFields({
-      elementName: preset.config.name || 'Caisson',
+      elementName: preset.config.name ? (['Caisson', 'Façades', 'tiroir'].find((opt) => preset.config.name.startsWith(opt)) || 'Caisson') : 'Caisson',
+      customName: preset.config.name || 'Caisson',
       height: preset.config.height ? String(preset.config.height) : '',
       width: preset.config.width ? String(preset.config.width) : '',
       depth: preset.config.depth ? String(preset.config.depth) : '',
@@ -840,13 +864,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 {/* ONGLET 2 : Remplir les cases (Gabarit guidé) */}
                 {showGuidedTemplate ? (
                   <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-150 text-xs">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                        <Sliders className="w-3.5 h-3.5" />
-                        <span>Gabarit de prompt préprogrammé</span>
-                      </span>
-                      <span className="text-[11px] text-amber-400/90 font-medium">
-                        * Tous les champs sont obligatoires
+                    <div className="flex items-center justify-end border-b border-slate-800 pb-2">
+                      <span className="text-[11px] text-amber-400 font-medium">
+                        * Champs obligatoires
                       </span>
                     </div>
 
@@ -857,28 +877,54 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       </div>
                     )}
 
-                    {/* Champ "Nom de l'élément" (sélection obligatoire : Caisson, Façades, tiroir) */}
-                    <div>
-                      <label className="text-[11px] text-slate-300 block mb-1">
-                        Nom de l&apos;élément <span className="text-amber-400">*</span> :
-                      </label>
-                      <select
-                        required
-                        value={guidedFields.elementName}
-                        onChange={(e) =>
-                          handleGuidedFieldChange('elementName', e.target.value, true)
-                        }
-                        className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 ${
-                          guidedValidationError && !guidedFields.elementName.trim()
-                            ? 'border-red-500 ring-1 ring-red-500'
-                            : 'border-slate-700'
-                        }`}
-                      >
-                        <option value="">-- Choisir un élément --</option>
-                        <option value="Caisson">Caisson</option>
-                        <option value="Façades">Façades</option>
-                        <option value="tiroir">tiroir</option>
-                      </select>
+                    {/* Champ "Nom de l'élément" + Champ "Nom dans la liste de débit" côte à côte */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">
+                          Nom de l&apos;élément <span className="text-amber-400">*</span> :
+                        </label>
+                        <select
+                          required
+                          value={guidedFields.elementName}
+                          onChange={(e) =>
+                            handleGuidedFieldChange('elementName', e.target.value, true)
+                          }
+                          className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 ${
+                            guidedValidationError && !guidedFields.elementName.trim()
+                              ? 'border-red-500 ring-1 ring-red-500'
+                              : 'border-slate-700'
+                          }`}
+                        >
+                          <option value="">-- Choisir un élément --</option>
+                          <option value="Caisson">Caisson</option>
+                          <option value="Façades">Façades</option>
+                          <option value="tiroir">tiroir</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] text-slate-300 block mb-1">
+                          Nom de l&apos;élément dans la liste de débit <span className="text-amber-400">*</span> :
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder={
+                            guidedFields.elementName
+                              ? `Ex: ${guidedFields.elementName} Cuisine`
+                              : 'Ex: Caisson Cuisine'
+                          }
+                          value={guidedFields.customName}
+                          onChange={(e) =>
+                            handleGuidedFieldChange('customName', e.target.value)
+                          }
+                          className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 placeholder-slate-500 ${
+                            guidedValidationError && !guidedFields.customName.trim()
+                              ? 'border-red-500 ring-1 ring-red-500'
+                              : 'border-slate-700'
+                          }`}
+                        />
+                      </div>
                     </div>
 
                     {/* LIGNE 1 : Hauteur, Largeur et Profondeur toujours sur la même ligne */}
