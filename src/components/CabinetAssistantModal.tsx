@@ -134,6 +134,7 @@ const EMPTY_CONFIG: CabinetConfig = {
 };
 
 interface GuidedTemplateFields {
+  elementName: string; // 'Caisson' | 'Façades' | 'tiroir'
   height: string;
   width: string;
   depth: string;
@@ -146,6 +147,7 @@ interface GuidedTemplateFields {
 }
 
 const EMPTY_GUIDED_FIELDS: GuidedTemplateFields = {
+  elementName: '',
   height: '',
   width: '',
   depth: '',
@@ -194,32 +196,16 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   workshopStock = [],
 }) => {
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'visual' | 'ai'>('visual');
+  const [activeTab, setActiveTab] = useState<'visual' | 'ai'>('ai');
   // À la création d'un nouveau projet, tous les champs de l'assistant IA sont vides
   const [config, setConfig] = useState<CabinetConfig>(() => ({ ...EMPTY_CONFIG }));
   const [guidedFields, setGuidedFields] = useState<GuidedTemplateFields>(() => ({
     ...EMPTY_GUIDED_FIELDS,
   }));
   const [guidedValidationError, setGuidedValidationError] = useState<string | null>(null);
-  const [nameValidationError, setNameValidationError] = useState<string | null>(null);
   const [showPartsSummaryModal, setShowPartsSummaryModal] = useState(false);
   const autoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
-
-  const hasCabinetName = Boolean(config.name && config.name.trim().length > 0);
-
-  const requireCabinetName = useCallback((): boolean => {
-    if (config.name && config.name.trim().length > 0) {
-      setNameValidationError(null);
-      return true;
-    }
-    setActiveTab('visual');
-    setNameValidationError('Veuillez obligatoirement saisir un nom de caisson pour commencer.');
-    setTimeout(() => {
-      nameInputRef.current?.focus();
-    }, 50);
-    return false;
-  }, [config.name]);
 
   // Prompt IA & Presets Personnalisés
   const [aiPrompt, setAiPrompt] = useState('');
@@ -230,7 +216,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const [customPresets, setCustomPresets] = useState<CustomCabinetPreset[]>([]);
   const [isSavingPreset, setIsSavingPreset] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
-  const [showGuidedTemplate, setShowGuidedTemplate] = useState(false);
+  const [showGuidedTemplate, setShowGuidedTemplate] = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -247,19 +233,18 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     };
   }, []);
 
-  // À chaque ouverture de l'Assistant IA, ouvrir systématiquement sur "1. Configuration Visuelle" et cibler le champ Nom du caisson
+  // À chaque ouverture de l'Assistant IA, ouvrir sur l'onglet IA et sur "Remplir les cases"
   useEffect(() => {
     if (isOpen) {
-      setActiveTab('visual');
-      setNameValidationError(null);
-      setTimeout(() => {
-        nameInputRef.current?.focus();
-      }, 80);
+      setActiveTab('ai');
+      setShowGuidedTemplate(true);
+      setGuidedValidationError(null);
     }
   }, [isOpen]);
 
   // Vérifie si tous les champs obligatoires de "Remplir les cases" sont complétés
   const isGuidedFormComplete = useCallback((gf: GuidedTemplateFields): boolean => {
+    if (!gf.elementName || !gf.elementName.trim()) return false;
     const h = parseInt(gf.height, 10);
     const w = parseInt(gf.width, 10);
     const d = parseInt(gf.depth, 10);
@@ -301,6 +286,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     // Synchroniser avec config
     setConfig((prev) => {
       const next = { ...prev };
+      if (nextGf.elementName && nextGf.elementName.trim()) {
+        next.name = nextGf.elementName.trim();
+      }
       const h = parseInt(nextGf.height, 10);
       const w = parseInt(nextGf.width, 10);
       const d = parseInt(nextGf.depth, 10);
@@ -337,6 +325,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   // Vérification forcée de tous les champs de "Remplir les cases" avant d'ouvrir la fenêtre récapitulative
   const handleValidateGuidedTemplate = () => {
     const missing: string[] = [];
+    if (!guidedFields.elementName || !guidedFields.elementName.trim()) {
+      missing.push("Nom de l'élément");
+    }
     const h = parseInt(guidedFields.height, 10);
     const w = parseInt(guidedFields.width, 10);
     const d = parseInt(guidedFields.depth, 10);
@@ -437,6 +428,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const handleApplyCustomPreset = (preset: CustomCabinetPreset) => {
     setConfig({ ...preset.config });
     setGuidedFields({
+      elementName: preset.config.name || 'Caisson',
       height: preset.config.height ? String(preset.config.height) : '',
       width: preset.config.width ? String(preset.config.width) : '',
       depth: preset.config.depth ? String(preset.config.depth) : '',
@@ -570,17 +562,13 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     setAiPrompt('');
     setAiSuccessMessage(null);
     setGuidedValidationError(null);
-    setNameValidationError(null);
     setShowPartsSummaryModal(false);
-    setActiveTab('visual');
+    setActiveTab('ai');
+    setShowGuidedTemplate(true);
   };
 
   // Injection des pièces calculées dans la liste de débit
   const handleInjectPieces = () => {
-    if (!requireCabinetName()) {
-      setShowPartsSummaryModal(false);
-      return;
-    }
     if (!hasValidDimensions || calculated.cutItems.length === 0) {
       alert(
         'Veuillez renseigner les dimensions du caisson (Hauteur, Largeur, Profondeur) avant de l’ajouter au projet.'
@@ -598,7 +586,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
   // Traiter la demande IA (via API ou NLP local)
   const handleAnalyzePrompt = async (promptToRun?: string) => {
-    if (!requireCabinetName()) return;
     const text = promptToRun || aiPrompt;
     if (!text.trim()) return;
 
@@ -797,10 +784,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (!requireCabinetName()) return;
-                setActiveTab('ai');
-              }}
+              onClick={() => setActiveTab('ai')}
               className={`flex-1 py-2 px-2.5 sm:px-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                 activeTab === 'ai'
                   ? 'ai-tab-pill-active bg-amber-600 text-white'
@@ -872,6 +856,30 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         <span>{guidedValidationError}</span>
                       </div>
                     )}
+
+                    {/* Champ "Nom de l'élément" (sélection obligatoire : Caisson, Façades, tiroir) */}
+                    <div>
+                      <label className="text-[11px] text-slate-300 block mb-1">
+                        Nom de l&apos;élément <span className="text-amber-400">*</span> :
+                      </label>
+                      <select
+                        required
+                        value={guidedFields.elementName}
+                        onChange={(e) =>
+                          handleGuidedFieldChange('elementName', e.target.value, true)
+                        }
+                        className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 ${
+                          guidedValidationError && !guidedFields.elementName.trim()
+                            ? 'border-red-500 ring-1 ring-red-500'
+                            : 'border-slate-700'
+                        }`}
+                      >
+                        <option value="">-- Choisir un élément --</option>
+                        <option value="Caisson">Caisson</option>
+                        <option value="Façades">Façades</option>
+                        <option value="tiroir">tiroir</option>
+                      </select>
+                    </div>
 
                     {/* LIGNE 1 : Hauteur, Largeur et Profondeur toujours sur la même ligne */}
                     <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
@@ -1239,81 +1247,37 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
               )}
 
               {/* Nom du meuble, Matière et Nbre de caissons (alignés sur la même ligne) */}
-              <div
-                className={`bg-slate-850 p-3.5 rounded-2xl border transition-all space-y-2.5 ${
-                  !hasCabinetName
-                    ? 'border-amber-500 ring-1 ring-amber-500/50 shadow-lg'
-                    : 'border-slate-800'
-                }`}
-              >
-                {!hasCabinetName && (
-                  <div
-                    className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
-                      nameValidationError
-                        ? 'bg-red-950/80 border-red-500/60 text-red-200'
-                        : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                    }`}
-                  >
-                    <AlertTriangle
-                      className={`w-4 h-4 shrink-0 ${
-                        nameValidationError ? 'text-red-400' : 'text-amber-400'
-                      }`}
-                    />
-                    <span>
-                      {nameValidationError ||
-                        'Étape 1 obligatoire : Veuillez saisir le nom du caisson pour débloquer la configuration.'}
-                    </span>
-                  </div>
-                )}
-
+              <div className="bg-slate-850 p-3.5 rounded-2xl border border-slate-800">
                 <div className="grid grid-cols-12 gap-2 sm:gap-2.5 items-end">
-                  {/* 1. Nom du caisson (obligatoire) */}
+                  {/* 1. Nom du caisson / élément */}
                   <div className="col-span-5 sm:col-span-4 min-w-0">
-                    <label className="block text-[11px] font-bold text-amber-300 mb-1 truncate">
-                      <span className="sm:hidden">Nom caisson *</span>
-                      <span className="hidden sm:inline">Nom du caisson *</span>
+                    <label className="block text-[11px] font-semibold text-slate-300 mb-1 truncate">
+                      <span className="sm:hidden">Nom</span>
+                      <span className="hidden sm:inline">Nom du meuble / élément</span>
                     </label>
                     <input
                       ref={nameInputRef}
                       type="text"
-                      required
                       value={config.name}
                       onChange={(e) => {
                         setConfig({ ...config, name: e.target.value });
-                        if (e.target.value.trim()) {
-                          setNameValidationError(null);
-                        }
+                        setGuidedFields((prev) => ({ ...prev, elementName: e.target.value }));
                       }}
-                      placeholder="Saisissez le nom..."
-                      className={`w-full bg-slate-900 border rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none truncate font-semibold ${
-                        !hasCabinetName
-                          ? nameValidationError
-                            ? 'border-red-500 ring-1 ring-red-500 placeholder-red-300/60'
-                            : 'border-amber-500 ring-1 ring-amber-500/60 placeholder-amber-300/60'
-                          : 'border-emerald-500/60 focus:border-amber-500'
-                      }`}
+                      placeholder="Ex: Caisson, Façades..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 truncate"
                     />
                   </div>
 
                   {/* 2. Matière du caisson (réduit) */}
-                  <div
-                    className="col-span-4 sm:col-span-5 min-w-0"
-                    onMouseDownCapture={(e) => {
-                      if (!hasCabinetName) {
-                        e.preventDefault();
-                        requireCabinetName();
-                      }
-                    }}
-                  >
+                  <div className="col-span-4 sm:col-span-5 min-w-0">
                     <label className="block text-[11px] font-semibold text-slate-300 mb-1 truncate">
                       <span className="sm:hidden">Matière</span>
                       <span className="hidden sm:inline">Matière du caisson</span>
                     </label>
                     <select
-                      disabled={!hasCabinetName}
                       value={config.material}
                       onChange={(e) => handleMaterialChange(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white truncate focus:outline-none focus:border-amber-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white truncate focus:outline-none focus:border-amber-500 font-medium"
                     >
                       <option value="">-- Sélectionner --</option>
                       {stockPanels.length > 0 && (
@@ -1360,22 +1324,13 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   </div>
 
                   {/* 3. Nbre de caissons */}
-                  <div
-                    className="col-span-3 min-w-0"
-                    onMouseDownCapture={(e) => {
-                      if (!hasCabinetName) {
-                        e.preventDefault();
-                        requireCabinetName();
-                      }
-                    }}
-                  >
+                  <div className="col-span-3 min-w-0">
                     <label className="block text-[11px] font-bold text-amber-300 mb-1 truncate text-center sm:text-left">
                       <span className="sm:hidden">Nbre caisson</span>
                       <span className="hidden sm:inline">Nbre de caissons</span>
                     </label>
                     <input
                       type="number"
-                      disabled={!hasCabinetName}
                       min="1"
                       max="100"
                       placeholder="Ex: 1"
@@ -1387,26 +1342,13 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           cabinetCount: isNaN(val) || val < 1 ? 0 : val,
                         });
                       }}
-                      className="w-full bg-slate-900 border border-amber-500/50 focus:border-amber-400 rounded-lg px-2 py-1.5 text-xs text-amber-400 font-mono font-bold text-center shadow-inner placeholder-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-slate-900 border border-amber-500/50 focus:border-amber-400 rounded-lg px-2 py-1.5 text-xs text-amber-400 font-mono font-bold text-center shadow-inner placeholder-slate-500"
                       title="Nombre de caissons identiques à débiter"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Bloc verrouillé tant que le nom du caisson n'est pas saisi */}
-              <div
-                onClickCapture={(e) => {
-                  if (!hasCabinetName) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    requireCabinetName();
-                  }
-                }}
-                className={`space-y-5 transition-opacity ${
-                  !hasCabinetName ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
               {/* Dimensions extérieures & Épaisseur */}
               <div className="bg-slate-850 p-4 rounded-2xl border border-slate-800 space-y-3">
                 <h4 className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
@@ -1939,7 +1881,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     </div>
                   )}
                 </div>
-              </div>
               </div>
             </div>
 
