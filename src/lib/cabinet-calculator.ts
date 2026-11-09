@@ -15,7 +15,8 @@ export type CabinetPartKey =
   | 'partitions'
   | 'shelves'
   | 'back'
-  | 'doors';
+  | 'doors'
+  | 'drawers';
 
 export interface CabinetPieceCalculation {
   partKey?: CabinetPartKey;
@@ -47,6 +48,7 @@ const PIECE_COLORS = {
   partition: '#f3e8ff', // Violet très clair (pastel)
   back: '#fce7f3', // Rose très clair (pastel)
   door: '#cffafe', // Cyan très clair (pastel)
+  drawers: '#fed7aa', // Orange très clair (pastel)
 };
 
 /**
@@ -82,6 +84,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   const resolvedPartitionsMaterial = (partitionsMaterial || material || '').trim();
   const resolvedShelvesMaterial = (shelvesMaterial || material || '').trim();
   const resolvedDoorMaterial = (doorMaterial || material || '').trim();
+  const resolvedDrawerMaterial = (config.drawerMaterial || material || '').trim();
 
   const cabinetCount = Math.max(1, rawCabinetCount || 1);
 
@@ -316,40 +319,140 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     });
   }
 
-  // 6. Portes battantes en applique (avec jeu périphérique de 2 mm de chaque côté)
-  if (doors === 'one_door') {
-    const doorH = height - 4; // 2mm en haut, 2mm en bas
-    const doorW = width - 4; // 2mm à gauche, 2mm à droite
-    const doorQty = 1 * cabinetCount;
+  // 6. Façades (en applique ou à l'intérieur du caisson, 1 ou plusieurs composants)
+  const hasFacadesConfig = config.facadesCount !== undefined;
+  const activeFacadesCount = hasFacadesConfig
+    ? config.facadesCount || 0
+    : doors === 'two_doors'
+    ? 2
+    : doors === 'one_door'
+    ? 1
+    : 0;
+
+  if (activeFacadesCount > 0) {
+    const isInside = config.facadePlacement === 'interieur';
+    const gap = config.facadeGap !== undefined && config.facadeGap >= 0 ? config.facadeGap : 2;
+
+    if (isInside) {
+      // Façades rentrantes / à l'intérieur du caisson (jeu périphérique 2 mm tout autour)
+      const facadeH = Math.max(50, interiorHeight - 4);
+      const totalAvailableW = Math.max(50, interiorWidth - 4);
+      const facadeW =
+        activeFacadesCount === 1
+          ? totalAvailableW
+          : Math.max(50, Math.floor((totalAvailableW - (activeFacadesCount - 1) * gap) / activeFacadesCount));
+      const totalQty = activeFacadesCount * cabinetCount;
+
+      pieces.push({
+        partKey: 'doors',
+        role: `Façade rentrante intérieure (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})`,
+        description: `${config.name} - Façade intérieure`,
+        formula:
+          activeFacadesCount > 1
+            ? `(${interiorWidth} - 4 - ${activeFacadesCount - 1}×${gap}) / ${activeFacadesCount} = ${facadeW} mm × ${facadeH} mm [${activeFacadesCount} × ${cabinetCount} = ${totalQty} pcs]`
+            : `(${interiorWidth} - 4mm) × (${interiorHeight} - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
+        length: Math.max(facadeH, facadeW),
+        width: Math.min(facadeH, facadeW),
+        quantity: totalQty,
+        material: resolvedDoorMaterial,
+        color: PIECE_COLORS.door,
+      });
+    } else {
+      // Façades en applique (recouvrement du caisson avec jeu périphérique de 2 mm)
+      const facadeH = Math.max(50, height - 4);
+      const totalAvailableW = Math.max(50, width - 4);
+      const facadeW =
+        activeFacadesCount === 1
+          ? totalAvailableW
+          : Math.max(50, Math.floor((totalAvailableW - (activeFacadesCount - 1) * gap) / activeFacadesCount));
+      const totalQty = activeFacadesCount * cabinetCount;
+
+      pieces.push({
+        partKey: 'doors',
+        role: `Façade en applique (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})`,
+        description: `${config.name} - Façade`,
+        formula:
+          activeFacadesCount > 1
+            ? `(${width} - 4 - ${activeFacadesCount - 1}×${gap}) / ${activeFacadesCount} = ${facadeW} mm × ${facadeH} mm [${activeFacadesCount} × ${cabinetCount} = ${totalQty} pcs]`
+            : `(${width} - 4mm) × (${height} - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
+        length: Math.max(facadeH, facadeW),
+        width: Math.min(facadeH, facadeW),
+        quantity: totalQty,
+        material: resolvedDoorMaterial,
+        color: PIECE_COLORS.door,
+      });
+    }
+  }
+
+  // 7. Tiroirs (calcul des bacs de tiroirs : côtés, façades intérieures/dos et fond)
+  if (config.drawersCount && config.drawersCount > 0) {
+    const dCount = config.drawersCount;
+    // Épaisseur coulisse par côté (ex: 13 mm standard)
+    const slideTh =
+      config.drawerSlideThickness && config.drawerSlideThickness > 0
+        ? config.drawerSlideThickness
+        : 13;
+    // Longueur des coulisses (ex: 500 mm ou déduite de la profondeur)
+    const slideLen =
+      config.drawerSlideLength && config.drawerSlideLength > 0
+        ? config.drawerSlideLength
+        : Math.min(500, Math.max(250, Math.floor(interiorDepth / 50) * 50));
+
+    // Largeur de l'alvéole intérieure recevant les tiroirs
+    const compartmentW =
+      partitionsCount > 0
+        ? Math.floor((interiorWidth - partitionsCount * thickness) / (partitionsCount + 1))
+        : interiorWidth;
+
+    // Largeur extérieure du bloc tiroir
+    const drawerOuterW = Math.max(50, compartmentW - 2 * slideTh);
+    // Hauteur du bac de tiroir (hauteur disponible divisée par nb de tiroirs avec jeu de 25-30 mm)
+    const drawerBoxH = Math.min(220, Math.max(80, Math.floor((interiorHeight / dCount) - 30)));
+    // Épaisseur des parois du tiroir (15 mm standard)
+    const drawerWallTh = 15;
+    const drawerInnerW = Math.max(50, drawerOuterW - 2 * drawerWallTh);
+
+    const sidesQty = 2 * dCount * cabinetCount;
+    const frontBackQty = 2 * dCount * cabinetCount;
+    const bottomQty = 1 * dCount * cabinetCount;
+
+    // Côtés de tiroir
     pieces.push({
-      partKey: 'doors',
-      role: 'Porte battante simple (Jeu 2 mm)',
-      description: `${config.name} - Porte`,
-      formula: cabinetCount > 1
-        ? `Applique (${height} - 4mm) × (${width} - 4mm) [1 × ${cabinetCount} = ${doorQty} pcs]`
-        : `Applique (${height} - 4mm) × (${width} - 4mm)`,
-      length: Math.max(doorH, doorW),
-      width: Math.min(doorH, doorW),
-      quantity: doorQty,
-      material: resolvedDoorMaterial,
-      color: PIECE_COLORS.door,
+      partKey: 'drawers',
+      role: `Côtés de tiroir (${dCount} tiroir${dCount > 1 ? 's' : ''}, coulisses ${slideLen} mm)`,
+      description: `${config.name} - Côtés tiroir`,
+      formula: `Coulisse ${slideLen} mm × H ${drawerBoxH} mm [2 × ${dCount} × ${cabinetCount} = ${sidesQty} pcs]`,
+      length: Math.max(slideLen, drawerBoxH),
+      width: Math.min(slideLen, drawerBoxH),
+      quantity: sidesQty,
+      material: resolvedDrawerMaterial,
+      color: PIECE_COLORS.drawers,
     });
-  } else if (doors === 'two_doors') {
-    const doorH = height - 4;
-    const doorW = Math.floor((width - 6) / 2); // 2mm à gauche, 2mm au centre, 2mm à droite
-    const doorQty = 2 * cabinetCount;
+
+    // Avant et arrière de bac tiroir
     pieces.push({
-      partKey: 'doors',
-      role: 'Portes battantes doubles (2 battants, Jeu 2 mm)',
-      description: `${config.name} - Battant de porte`,
-      formula: cabinetCount > 1
-        ? `2 battants : (${width} - 6mm) / 2 = ${doorW} mm × ${doorH} mm [2 × ${cabinetCount} = ${doorQty} pcs]`
-        : `2 battants : (${width} - 6mm) / 2 = ${doorW} mm × ${doorH} mm`,
-      length: Math.max(doorH, doorW),
-      width: Math.min(doorH, doorW),
-      quantity: doorQty,
-      material: resolvedDoorMaterial,
-      color: PIECE_COLORS.door,
+      partKey: 'drawers',
+      role: `Avant et arrière de tiroir (${dCount} tiroir${dCount > 1 ? 's' : ''})`,
+      description: `${config.name} - Avant/Arrière tiroir`,
+      formula: `Largeur ${drawerInnerW} mm × H ${drawerBoxH} mm [2 × ${dCount} × ${cabinetCount} = ${frontBackQty} pcs]`,
+      length: Math.max(drawerInnerW, drawerBoxH),
+      width: Math.min(drawerInnerW, drawerBoxH),
+      quantity: frontBackQty,
+      material: resolvedDrawerMaterial,
+      color: PIECE_COLORS.drawers,
+    });
+
+    // Fond de tiroir
+    pieces.push({
+      partKey: 'drawers',
+      role: `Fond de tiroir (${dCount} tiroir${dCount > 1 ? 's' : ''})`,
+      description: `${config.name} - Fond tiroir`,
+      formula: `${slideLen} mm × ${drawerOuterW} mm [1 × ${dCount} × ${cabinetCount} = ${bottomQty} pcs]`,
+      length: Math.max(slideLen, drawerOuterW),
+      width: Math.min(slideLen, drawerOuterW),
+      quantity: bottomQty,
+      material: resolvedDrawerMaterial,
+      color: PIECE_COLORS.drawers,
     });
   }
 

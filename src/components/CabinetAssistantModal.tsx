@@ -17,6 +17,7 @@ import {
   BookmarkPlus,
   Trash2,
   FileText,
+  Check,
 } from 'lucide-react';
 import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
@@ -130,11 +131,19 @@ const EMPTY_CONFIG: CabinetConfig = {
   partitionsMaterial: '',
   shelvesMaterial: '',
   doorMaterial: '',
-  cabinetCount: 0,
+  drawerMaterial: '',
+  cabinetCount: 1,
+  facadesCount: 0,
+  facadePlacement: 'applique',
+  facadeGap: 2,
+  drawersCount: 0,
+  drawerSlideThickness: 13,
+  drawerSlideLength: 500,
 };
 
 interface GuidedTemplateFields {
-  elementName: string; // 'Caisson' | 'Façades' | 'tiroir'
+  elementName: string; // Toujours 'Caisson'
+  cabinetCount: string; // Nombre de caissons identiques (ex: '1')
   customName: string; // Nom de chaque élément dans la liste de débit (ex: "Caisson Cuisine")
   height: string;
   width: string;
@@ -148,7 +157,8 @@ interface GuidedTemplateFields {
 }
 
 const EMPTY_GUIDED_FIELDS: GuidedTemplateFields = {
-  elementName: '',
+  elementName: 'Caisson',
+  cabinetCount: '1',
   customName: '',
   height: '',
   width: '',
@@ -206,6 +216,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   }));
   const [guidedValidationError, setGuidedValidationError] = useState<string | null>(null);
   const [showPartsSummaryModal, setShowPartsSummaryModal] = useState(false);
+  const [showCompositionModal, setShowCompositionModal] = useState(false);
+  const [compositionState, setCompositionState] = useState({
+    hasFacades: false,
+    facadesCount: 1,
+    facadePlacement: 'applique' as 'applique' | 'interieur',
+    facadeGap: 2,
+    hasDrawers: false,
+    drawersCount: 1,
+    drawerSlideThickness: 13,
+    drawerSlideLength: 500,
+  });
   const autoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -241,6 +262,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       setActiveTab('ai');
       setShowGuidedTemplate(true);
       setGuidedValidationError(null);
+      setShowCompositionModal(false);
     }
   }, [isOpen]);
 
@@ -248,6 +270,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const isGuidedFormComplete = useCallback((gf: GuidedTemplateFields): boolean => {
     if (!gf.elementName || !gf.elementName.trim()) return false;
     if (!gf.customName || !gf.customName.trim()) return false;
+    const cc = parseInt(gf.cabinetCount, 10);
+    if (!gf.cabinetCount || !gf.cabinetCount.trim() || isNaN(cc) || cc < 1) return false;
     const h = parseInt(gf.height, 10);
     const w = parseInt(gf.width, 10);
     const d = parseInt(gf.depth, 10);
@@ -268,7 +292,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     return true;
   }, []);
 
-  // Mise à jour d'un champ du gabarit guidé ("Remplir les cases") avec ouverture automatique de la fenêtre récapitulative dès que tous les champs sont complets
+  // Mise à jour d'un champ du gabarit guidé ("Remplir les cases") avec ouverture automatique de la composition dès que tous les champs sont complets
   const handleGuidedFieldChange = (
     field: keyof GuidedTemplateFields,
     value: string,
@@ -284,8 +308,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       [field]: value,
     };
 
-    // Si on choisit / change "Nom de l'élément" (Caisson, Façades, tiroir) :
-    // On met automatiquement à jour le début du nom de chaque élément dans la liste de débit
+    // Si on change "Nom de l'élément" :
     if (field === 'elementName') {
       const prevElement = guidedFields.elementName;
       const prevCustom = guidedFields.customName;
@@ -316,6 +339,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       const sh = parseInt(nextGf.shelvesCount, 10);
       const ovS = parseInt(nextGf.topOverhangSides, 10);
       const ovF = parseInt(nextGf.topOverhangFront, 10);
+      const cc = parseInt(nextGf.cabinetCount, 10);
 
       next.height = !isNaN(h) && h > 0 ? h : 0;
       next.width = !isNaN(w) && w > 0 ? w : 0;
@@ -328,28 +352,102 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       next.topOverhangFront =
         nextGf.topOverhangFront !== '' && !isNaN(ovF) ? ovF : undefined;
       next.backType = (nextGf.backType || '') as BackType;
+      next.cabinetCount = !isNaN(cc) && cc > 0 ? cc : 1;
       return next;
     });
 
     if (isGuidedFormComplete(nextGf)) {
       if (isSelectField) {
-        setShowPartsSummaryModal(true);
+        setShowCompositionModal(true);
       } else {
         autoOpenTimerRef.current = setTimeout(() => {
-          setShowPartsSummaryModal(true);
+          setShowCompositionModal(true);
         }, 650);
       }
     }
   };
 
-  // Vérification forcée de tous les champs de "Remplir les cases" avant d'ouvrir la fenêtre récapitulative
+  // Initialisation dynamique de la modale de composition selon les dimensions réelles du caisson
+  useEffect(() => {
+    if (showCompositionModal) {
+      const depthVal = config.depth || parseInt(guidedFields.depth, 10) || 560;
+      const defaultSlideLen = Math.min(
+        600,
+        Math.max(250, Math.floor((depthVal - 50) / 50) * 50)
+      );
+      setCompositionState((prev) => ({
+        ...prev,
+        hasFacades: config.facadesCount !== undefined ? config.facadesCount > 0 : prev.hasFacades,
+        facadesCount:
+          config.facadesCount && config.facadesCount > 0
+            ? config.facadesCount
+            : config.width >= 600
+            ? 2
+            : 1,
+        facadePlacement: config.facadePlacement || prev.facadePlacement || 'applique',
+        facadeGap: config.facadeGap !== undefined ? config.facadeGap : prev.facadeGap || 2,
+        hasDrawers: config.drawersCount !== undefined ? config.drawersCount > 0 : prev.hasDrawers,
+        drawersCount: config.drawersCount && config.drawersCount > 0 ? config.drawersCount : 1,
+        drawerSlideThickness: config.drawerSlideThickness || prev.drawerSlideThickness || 13,
+        drawerSlideLength: config.drawerSlideLength || defaultSlideLen,
+      }));
+    }
+  }, [
+    showCompositionModal,
+    config.depth,
+    config.width,
+    config.facadesCount,
+    config.facadePlacement,
+    config.facadeGap,
+    config.drawersCount,
+    config.drawerSlideThickness,
+    config.drawerSlideLength,
+    guidedFields.depth,
+  ]);
+
+  const handleValidateComposition = () => {
+    setConfig((prev) => ({
+      ...prev,
+      hasFacades: compositionState.hasFacades,
+      facadesCount: compositionState.hasFacades ? Math.max(1, compositionState.facadesCount) : 0,
+      facadePlacement: compositionState.facadePlacement,
+      facadeGap: compositionState.facadeGap,
+      hasDrawers: compositionState.hasDrawers,
+      drawersCount: compositionState.hasDrawers ? Math.max(1, compositionState.drawersCount) : 0,
+      drawerSlideThickness: compositionState.drawerSlideThickness,
+      drawerSlideLength: compositionState.drawerSlideLength,
+      doors: compositionState.hasFacades
+        ? compositionState.facadesCount >= 2
+          ? 'two_doors'
+          : 'one_door'
+        : 'none',
+    }));
+    setShowCompositionModal(false);
+    setShowPartsSummaryModal(true);
+  };
+
+  const handleSkipComposition = () => {
+    setConfig((prev) => ({
+      ...prev,
+      hasFacades: false,
+      facadesCount: 0,
+      hasDrawers: false,
+      drawersCount: 0,
+      doors: 'none',
+    }));
+    setShowCompositionModal(false);
+    setShowPartsSummaryModal(true);
+  };
+
+  // Vérification forcée de tous les champs de "Remplir les cases" avant d'ouvrir la fenêtre de composition
   const handleValidateGuidedTemplate = () => {
     const missing: string[] = [];
-    if (!guidedFields.elementName || !guidedFields.elementName.trim()) {
-      missing.push("Nom de l'élément");
-    }
     if (!guidedFields.customName || !guidedFields.customName.trim()) {
       missing.push("Nom dans la liste de débit");
+    }
+    const cc = parseInt(guidedFields.cabinetCount, 10);
+    if (!guidedFields.cabinetCount || !guidedFields.cabinetCount.trim() || isNaN(cc) || cc < 1) {
+      missing.push('Nombre de caissons identiques');
     }
     const h = parseInt(guidedFields.height, 10);
     const w = parseInt(guidedFields.width, 10);
@@ -381,7 +479,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     }
 
     setGuidedValidationError(null);
-    setShowPartsSummaryModal(true);
+    setShowCompositionModal(true);
   };
 
   // Sélection de la matière pour une partie spécifique du caisson dans la fenêtre récapitulative
@@ -408,6 +506,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         if (detectedThickness) next.backThickness = detectedThickness;
       } else if (partKey === 'doors') {
         next.doorMaterial = newMat;
+      } else if (partKey === 'drawers') {
+        next.drawerMaterial = newMat;
       }
       return next;
     });
@@ -451,7 +551,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const handleApplyCustomPreset = (preset: CustomCabinetPreset) => {
     setConfig({ ...preset.config });
     setGuidedFields({
-      elementName: preset.config.name ? (['Caisson', 'Façades', 'tiroir'].find((opt) => preset.config.name.startsWith(opt)) || 'Caisson') : 'Caisson',
+      elementName: 'Caisson',
+      cabinetCount:
+        preset.config.cabinetCount && preset.config.cabinetCount > 0
+          ? String(preset.config.cabinetCount)
+          : '1',
       customName: preset.config.name || 'Caisson',
       height: preset.config.height ? String(preset.config.height) : '',
       width: preset.config.width ? String(preset.config.width) : '',
@@ -587,6 +691,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     setAiSuccessMessage(null);
     setGuidedValidationError(null);
     setShowPartsSummaryModal(false);
+    setShowCompositionModal(false);
     setActiveTab('ai');
     setShowGuidedTemplate(true);
   };
@@ -864,29 +969,36 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 {/* ONGLET 2 : Remplir les cases (Gabarit guidé) */}
                 {showGuidedTemplate ? (
                   <div className="bg-slate-900 border border-amber-500/40 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-150 text-xs">
-                    {/* Ligne d'en-tête : Élément (réduit) à gauche, Champs obligatoires à droite */}
+                    {/* Ligne d'en-tête : Élément Caisson + Nombre de caissons identiques à côté + Champs obligatoires */}
                     <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-800 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <label className="text-[11px] font-bold text-slate-300 shrink-0">
-                          Élément <span className="text-amber-400">*</span> :
-                        </label>
-                        <select
-                          required
-                          value={guidedFields.elementName}
-                          onChange={(e) =>
-                            handleGuidedFieldChange('elementName', e.target.value, true)
-                          }
-                          className={`bg-slate-800 border rounded-lg px-2.5 py-1 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 w-36 sm:w-40 ${
-                            guidedValidationError && !guidedFields.elementName.trim()
-                              ? 'border-red-500 ring-1 ring-red-500'
-                              : 'border-slate-700'
-                          }`}
-                        >
-                          <option value="">-- Choisir --</option>
-                          <option value="Caisson">Caisson</option>
-                          <option value="Façades">Façades</option>
-                          <option value="tiroir">tiroir</option>
-                        </select>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-slate-300 shrink-0">
+                            Élément :
+                          </span>
+                          <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-bold tracking-wide">
+                            Caisson
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-bold text-slate-300 shrink-0">
+                            Nombre de caissons identiques <span className="text-amber-400">*</span> :
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            required
+                            value={guidedFields.cabinetCount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              handleGuidedFieldChange('cabinetCount', val);
+                            }}
+                            title="Nombre de caissons identiques pour le calcul du calepinage"
+                            className="w-16 bg-slate-800 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-2 py-1 text-amber-300 text-xs font-bold text-center font-mono"
+                          />
+                        </div>
                       </div>
 
                       <span className="text-[11px] text-amber-400 font-medium shrink-0">
@@ -1134,17 +1246,27 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
                       <span className="text-[11px] text-slate-400">
                         {isGuidedFormComplete(guidedFields)
-                          ? '✅ Tous les champs sont complets — cliquez pour choisir les matières de chaque partie.'
-                          : 'Remplissez toutes les cases pour ouvrir le récapitulatif des parties et choisir leurs matières.'}
+                          ? '✅ Tous les champs sont saisis — la composition du caisson (façades & tiroirs) est prête.'
+                          : 'Remplissez tous les champs obligatoires pour ouvrir la composition du caisson.'}
                       </span>
-                      <button
-                        type="button"
-                        onClick={handleValidateGuidedTemplate}
-                        className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
-                      >
-                        <Layers className="w-3.5 h-3.5" />
-                        <span>Récapitulatif des parties &amp; Matières</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowCompositionModal(true)}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                        >
+                          <Sliders className="w-3.5 h-3.5" />
+                          <span>Composition (Façades &amp; Tiroirs)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleValidateGuidedTemplate}
+                          className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Valider &amp; Récapitulatif</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -2439,11 +2561,24 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
                 <button
                   type="button"
+                  onClick={() => {
+                    setShowPartsSummaryModal(false);
+                    setShowCompositionModal(true);
+                  }}
+                  className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Façades &amp; Tiroirs</span>
+                </button>
+
+                <button
+                  type="button"
                   disabled={!allPartsHaveMaterial}
                   onClick={() => {
                     const generated = generatePromptFromConfig(calculated.config);
                     setAiPrompt(generated);
                     setShowPartsSummaryModal(false);
+    setShowCompositionModal(false);
                     setActiveTab('visual');
                     setAiSuccessMessage('Récapitulatif et matières par partie validés !');
                   }}
@@ -2462,6 +2597,303 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   <span>Ajouter ce caisson au projet</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FENÊTRE FLOTTANTE : Composition du caisson (Façades, Positionnement, Tiroirs, Coulisses) */}
+      {showCompositionModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="modal-box bg-slate-900 border-2 border-amber-500/60 w-full max-w-xl rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-white"
+          >
+            {/* En-tête */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between gap-3 bg-slate-900/95">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2 truncate">
+                    Composition du caisson
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5 font-mono truncate">
+                    {config.name || guidedFields.customName || 'Caisson'} • H {config.height || guidedFields.height} × L {config.width || guidedFields.width} × P {config.depth || guidedFields.depth} mm
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCompositionModal(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Corps défilable */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
+              {/* SECTION FAÇADES */}
+              <div className="p-4 rounded-2xl bg-slate-850 border border-slate-700/80 space-y-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={compositionState.hasFacades}
+                      onChange={(e) =>
+                        setCompositionState((prev) => ({
+                          ...prev,
+                          hasFacades: e.target.checked,
+                          facadesCount:
+                            prev.facadesCount > 0
+                              ? prev.facadesCount
+                              : (config.width || parseInt(guidedFields.width, 10) || 0) >= 600
+                              ? 2
+                              : 1,
+                        }))
+                      }
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span className="text-xs sm:text-sm font-bold text-amber-300">
+                      Ajouter une ou des façades
+                    </span>
+                  </label>
+                  <span className="text-[11px] text-slate-400">Portes / Battants</span>
+                </div>
+
+                {compositionState.hasFacades && (
+                  <div className="space-y-3 pt-2.5 border-t border-slate-800 animate-in fade-in duration-150">
+                    {/* Nombre de façades et Espace entre composants */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          Nombre de façades <span className="text-amber-400">*</span> :
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={compositionState.facadesCount}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            setCompositionState((prev) => ({
+                              ...prev,
+                              facadesCount: isNaN(val) || val < 1 ? 1 : val,
+                            }));
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          Espace souhaité entre composants (mm) :
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          step="0.5"
+                          value={compositionState.facadeGap}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setCompositionState((prev) => ({
+                              ...prev,
+                              facadeGap: isNaN(val) || val < 0 ? 0 : val,
+                            }));
+                          }}
+                          placeholder="Ex: 2"
+                          title="Espace souhaité entre chaque composant de la façade si j'en ai plusieurs"
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                        />
+                        <span className="text-[10px] text-slate-500 block mt-0.5">
+                          Jeu intermédiaire si plusieurs façades (ex: 2 mm)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Positionnement : En applique ou À l'intérieur du caisson */}
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
+                        Positionnement de la façade <span className="text-amber-400">*</span> :
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCompositionState((prev) => ({
+                              ...prev,
+                              facadePlacement: 'applique',
+                            }))
+                          }
+                          className={`p-2.5 rounded-xl border text-left transition-all ${
+                            compositionState.facadePlacement === 'applique'
+                              ? 'bg-amber-500/20 border-amber-500 text-white shadow-sm'
+                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="font-bold text-xs flex items-center justify-between">
+                            <span>En applique</span>
+                            {compositionState.facadePlacement === 'applique' && (
+                              <span className="text-amber-400 text-[10px] font-mono">● Choisi</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                            Recouvrement des chants du caisson (jeu 2 mm tout autour)
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCompositionState((prev) => ({
+                              ...prev,
+                              facadePlacement: 'interieur',
+                            }))
+                          }
+                          className={`p-2.5 rounded-xl border text-left transition-all ${
+                            compositionState.facadePlacement === 'interieur'
+                              ? 'bg-amber-500/20 border-amber-500 text-white shadow-sm'
+                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="font-bold text-xs flex items-center justify-between">
+                            <span>À l&apos;intérieur du caisson</span>
+                            {compositionState.facadePlacement === 'interieur' && (
+                              <span className="text-amber-400 text-[10px] font-mono">● Choisi</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                            Façade rentrante encastrée entre les parois (jeu 2 mm)
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION TIROIRS */}
+              <div className="p-4 rounded-2xl bg-slate-850 border border-slate-700/80 space-y-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={compositionState.hasDrawers}
+                      onChange={(e) =>
+                        setCompositionState((prev) => ({
+                          ...prev,
+                          hasDrawers: e.target.checked,
+                          drawersCount: prev.drawersCount > 0 ? prev.drawersCount : 1,
+                        }))
+                      }
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span className="text-xs sm:text-sm font-bold text-amber-300">
+                      Ajouter un ou des tiroirs
+                    </span>
+                  </label>
+                  <span className="text-[11px] text-slate-400">Bacs et coulisses</span>
+                </div>
+
+                {compositionState.hasDrawers && (
+                  <div className="space-y-3 pt-2.5 border-t border-slate-800 animate-in fade-in duration-150">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          Nombre de tiroirs <span className="text-amber-400">*</span> :
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={compositionState.drawersCount}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            setCompositionState((prev) => ({
+                              ...prev,
+                              drawersCount: isNaN(val) || val < 1 ? 1 : val,
+                            }));
+                          }}
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          Épaisseur coulisses (mm) <span className="text-amber-400">*</span> :
+                        </label>
+                        <input
+                          type="number"
+                          min="5"
+                          max="30"
+                          step="0.5"
+                          value={compositionState.drawerSlideThickness}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setCompositionState((prev) => ({
+                              ...prev,
+                              drawerSlideThickness: isNaN(val) || val <= 0 ? 13 : val,
+                            }));
+                          }}
+                          placeholder="Ex: 13"
+                          title="Épaisseur par coulisse latérale (ex: 13 mm standard)"
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                        />
+                        <span className="text-[10px] text-slate-500 block mt-0.5">Par côté (ex: 13 mm)</span>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                          Longueur coulisses (mm) <span className="text-amber-400">*</span> :
+                        </label>
+                        <input
+                          type="number"
+                          min="150"
+                          max="1000"
+                          step="50"
+                          value={compositionState.drawerSlideLength}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            setCompositionState((prev) => ({
+                              ...prev,
+                              drawerSlideLength: isNaN(val) || val <= 0 ? 500 : val,
+                            }));
+                          }}
+                          placeholder="Ex: 500"
+                          title="Longueur des coulisses (ex: 300, 350, 400, 450, 500 mm)"
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                        />
+                        <span className="text-[10px] text-slate-500 block mt-0.5">
+                          Profondeur caisson : {config.depth || guidedFields.depth || '—'} mm
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Pied de page */}
+            <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-900/95 flex flex-wrap items-center justify-between gap-2.5">
+              <button
+                type="button"
+                onClick={handleSkipComposition}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+              >
+                Passer sans façade ni tiroir
+              </button>
+              <button
+                type="button"
+                onClick={handleValidateComposition}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Valider la composition &amp; Voir les pièces</span>
+              </button>
             </div>
           </div>
         </div>

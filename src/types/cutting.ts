@@ -39,6 +39,7 @@ export type AssemblyType =
   | 'bottom_inside_top_over'; // Bas encastré entre côtés, Dessus posé sur côtés (avec ou sans débord)
 export type BackType = 'none' | 'applique' | 'groove';
 export type DoorsType = 'none' | 'one_door' | 'two_doors';
+export type FacadePlacement = 'applique' | 'interieur';
 
 export interface CabinetConfig {
   name: string;
@@ -64,7 +65,18 @@ export interface CabinetConfig {
   shelvesMaterial?: string; // Matière spécifique des étagères
   backMaterial?: string; // Matière du fond
   doorMaterial?: string; // Matière des portes
+  drawerMaterial?: string; // Matière des tiroirs
   cabinetCount?: number; // Nombre de caissons identiques à fabriquer
+
+  // Composition détaillée du meuble (façades & tiroirs)
+  hasFacades?: boolean;
+  facadesCount?: number; // Nombre de composants de façade (0 si aucune)
+  facadePlacement?: FacadePlacement; // 'applique' ou 'interieur'
+  facadeGap?: number; // Espace entre composants de façade (mm)
+  hasDrawers?: boolean;
+  drawersCount?: number; // Nombre de tiroirs (0 si aucun)
+  drawerSlideThickness?: number; // Épaisseur des coulisses (mm par côté, ex: 13)
+  drawerSlideLength?: number; // Longueur des coulisses (mm)
 }
 
 export interface CutItem {
