@@ -21,6 +21,7 @@ export type CabinetPartKey =
 
 export interface CabinetPieceCalculation {
   partKey?: CabinetPartKey;
+  partId?: string;
   role: string;
   description: string;
   formula: string;
@@ -212,6 +213,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     }
   }
 
+  // Résolution individuelle d'une matière spécifique saisie par partie
+  const getPartMat = (partId: string, fallback: string): string => {
+    if (config.partMaterials && config.partMaterials[partId]) {
+      return config.partMaterials[partId].trim();
+    }
+    return fallback;
+  };
+
   const pieces: CabinetPieceCalculation[] = [];
 
   // Profondeur utile pour les pièces de structure (si fond en applique, le fond vient en plus ou en retrait)
@@ -232,13 +241,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   const sidesQty = 2 * cabinetCount;
   pieces.push({
     partKey: 'sides',
+    partId: 'sides',
     role: cabinetCount > 1 ? `Côtés (${sidesQty} pcs pour ${cabinetCount} caissons)` : 'Côtés (Gauche & Droit)',
     description: `${config.name} - Côtés`,
     formula: cabinetCount > 1 ? `${sideFormula} [2 × ${cabinetCount} = ${sidesQty} pcs]` : sideFormula,
     length: Math.max(sideHeight, structuralDepth),
     width: Math.min(sideHeight, structuralDepth),
     quantity: sidesQty,
-    material: resolvedSidesMaterial,
+    material: getPartMat('sides', resolvedSidesMaterial),
     color: PIECE_COLORS.sides,
   });
 
@@ -259,13 +269,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     pieces.push({
       partKey: 'top',
+      partId: 'top',
       role: cabinetCount > 1 ? `Plateau haut (${topQty} pcs pour ${cabinetCount} caissons)` : 'Plateau haut (Dessus posé)',
       description: `${config.name} - Plateau du haut`,
       formula: cabinetCount > 1 ? `${topFormula} [1 × ${cabinetCount} = ${topQty} pcs]` : topFormula,
       length: Math.max(topWidth, topDepth),
       width: Math.min(topWidth, topDepth),
       quantity: topQty,
-      material: resolvedTopMaterial,
+      material: getPartMat('top', resolvedTopMaterial),
       color: PIECE_COLORS.topBottom,
     });
 
@@ -277,13 +288,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     pieces.push({
       partKey: 'bottom',
+      partId: 'bottom',
       role: cabinetCount > 1 ? `Plateau bas (${bottomQty} pcs pour ${cabinetCount} caissons)` : 'Plateau bas (Dessous encastré)',
       description: `${config.name} - Plateau du bas`,
       formula: cabinetCount > 1 ? `${bottomFormula} [1 × ${cabinetCount} = ${bottomQty} pcs]` : bottomFormula,
       length: Math.max(bottomWidth, bottomDepth),
       width: Math.min(bottomWidth, bottomDepth),
       quantity: bottomQty,
-      material: resolvedBottomMaterial,
+      material: getPartMat('bottom', resolvedBottomMaterial),
       color: PIECE_COLORS.topBottom,
     });
   } else {
@@ -299,25 +311,27 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const singleQty = 1 * cabinetCount;
     pieces.push({
       partKey: 'top',
+      partId: 'top',
       role: cabinetCount > 1 ? `Plateau haut (${singleQty} pcs pour ${cabinetCount} caissons)` : 'Plateau haut (Dessus)',
       description: `${config.name} - Plateau du haut`,
       formula: cabinetCount > 1 ? `${topBottomFormula} [1 × ${cabinetCount} = ${singleQty} pcs]` : topBottomFormula,
       length: Math.max(topBottomWidth, structuralDepth),
       width: Math.min(topBottomWidth, structuralDepth),
       quantity: singleQty,
-      material: resolvedTopMaterial,
+      material: getPartMat('top', resolvedTopMaterial),
       color: PIECE_COLORS.topBottom,
     });
 
     pieces.push({
       partKey: 'bottom',
+      partId: 'bottom',
       role: cabinetCount > 1 ? `Plateau bas (${singleQty} pcs pour ${cabinetCount} caissons)` : 'Plateau bas (Dessous)',
       description: `${config.name} - Plateau du bas`,
       formula: cabinetCount > 1 ? `${topBottomFormula} [1 × ${cabinetCount} = ${singleQty} pcs]` : topBottomFormula,
       length: Math.max(topBottomWidth, structuralDepth),
       width: Math.min(topBottomWidth, structuralDepth),
       quantity: singleQty,
-      material: resolvedBottomMaterial,
+      material: getPartMat('bottom', resolvedBottomMaterial),
       color: PIECE_COLORS.topBottom,
     });
   }
@@ -335,6 +349,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     pieces.push({
       partKey: 'partitions',
+      partId: 'partitions',
       role:
         partitionsCount > 1
           ? `Séparations verticales (${partitionQty} pcs pour ${cabinetCount} caisson${cabinetCount > 1 ? 's' : ''})`
@@ -352,7 +367,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       length: Math.max(partitionHeight, structuralDepth),
       width: Math.min(partitionHeight, structuralDepth),
       quantity: partitionQty,
-      material: resolvedPartitionsMaterial,
+      material: getPartMat('partitions', resolvedPartitionsMaterial),
       color: PIECE_COLORS.partition,
     });
   }
@@ -377,6 +392,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     pieces.push({
       partKey: 'shelves',
+      partId: 'shelves',
       role:
         partitionsCount > 0
           ? `Étagères (${shelvesCount} par compartiment × ${compartmentsCount} = ${shelvesPerCabinet} pcs)`
@@ -388,7 +404,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       length: Math.max(shelfWidth, shelfDepth),
       width: Math.min(shelfWidth, shelfDepth),
       quantity: totalShelvesQty,
-      material: resolvedShelvesMaterial,
+      material: getPartMat('shelves', resolvedShelvesMaterial),
       color: PIECE_COLORS.shelf,
     });
   }
@@ -399,6 +415,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     // Fond cloué ou vissé en applique à l'arrière
     pieces.push({
       partKey: 'back',
+      partId: 'back',
       role: `Fond (applique arrière)${resolvedBackMaterial ? ` [${resolvedBackMaterial}]` : ''}`,
       description: `${config.name} - Fond applique`,
       formula: cabinetCount > 1
@@ -407,7 +424,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       length: Math.max(height, width),
       width: Math.min(height, width),
       quantity: backQty,
-      material: resolvedBackMaterial,
+      material: getPartMat('back', resolvedBackMaterial),
       color: PIECE_COLORS.back,
     });
   } else if (backType === 'groove') {
@@ -418,6 +435,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     pieces.push({
       partKey: 'back',
+      partId: 'back',
       role: `Fond (rainure encastrée)${resolvedBackMaterial ? ` [${resolvedBackMaterial}]` : ''}`,
       description: `${config.name} - Fond encastré`,
       formula: cabinetCount > 1
@@ -426,7 +444,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       length: Math.max(backH, backW),
       width: Math.min(backH, backW),
       quantity: backQty,
-      material: resolvedBackMaterial,
+      material: getPartMat('back', resolvedBackMaterial),
       color: PIECE_COLORS.back,
     });
   }
@@ -484,6 +502,11 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     groups.forEach((g) => {
       const totalQty = g.count * cabinetCount;
       const label = g.type === 'tiroir' ? 'Façade tiroir' : 'Porte';
+      const partId = g.type === 'tiroir' ? `facade_tiroir_${g.h}` : `facade_porte_${g.h}`;
+      const defaultMat = g.type === 'tiroir'
+        ? (config.partMaterials?.['facade_tiroir'] || config.partMaterials?.['doors'] || resolvedDoorMaterial)
+        : (config.partMaterials?.['porte'] || config.partMaterials?.['doors'] || resolvedDoorMaterial);
+      const pieceMat = getPartMat(partId, defaultMat);
       const autoFormula = g.auto
         ? `Auto : ${baseH} - ${2 * FACADE_EDGE_CLEARANCE} (jeux)${fixedDesc ? ` - ${fixedDesc}` : ''}${
             layout.gapsTotal > 0 ? ` - ${items.length - 1}×${gap} (espaces)` : ''
@@ -491,13 +514,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         : `Hauteur saisie ${g.h} mm`;
       pieces.push({
         partKey: 'doors',
+        partId,
         role: `${label} ${placementLabel} (H ${g.h} mm${g.count > 1 ? `, ${g.count} par caisson` : ''})`,
         description: `${config.name} - ${label}`,
         formula: `${autoFormula} × L ${facadeW} mm [${g.count} × ${cabinetCount} = ${totalQty} pcs]`,
         length: Math.max(g.h, facadeW),
         width: Math.min(g.h, facadeW),
         quantity: totalQty,
-        material: resolvedDoorMaterial,
+        material: pieceMat,
         color: g.type === 'tiroir' ? PIECE_COLORS.drawers : PIECE_COLORS.door,
       });
     });
@@ -517,6 +541,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
       pieces.push({
         partKey: 'doors',
+        partId: 'doors',
         role: `Façade rentrante intérieure (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})`,
         description: `${config.name} - Façade intérieure`,
         formula:
@@ -526,7 +551,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         length: Math.max(facadeH, facadeW),
         width: Math.min(facadeH, facadeW),
         quantity: totalQty,
-        material: resolvedDoorMaterial,
+        material: getPartMat('doors', resolvedDoorMaterial),
         color: PIECE_COLORS.door,
       });
     } else {
@@ -541,6 +566,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
       pieces.push({
         partKey: 'doors',
+        partId: 'doors',
         role: `Façade en applique (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})`,
         description: `${config.name} - Façade`,
         formula:
@@ -550,7 +576,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         length: Math.max(facadeH, facadeW),
         width: Math.min(facadeH, facadeW),
         quantity: totalQty,
-        material: resolvedDoorMaterial,
+        material: getPartMat('doors', resolvedDoorMaterial),
         color: PIECE_COLORS.door,
       });
     }
@@ -601,30 +627,34 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       const sidesQty = 2 * n * cabinetCount;
       const frontBackQty = 2 * n * cabinetCount;
       const hNote = useFrontHeights ? ' (hauteur façade - 40 mm)' : '';
+      const sidesPartId = `drawer_sides_${boxH}`;
+      const frontBackPartId = `drawer_front_back_${boxH}`;
 
       // Côtés de tiroir
       pieces.push({
         partKey: 'drawers',
+        partId: sidesPartId,
         role: `Côtés de tiroir (${n} tiroir${n > 1 ? 's' : ''}, H ${boxH} mm, coulisses ${slideLen} mm)`,
         description: `${config.name} - Côtés tiroir`,
         formula: `Coulisse ${slideLen} mm × H ${boxH} mm${hNote} [2 × ${n} × ${cabinetCount} = ${sidesQty} pcs]`,
         length: Math.max(slideLen, boxH),
         width: Math.min(slideLen, boxH),
         quantity: sidesQty,
-        material: resolvedDrawerMaterial,
+        material: getPartMat(sidesPartId, getPartMat('drawer_sides', resolvedDrawerMaterial)),
         color: PIECE_COLORS.drawers,
       });
 
       // Avant et arrière de bac tiroir
       pieces.push({
         partKey: 'drawers',
+        partId: frontBackPartId,
         role: `Avant et arrière de tiroir (${n} tiroir${n > 1 ? 's' : ''}, H ${boxH} mm)`,
         description: `${config.name} - Avant/Arrière tiroir`,
         formula: `Largeur ${drawerInnerW} mm × H ${boxH} mm${hNote} [2 × ${n} × ${cabinetCount} = ${frontBackQty} pcs]`,
         length: Math.max(drawerInnerW, boxH),
         width: Math.min(drawerInnerW, boxH),
         quantity: frontBackQty,
-        material: resolvedDrawerMaterial,
+        material: getPartMat(frontBackPartId, getPartMat('drawer_front_back', resolvedDrawerMaterial)),
         color: PIECE_COLORS.drawers,
       });
     });
@@ -632,13 +662,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     // Fond de tiroir
     pieces.push({
       partKey: 'drawers',
+      partId: 'drawer_bottom',
       role: `Fond de tiroir (${dCount} tiroir${dCount > 1 ? 's' : ''})`,
       description: `${config.name} - Fond tiroir`,
       formula: `${slideLen} mm × ${drawerOuterW} mm [1 × ${dCount} × ${cabinetCount} = ${bottomQty} pcs]`,
       length: Math.max(slideLen, drawerOuterW),
       width: Math.min(slideLen, drawerOuterW),
       quantity: bottomQty,
-      material: resolvedDrawerMaterial,
+      material: getPartMat('drawer_bottom', resolvedDrawerMaterial),
       color: PIECE_COLORS.drawers,
     });
   }

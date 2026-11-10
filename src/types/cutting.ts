@@ -73,6 +73,7 @@ export interface CabinetConfig {
   doorMaterial?: string; // Matière des portes
   drawerMaterial?: string; // Matière des tiroirs
   cabinetCount?: number; // Nombre de caissons identiques à fabriquer
+  partMaterials?: Record<string, string>; // Matière spécifique par partie (clé: partId ou partKey)
 
   // Composition détaillée du meuble (façades & tiroirs)
   hasFacades?: boolean;

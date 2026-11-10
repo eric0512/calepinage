@@ -23,6 +23,7 @@ import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
   CabinetConfig,
   CabinetPartKey,
+  CabinetPieceCalculation,
   BackType,
   AssemblyType,
   calculateCabinetPieces,
@@ -154,6 +155,7 @@ const EMPTY_CONFIG: CabinetConfig = {
   doorMaterial: '',
   drawerMaterial: '',
   cabinetCount: 1,
+  partMaterials: {},
   facadesCount: 0,
   facadePlacement: 'applique',
   facadeGap: 2,
@@ -249,6 +251,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     drawerSlideThickness: 13,
     drawerSlideLength: 500,
   });
+  const [bulkMaterial, setBulkMaterial] = useState('');
   const autoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -576,14 +579,37 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     setShowCompositionModal(true);
   };
 
-  // Sélection de la matière pour une partie spécifique du caisson dans la fenêtre récapitulative
-  const handlePartMaterialChange = (partKey: CabinetPartKey | undefined, newMat: string) => {
+  // Sélection ou saisie libre de la matière pour une partie spécifique du caisson dans la fenêtre récapitulative
+  const handlePartMaterialChange = (
+    part: CabinetPieceCalculation | CabinetPartKey | undefined,
+    newMat: string
+  ) => {
+    const partKey = typeof part === 'string' ? part : part?.partKey;
+    const partId =
+      typeof part === 'object' && part
+        ? part.partId || part.partKey
+        : typeof part === 'string'
+        ? part
+        : undefined;
     const detectedThickness = extractThicknessFromMaterialName(newMat);
+
     setConfig((prev) => {
       const next = { ...prev };
+      const nextPartMaterials = { ...(prev.partMaterials || {}) };
+      if (partId) {
+        nextPartMaterials[partId] = newMat;
+      }
+      if (partKey && (!partId || partId === partKey)) {
+        nextPartMaterials[partKey] = newMat;
+      }
+      next.partMaterials = nextPartMaterials;
+
+      if (!next.material && newMat) {
+        next.material = newMat;
+      }
+
       if (partKey === 'sides') {
         next.sidesMaterial = newMat;
-        if (!next.material) next.material = newMat;
         if (detectedThickness) next.thickness = detectedThickness;
       } else if (partKey === 'top') {
         next.topMaterial = newMat;
@@ -599,10 +625,44 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         next.backMaterial = newMat;
         if (detectedThickness) next.backThickness = detectedThickness;
       } else if (partKey === 'doors') {
-        next.doorMaterial = newMat;
+        if (!partId || partId === 'doors') {
+          next.doorMaterial = newMat;
+        }
       } else if (partKey === 'drawers') {
-        next.drawerMaterial = newMat;
+        if (!partId || partId === 'drawers') {
+          next.drawerMaterial = newMat;
+        }
       }
+      return next;
+    });
+  };
+
+  // Appliquer une matière à toutes les parties du caisson en un clic
+  const handleApplyMaterialToAll = (newMat: string) => {
+    if (!newMat.trim()) return;
+    const detectedThickness = extractThicknessFromMaterialName(newMat);
+    setConfig((prev) => {
+      const next = { ...prev };
+      next.material = newMat;
+      next.sidesMaterial = newMat;
+      next.topMaterial = newMat;
+      next.bottomMaterial = newMat;
+      next.partitionsMaterial = newMat;
+      next.shelvesMaterial = newMat;
+      next.backMaterial = newMat;
+      next.doorMaterial = newMat;
+      next.drawerMaterial = newMat;
+      if (detectedThickness) {
+        next.thickness = detectedThickness;
+      }
+      const updatedPartMaterials: Record<string, string> = {};
+      if (calculated.pieces.length > 0) {
+        calculated.pieces.forEach((p) => {
+          if (p.partId) updatedPartMaterials[p.partId] = newMat;
+          if (p.partKey) updatedPartMaterials[p.partKey] = newMat;
+        });
+      }
+      next.partMaterials = updatedPartMaterials;
       return next;
     });
   };
@@ -2527,30 +2587,43 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 <label className="block text-[11px] font-semibold text-amber-300 mb-1">
                   Appliquer une matière à toutes les parties (optionnel) :
                 </label>
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleMaterialChange(e.target.value);
-                    }
-                  }}
-                  className="w-full bg-slate-800 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
-                >
-                  <option value="">-- Choisir pour pré-remplir toutes les parties --</option>
-                  {selectableMaterials.map((m) => (
-                    <option key={`all-${m}`} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      list="all-materials-datalist"
+                      value={bulkMaterial}
+                      onChange={(e) => setBulkMaterial(e.target.value)}
+                      placeholder="Saisir ou choisir la matière..."
+                      className="w-full bg-slate-800 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
+                    />
+                    <datalist id="all-materials-datalist">
+                      {selectableMaterials.map((m) => (
+                        <option key={`all-dl-${m}`} value={m} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!bulkMaterial.trim()}
+                    onClick={() => {
+                      if (bulkMaterial.trim()) {
+                        handleApplyMaterialToAll(bulkMaterial.trim());
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-bold disabled:opacity-40 transition-colors shrink-0"
+                  >
+                    Appliquer à tout
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Liste détaillée de chaque partie avec sélection individuelle de la matière */}
+            {/* Liste détaillée de chaque partie avec saisie libre individuelle de la matière */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
               {calculated.pieces.map((part, idx) => (
                 <div
-                  key={`${part.partKey || idx}-${idx}`}
+                  key={`${part.partId || part.partKey || idx}-${idx}`}
                   className="p-3.5 rounded-2xl bg-slate-850 border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
                   <div className="space-y-1 min-w-0 flex-1">
@@ -2574,19 +2647,51 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Sélecteur de matière spécifique pour cette partie */}
-                  <div className="sm:w-64 shrink-0">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                      Matière de cette partie <span className="text-amber-400">*</span> :
-                    </label>
+                  {/* Saisie libre et sélecteur de matière spécifique pour cette partie */}
+                  <div className="sm:w-72 md:w-80 shrink-0 space-y-1.5">
+                    <div className="flex items-center justify-between gap-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                        Matière de cette partie <span className="text-amber-400">*</span> :
+                      </label>
+                      {part.material ? (
+                        <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                          <Check className="w-3 h-3" /> Saisie
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-amber-400 font-mono">À renseigner</span>
+                      )}
+                    </div>
+
+                    {/* Champ de saisie au clavier avec suggestions datalist */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        list={`part-mat-dl-${idx}`}
+                        value={part.material || ''}
+                        onChange={(e) => handlePartMaterialChange(part, e.target.value)}
+                        placeholder="Saisir la matière (ex: MDF 18mm)..."
+                        className={`w-full bg-slate-900 border rounded-xl px-2.5 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-amber-500 transition-all ${
+                          part.material ? 'border-emerald-500/60' : 'border-amber-500/80 shadow-sm'
+                        }`}
+                      />
+                      <datalist id={`part-mat-dl-${idx}`}>
+                        {selectableMaterials.map((m) => (
+                          <option key={`p-dl-${idx}-${m}`} value={m} />
+                        ))}
+                      </datalist>
+                    </div>
+
+                    {/* Menu déroulant de sélection rapide (stock / atelier / standards) */}
                     <select
-                      value={part.material || ''}
-                      onChange={(e) => handlePartMaterialChange(part.partKey, e.target.value)}
-                      className={`w-full bg-slate-900 border rounded-xl px-2.5 py-2 text-xs text-white font-medium focus:outline-none focus:border-amber-500 ${
-                        part.material ? 'border-emerald-500/60' : 'border-amber-500/70'
-                      }`}
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          handlePartMaterialChange(part, e.target.value);
+                        }
+                      }}
+                      className="w-full bg-slate-900/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500 cursor-pointer"
                     >
-                      <option value="">-- Sélectionner la matière --</option>
+                      <option value="">-- ou choisir dans le stock / liste --</option>
                       {stockPanels.length > 0 && (
                         <optgroup label="📦 En Stock Saisi (Panneaux projet)">
                           {stockPanels.map((p, sIdx) => (
@@ -2618,10 +2723,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                             </option>
                           ))}
                       </optgroup>
-                      {part.material &&
-                        !selectableMaterials.includes(part.material) && (
-                          <option value={part.material}>{part.material}</option>
-                        )}
                     </select>
                   </div>
                 </div>
