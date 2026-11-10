@@ -243,18 +243,34 @@ export function exportCuttingPlansToPdf(
             bh >= bw * 1.3
           );
 
-          const titleFSize = isVertical
+          let titleFSize = isVertical
             ? Math.min(8.5, Math.max(4.0, Math.min(bh / 6, bw / 5)))
             : Math.min(8.5, Math.max(4.0, bw / 6, bh / 6));
 
-          // Espace disponible dans la direction du texte
-          const availLength = isVertical ? bh - 4 : bw - 4;
-          const maxChars = Math.max(4, Math.floor(availLength / (titleFSize * 0.35)));
+          // Espace disponible dans la direction du texte (marge pour les cotes affichées sur les bords)
+          const dimMargin = dimFSize * 0.353 + 1.6;
+          const availLength = Math.max(4, (isVertical ? bh : bw) - 2 * dimMargin);
+
+          // Réduction automatique de la police pour que le nom complet tienne dans la pièce
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(titleFSize);
+          const hasCabLine = isMixedPanel && !!pieceCabinet;
+          const longestW = Math.max(
+            doc.getTextWidth(hasCabLine ? piecePart : piece.name),
+            hasCabLine ? doc.getTextWidth(`[${pieceCabinet}]`) * 0.78 : 0
+          );
+          if (longestW > availLength) {
+            titleFSize = Math.max(2.8, titleFSize * (availLength / longestW));
+          }
+          doc.setFontSize(titleFSize);
+          const avgCharW =
+            doc.getTextWidth(textToMeasure) / Math.max(1, textToMeasure.length) || titleFSize * 0.2;
+          const maxChars = Math.max(4, Math.floor(availLength / avgCharW));
 
           if (isVertical) {
             // Rendu vertical (angle 90°)
             if (isMixedPanel && pieceCabinet && bw >= 12) {
-              const cabFSize = Math.max(3.8, titleFSize * 0.78);
+              const cabFSize = Math.max(2.5, titleFSize * 0.78);
               doc.setFontSize(cabFSize);
               doc.setFont('helvetica', 'bold');
               doc.setTextColor(49, 46, 129); // Indigo foncé lisible
@@ -282,7 +298,7 @@ export function exportCuttingPlansToPdf(
           } else {
             // Rendu horizontal classique
             if (isMixedPanel && pieceCabinet && bh >= 14) {
-              const cabFSize = Math.max(3.8, titleFSize * 0.78);
+              const cabFSize = Math.max(2.5, titleFSize * 0.78);
               doc.setFontSize(cabFSize);
               doc.setFont('helvetica', 'bold');
               doc.setTextColor(49, 46, 129); // Indigo foncé lisible

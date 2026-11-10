@@ -300,8 +300,14 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
 
                             const cx = px + pw / 2;
                             const cy = py + ph / 2;
-                            const availLength = isVertical ? ph - 24 : pw - 24;
-                            const maxChars = Math.max(5, Math.floor(availLength / (effTitleFSize * 0.58)));
+                            // Marge pour ne pas chevaucher les cotes affichées sur les bords
+                            const availLength = Math.max(20, isVertical ? ph - 56 : pw - 56);
+                            // Réduction automatique de la police pour afficher le nom complet
+                            const fitLen = isMixedPanel && pieceCabinet
+                              ? Math.max(pieceCabinet.length + 2, piecePart.length)
+                              : piece.name.length;
+                            const fitFSize = Math.max(6, Math.min(effTitleFSize, availLength / (Math.max(1, fitLen) * 0.6)));
+                            const maxChars = Math.max(5, Math.floor(availLength / (fitFSize * 0.6)));
 
                             const displayPieceName =
                               piece.name.length > maxChars
@@ -328,7 +334,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                                 dominantBaseline="middle"
                                 transform={isVertical ? `rotate(-90, ${cx}, ${cy})` : undefined}
                                 fill="#000000"
-                                fontSize={effTitleFSize}
+                                fontSize={fitFSize}
                                 fontWeight="bold"
                               >
                                 {showTwoLines ? (
@@ -336,7 +342,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                                     <tspan
                                       x={cx}
                                       dy="-0.6em"
-                                      fontSize={Math.max(10, effTitleFSize * 0.75)}
+                                      fontSize={Math.max(6, fitFSize * 0.75)}
                                       fill="#1e1b4b"
                                       fontWeight="800"
                                     >
@@ -345,7 +351,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                                     <tspan
                                       x={cx}
                                       dy="1.25em"
-                                      fontSize={effTitleFSize}
+                                      fontSize={fitFSize}
                                       fill="#000000"
                                     >
                                       {displayPiecePart}
