@@ -229,37 +229,84 @@ export function exportCuttingPlansToPdf(
         const pieceCabinet = getPieceCabinet(piece.name);
         const piecePart = getPiecePart(piece.name);
 
-        if (bw >= 12 && bh >= 9) {
-          const titleFSize = Math.min(8.5, Math.max(4.5, bw / 6, bh / 6));
+        if (bw >= 7 && bh >= 7) {
+          // Déterminer si le texte doit être orienté verticalement
+          // (lorsque la pièce est plus haute que large et que le texte ne tient pas à l'horizontale)
+          const textToMeasure = isMixedPanel && pieceCabinet
+            ? (piecePart.length > pieceCabinet.length ? piecePart : pieceCabinet)
+            : piece.name;
+          const tentativeFSize = Math.min(8.5, Math.max(4.0, Math.max(bw, bh) / 7));
+          doc.setFontSize(tentativeFSize);
+          const textWidthHorizontal = doc.getTextWidth(textToMeasure);
+          const isVertical = bh > bw && (
+            textWidthHorizontal > (bw - 3) ||
+            bh >= bw * 1.3
+          );
 
-          if (isMixedPanel && pieceCabinet && bh >= 14) {
-            const cabFSize = Math.max(3.8, titleFSize * 0.78);
-            doc.setFontSize(cabFSize);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(49, 46, 129); // Indigo foncé lisible
-            const maxCabChars = Math.floor(bw / 1.7);
-            const displayCab = `[${pieceCabinet.length > maxCabChars ? pieceCabinet.substring(0, maxCabChars - 1) + '…' : pieceCabinet}]`;
-            doc.text(displayCab, bx + bw / 2, by + bh / 2 - 1.2, { align: 'center' });
+          const titleFSize = isVertical
+            ? Math.min(8.5, Math.max(4.0, Math.min(bh / 6, bw / 5)))
+            : Math.min(8.5, Math.max(4.0, bw / 6, bh / 6));
 
-            doc.setFontSize(titleFSize);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 0, 0); // Noir pur
-            const maxPartChars = Math.floor(bw / 1.8);
-            const displayPart =
-              piecePart.length > maxPartChars
-                ? piecePart.substring(0, maxPartChars) + '…'
-                : piecePart;
-            doc.text(displayPart, bx + bw / 2, by + bh / 2 + 2.5, { align: 'center' });
+          // Espace disponible dans la direction du texte
+          const availLength = isVertical ? bh - 4 : bw - 4;
+          const maxChars = Math.max(4, Math.floor(availLength / (titleFSize * 0.35)));
+
+          if (isVertical) {
+            // Rendu vertical (angle 90°)
+            if (isMixedPanel && pieceCabinet && bw >= 12) {
+              const cabFSize = Math.max(3.8, titleFSize * 0.78);
+              doc.setFontSize(cabFSize);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(49, 46, 129); // Indigo foncé lisible
+              const displayCab = `[${pieceCabinet.length > maxChars ? pieceCabinet.substring(0, maxChars - 1) + '…' : pieceCabinet}]`;
+              doc.text(displayCab, bx + bw / 2 - 1.4, by + bh / 2, { align: 'center', angle: 90 });
+
+              doc.setFontSize(titleFSize);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(0, 0, 0); // Noir pur
+              const displayPart =
+                piecePart.length > maxChars
+                  ? piecePart.substring(0, maxChars) + '…'
+                  : piecePart;
+              doc.text(displayPart, bx + bw / 2 + 1.8, by + bh / 2, { align: 'center', angle: 90 });
+            } else {
+              doc.setFontSize(titleFSize);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(0, 0, 0);
+              const displayName =
+                piece.name.length > maxChars
+                  ? piece.name.substring(0, maxChars) + '…'
+                  : piece.name;
+              doc.text(displayName, bx + bw / 2, by + bh / 2, { align: 'center', angle: 90 });
+            }
           } else {
-            doc.setFontSize(titleFSize);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 0, 0);
-            const maxChars = Math.floor(bw / 1.8);
-            const displayName =
-              piece.name.length > maxChars
-                ? piece.name.substring(0, maxChars) + '…'
-                : piece.name;
-            doc.text(displayName, bx + bw / 2, by + bh / 2 + 1, { align: 'center' });
+            // Rendu horizontal classique
+            if (isMixedPanel && pieceCabinet && bh >= 14) {
+              const cabFSize = Math.max(3.8, titleFSize * 0.78);
+              doc.setFontSize(cabFSize);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(49, 46, 129); // Indigo foncé lisible
+              const displayCab = `[${pieceCabinet.length > maxChars ? pieceCabinet.substring(0, maxChars - 1) + '…' : pieceCabinet}]`;
+              doc.text(displayCab, bx + bw / 2, by + bh / 2 - 1.2, { align: 'center' });
+
+              doc.setFontSize(titleFSize);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(0, 0, 0); // Noir pur
+              const displayPart =
+                piecePart.length > maxChars
+                  ? piecePart.substring(0, maxChars) + '…'
+                  : piecePart;
+              doc.text(displayPart, bx + bw / 2, by + bh / 2 + 2.5, { align: 'center' });
+            } else {
+              doc.setFontSize(titleFSize);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(0, 0, 0);
+              const displayName =
+                piece.name.length > maxChars
+                  ? piece.name.substring(0, maxChars) + '…'
+                  : piece.name;
+              doc.text(displayName, bx + bw / 2, by + bh / 2 + 1, { align: 'center' });
+            }
           }
         }
       }

@@ -227,10 +227,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                       const topDim = Math.round(isLandscape ? piece.width : piece.length);
                       const leftDim = Math.round(isLandscape ? piece.length : piece.width);
 
-                      const fSize = Math.min(
-                        36,
-                        Math.max(16, pw / 12, ph / 15)
-                      );
+                      // Taille de police pour les cotations
                       const fSizeDim = Math.min(
                         24,
                         Math.max(12, pw / 16, ph / 20)
@@ -281,41 +278,85 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                           )}
 
                           {/* 3. Nom de la pièce et destination au centre */}
-                          {pw >= 35 && ph >= 35 && (
-                            <text
-                              x={px + pw / 2}
-                              y={py + ph / 2}
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                              fill="#000000"
-                              fontSize={fSize}
-                              fontWeight="bold"
-                            >
-                              {isMixedPanel && pieceCabinet && ph >= 55 ? (
-                                <>
-                                  <tspan
-                                    x={px + pw / 2}
-                                    dy="-0.6em"
-                                    fontSize={Math.max(10, fSize * 0.75)}
-                                    fill="#1e1b4b"
-                                    fontWeight="800"
-                                  >
-                                    [{pieceCabinet}]
-                                  </tspan>
-                                  <tspan
-                                    x={px + pw / 2}
-                                    dy="1.25em"
-                                    fontSize={fSize}
-                                    fill="#000000"
-                                  >
-                                    {piecePart}
-                                  </tspan>
-                                </>
-                              ) : (
-                                piece.name
-                              )}
-                            </text>
-                          )}
+                          {pw >= 28 && ph >= 28 && (() => {
+                            const textToMeasure = isMixedPanel && pieceCabinet
+                              ? (piecePart.length > pieceCabinet.length ? piecePart : pieceCabinet)
+                              : piece.name;
+
+                            // Estimation de la largeur nécessaire du texte à l'horizontale
+                            const tentativeFSize = Math.min(36, Math.max(15, Math.max(pw, ph) / 12));
+                            const estimatedHorizWidth = textToMeasure.length * tentativeFSize * 0.58;
+
+                            // Le texte est orienté verticalement lorsque la pièce est plus haute que large
+                            // et qu'il ne tient pas confortablement à l'horizontale
+                            const isVertical = ph > pw && (
+                              estimatedHorizWidth > (pw - 20) ||
+                              ph >= pw * 1.3
+                            );
+
+                            const effTitleFSize = isVertical
+                              ? Math.min(32, Math.max(13, Math.min(ph / 14, pw / 7)))
+                              : Math.min(36, Math.max(14, pw / 10, ph / 14));
+
+                            const cx = px + pw / 2;
+                            const cy = py + ph / 2;
+                            const availLength = isVertical ? ph - 24 : pw - 24;
+                            const maxChars = Math.max(5, Math.floor(availLength / (effTitleFSize * 0.58)));
+
+                            const displayPieceName =
+                              piece.name.length > maxChars
+                                ? piece.name.substring(0, maxChars) + '…'
+                                : piece.name;
+                            const displayPieceCabinet = pieceCabinet
+                              ? pieceCabinet.length > maxChars
+                                ? pieceCabinet.substring(0, maxChars - 1) + '…'
+                                : pieceCabinet
+                              : '';
+                            const displayPiecePart = piecePart
+                              ? piecePart.length > maxChars
+                                ? piecePart.substring(0, maxChars) + '…'
+                                : piecePart
+                              : '';
+
+                            const showTwoLines = isMixedPanel && pieceCabinet && (isVertical ? pw >= 45 : ph >= 55);
+
+                            return (
+                              <text
+                                x={cx}
+                                y={cy}
+                                textAnchor="middle"
+                                dominantBaseline="middle"
+                                transform={isVertical ? `rotate(-90, ${cx}, ${cy})` : undefined}
+                                fill="#000000"
+                                fontSize={effTitleFSize}
+                                fontWeight="bold"
+                              >
+                                {showTwoLines ? (
+                                  <>
+                                    <tspan
+                                      x={cx}
+                                      dy="-0.6em"
+                                      fontSize={Math.max(10, effTitleFSize * 0.75)}
+                                      fill="#1e1b4b"
+                                      fontWeight="800"
+                                    >
+                                      [{displayPieceCabinet}]
+                                    </tspan>
+                                    <tspan
+                                      x={cx}
+                                      dy="1.25em"
+                                      fontSize={effTitleFSize}
+                                      fill="#000000"
+                                    >
+                                      {displayPiecePart}
+                                    </tspan>
+                                  </>
+                                ) : (
+                                  displayPieceName
+                                )}
+                              </text>
+                            );
+                          })()}
                         </g>
                       );
                     })}
