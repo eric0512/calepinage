@@ -48,10 +48,15 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
             Projet : <strong className="text-black">{projectName}</strong> — Généré par CalepinagePro Menuiserie — {new Date().toLocaleDateString('fr-FR')}
           </p>
         </div>
-        <div className="text-right text-xs">
+        <div className="text-right text-xs space-y-0.5">
           <p>
             <strong>Trait de scie (Kerf) :</strong> {settings.kerf.toFixed(1)} mm
           </p>
+          {settings.edgeBanding && (
+            <p>
+              <strong>Bande de champs :</strong> {settings.edgeBanding}
+            </p>
+          )}
           <p>
             <strong>Panneaux consommés :</strong> {result.totalPanelsUsed}
           </p>

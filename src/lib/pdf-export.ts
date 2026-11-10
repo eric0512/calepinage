@@ -27,7 +27,8 @@ export function exportCuttingPlansToPdf(
   panels: PanelResult[],
   kerf: number,
   projectName: string = 'Projet Menuiserie',
-  panelOrientations?: Record<string, 'vertical' | 'horizontal'>
+  panelOrientations?: Record<string, 'vertical' | 'horizontal'>,
+  edgeBanding?: string
 ) {
   if (!panels || panels.length === 0) return;
 
@@ -94,13 +95,14 @@ export function exportCuttingPlansToPdf(
         ? `  |  Meuble : ${panelCabinets[0]}`
         : '';
 
-    // Métriques (Rendement, trait de scie, nb pièces, destinations)
+    // Métriques (Rendement, trait de scie, bande de champs, nb pièces, destinations)
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105); // slate-600
+    const edgeBandStr = edgeBanding ? `  |  Bande de champs : ${edgeBanding}` : '';
     doc.text(
       `Rendement : ${panel.efficiencyPercentage}%  |  Trait de scie : ${kerf.toFixed(
         1
-      )} mm  |  Pièces : ${panel.placedPieces.length}${destInfo}`,
+      )} mm${edgeBandStr}  |  Pièces : ${panel.placedPieces.length}${destInfo}`,
       marginX + 5,
       marginTop + 18
     );

@@ -4,6 +4,7 @@ export const DEFAULT_SETTINGS: CutSettings = {
   kerf: 3.0, // 3 mm par défaut
   minOffcutWidth: 500, // 500 mm
   minOffcutLength: 500, // 500 mm
+  edgeBanding: '', // Obligatoire : l'utilisateur doit choisir (Sans, 1mm, 2mm, 3mm, etc.)
 };
 
 export interface ProjectPreset {
@@ -24,6 +25,7 @@ export const PRESETS: ProjectPreset[] = [
       kerf: 3.0,
       minOffcutWidth: 500,
       minOffcutLength: 500,
+      edgeBanding: '1mm',
     },
     stockPanels: [
       {
@@ -112,6 +114,7 @@ export const PRESETS: ProjectPreset[] = [
       kerf: 3.0,
       minOffcutWidth: 500,
       minOffcutLength: 500,
+      edgeBanding: '1mm',
     },
     stockPanels: [
       {

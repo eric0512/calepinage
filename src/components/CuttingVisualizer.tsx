@@ -22,6 +22,7 @@ interface CuttingVisualizerProps {
   projectName?: string;
   panelOrientations?: Record<string, 'vertical' | 'horizontal'>;
   onPanelOrientationsChange?: (orientations: Record<string, 'vertical' | 'horizontal'>) => void;
+  edgeBanding?: string;
 }
 
 export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
@@ -30,6 +31,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   projectName = 'Projet Menuiserie',
   panelOrientations,
   onPanelOrientationsChange,
+  edgeBanding,
 }) => {
   const [selectedPanelIdx, setSelectedPanelIdx] = useState(0);
   const [hoveredPiece, setHoveredPiece] = useState<PlacedPiece | null>(null);
@@ -81,7 +83,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const handleExportPDF = () => {
     setIsExportingPdf(true);
     try {
-      exportCuttingPlansToPdf(panels, kerf, projectName, effectiveOrientations);
+      exportCuttingPlansToPdf(panels, kerf, projectName, effectiveOrientations, edgeBanding);
     } catch (err) {
       console.error('Erreur export PDF:', err);
       alert('Une erreur est survenue lors de l\'exportation PDF.');

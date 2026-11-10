@@ -403,6 +403,16 @@ export default function Home() {
         return;
       }
 
+      // Validation obligatoire de la Bande de champs
+      if (!settings.edgeBanding || settings.edgeBanding.trim() === '') {
+        alert(
+          'Le champ « Bande de champs » est obligatoire dans les Paramètres de Coupe.\n\nVeuillez sélectionner une option (Sans, 1mm, 2mm, 3mm ou saisir une épaisseur manuelle) avant de lancer le calcul.'
+        );
+        const el = document.getElementById('settings-bar-container');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+
       const res = optimizeCutting(combinedPanels, activeCutItems, settings);
       setOptimizationResult(res);
       setMobileTab('results');
@@ -856,6 +866,7 @@ export default function Home() {
                   projectName={projectName}
                   panelOrientations={panelOrientations}
                   onPanelOrientationsChange={setPanelOrientations}
+                  edgeBanding={settings.edgeBanding}
                 />
 
                 {/* Statistiques Globales & Taux de chute */}

@@ -12,6 +12,7 @@ export interface CutSettings {
   kerf: number; // Trait de scie en mm (ex: 3.2)
   minOffcutWidth: number; // Largeur min pour chute réutilisable en mm (ex: 200)
   minOffcutLength: number; // Longueur min pour chute réutilisable en mm (ex: 200)
+  edgeBanding?: string; // Bande de chant / champs (ex: "Sans", "1mm", "2mm", "3mm", "0.8mm")
 }
 
 export interface StockPanel {
