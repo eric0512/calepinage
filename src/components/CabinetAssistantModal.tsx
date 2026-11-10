@@ -31,6 +31,7 @@ import {
   extractThicknessFromMaterialName,
   computeFacadeLayout,
   getFacadeAvailableHeight,
+  DEFAULT_BASE_MATERIALS,
 } from '@/lib/cabinet-calculator';
 import type { FacadeItemType } from '@/types/cutting';
 
@@ -266,12 +267,26 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const [newPresetName, setNewPresetName] = useState('');
   const [showGuidedTemplate, setShowGuidedTemplate] = useState(true);
 
+  // Matières personnalisées enregistrées par l'utilisateur (Persistées en LocalStorage)
+  const [customMaterials, setCustomMaterials] = useState<string[]>([]);
+  const [materialToConfirmSave, setMaterialToConfirmSave] = useState<string | null>(null);
+  const [showAddMaterialInput, setShowAddMaterialInput] = useState(false);
+  const [newMaterialNameToAdd, setNewMaterialNameToAdd] = useState('');
+
   useEffect(() => {
     setMounted(true);
     try {
       const saved = localStorage.getItem('calepinage_user_cabinet_presets');
       if (saved) {
         setCustomPresets(JSON.parse(saved));
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      const savedMats = localStorage.getItem('calepinage_user_materials');
+      if (savedMats) {
+        setCustomMaterials(JSON.parse(savedMats));
       }
     } catch {
       // ignore
@@ -809,28 +824,57 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     return calculateCabinetPieces(safeConfig);
   }, [config, hasValidDimensions]);
 
-  // Toutes les matières sélectionnables pour chaque partie
+  // Enregistrer définitivement une matière dans le LocalStorage après accord de l'utilisateur
+  const handleConfirmSaveMaterial = (mat: string) => {
+    const trimmed = mat.trim();
+    if (!trimmed) return;
+    if (DEFAULT_BASE_MATERIALS.includes(trimmed) || customMaterials.includes(trimmed)) {
+      setMaterialToConfirmSave(null);
+      return;
+    }
+    const updated = [...customMaterials, trimmed];
+    setCustomMaterials(updated);
+    try {
+      localStorage.setItem('calepinage_user_materials', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+    setMaterialToConfirmSave(null);
+    setNewMaterialNameToAdd('');
+    setShowAddMaterialInput(false);
+  };
+
+  // Supprimer une matière personnalisée enregistrée
+  const handleDeleteCustomMaterial = (mat: string) => {
+    const updated = customMaterials.filter((m) => m !== mat);
+    setCustomMaterials(updated);
+    try {
+      localStorage.setItem('calepinage_user_materials', JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+  };
+
+  // Toutes les matières sélectionnables pour chaque partie, triées par ordre alphabétique
   const selectableMaterials = useMemo(() => {
     const set = new Set<string>();
+
+    // 1. Matières de base par ordre alphabétique (MDF, Mela, OSB)
+    DEFAULT_BASE_MATERIALS.forEach((m) => set.add(m));
+
+    // 2. Matières personnalisées enregistrées par l'utilisateur
+    customMaterials.forEach((m) => m && set.add(m.trim()));
+
+    // 3. Panneaux en stock et chutes atelier
     stockPanels.forEach((p) => p.material && set.add(p.material.trim()));
     workshopStock.forEach((w) => w.material && set.add(w.material.trim()));
     availableMaterials.forEach((m) => m && set.add(m.trim()));
-    [
-      'MDF 19mm',
-      'MDF 18mm',
-      'MDF 8mm',
-      'Mélaminé Blanc 18mm',
-      'Mélaminé Blanc 19mm',
-      'Contreplaqué Bouleau 15mm',
-      'Contreplaqué 5mm',
-      'OSB 3 18mm',
-      'Chêne Massif 20mm',
-      'Isorel 3mm',
-    ].forEach((m) => set.add(m));
+
+    // Tri alphabétique avec ordre numérique naturel pour les épaisseurs (MDF 3mm < MDF 10mm, MDF < Mela < OSB)
     return Array.from(set).sort((a, b) =>
-      a.localeCompare(b, 'fr', { sensitivity: 'base' })
+      a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' })
     );
-  }, [stockPanels, workshopStock, availableMaterials]);
+  }, [stockPanels, workshopStock, availableMaterials, customMaterials]);
 
   const allPartsHaveMaterial = useMemo(() => {
     if (calculated.pieces.length === 0) return false;
@@ -2568,165 +2612,270 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
               </button>
             </div>
 
-            {/* Barre d'outils rapide : Nom du caisson + Appliquer une matière à tout */}
-            <div className="px-4 sm:px-5 py-3 bg-slate-900/90 border-b border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                  Nom du caisson :
-                </label>
-                <input
-                  type="text"
-                  value={config.name}
-                  onChange={(e) => setConfig({ ...config, name: e.target.value })}
-                  placeholder={`Caisson ${config.height}×${config.width}×${config.depth}`}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
-                />
-              </div>
+            {/* Barre d'outils rapide : Nom du caisson + Appliquer une matière à tout + Ajouter une nouvelle matière */}
+            <div className="px-4 sm:px-5 py-3 bg-slate-900/90 border-b border-slate-800 space-y-2.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Nom du caisson :
+                  </label>
+                  <input
+                    type="text"
+                    value={config.name}
+                    onChange={(e) => setConfig({ ...config, name: e.target.value })}
+                    placeholder={`Caisson ${config.height}×${config.width}×${config.depth}`}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-amber-300 mb-1">
-                  Appliquer une matière à toutes les parties (optionnel) :
-                </label>
-                <div className="flex gap-1.5">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      list="all-materials-datalist"
-                      value={bulkMaterial}
-                      onChange={(e) => setBulkMaterial(e.target.value)}
-                      placeholder="Saisir ou choisir la matière..."
-                      className="w-full bg-slate-800 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
-                    />
-                    <datalist id="all-materials-datalist">
-                      {selectableMaterials.map((m) => (
-                        <option key={`all-dl-${m}`} value={m} />
-                      ))}
-                    </datalist>
+                <div>
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <label className="block text-[11px] font-semibold text-amber-300">
+                      Appliquer une matière à tout :
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMaterialInput((prev) => !prev)}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Ajouter une matière</span>
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={!bulkMaterial.trim()}
-                    onClick={() => {
-                      if (bulkMaterial.trim()) {
-                        handleApplyMaterialToAll(bulkMaterial.trim());
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-bold disabled:opacity-40 transition-colors shrink-0"
-                  >
-                    Appliquer à tout
-                  </button>
+                  <div className="flex gap-1.5">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        list="all-materials-datalist"
+                        value={bulkMaterial}
+                        onChange={(e) => setBulkMaterial(e.target.value)}
+                        placeholder="Saisir ou choisir la matière..."
+                        className="w-full bg-slate-800 border border-amber-500/40 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 font-medium"
+                      />
+                      <datalist id="all-materials-datalist">
+                        {selectableMaterials.map((m) => (
+                          <option key={`all-dl-${m}`} value={m} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!bulkMaterial.trim()}
+                      onClick={() => {
+                        if (bulkMaterial.trim()) {
+                          handleApplyMaterialToAll(bulkMaterial.trim());
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-bold disabled:opacity-40 transition-colors shrink-0"
+                    >
+                      Appliquer à tout
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Formulaire d'ajout rapide d'une nouvelle matière à la boîte */}
+              {showAddMaterialInput && (
+                <div className="p-3 bg-slate-850 rounded-xl border border-amber-500/40 space-y-2 animate-in fade-in duration-150">
+                  <label className="block text-[11px] font-semibold text-amber-300">
+                    Ajouter une nouvelle matière à la boîte de sélection :
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newMaterialNameToAdd}
+                      onChange={(e) => setNewMaterialNameToAdd(e.target.value)}
+                      placeholder="Ex: MDF 22mm, Mela 18mm, OSB 30mm, Chêne 20mm..."
+                      className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="button"
+                      disabled={!newMaterialNameToAdd.trim()}
+                      onClick={() => {
+                        if (newMaterialNameToAdd.trim()) {
+                          setMaterialToConfirmSave(newMaterialNameToAdd.trim());
+                        }
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all disabled:opacity-40 shrink-0"
+                    >
+                      Enregistrer...
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddMaterialInput(false);
+                        setNewMaterialNameToAdd('');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors shrink-0"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+
+                  {customMaterials.length > 0 && (
+                    <div className="pt-2 border-t border-slate-800/80">
+                      <span className="text-[10px] text-slate-400 block mb-1">
+                        Matières personnalisées enregistrées :
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                        {customMaterials.map((m) => (
+                          <span
+                            key={`custom-tag-${m}`}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-800 text-[11px] text-amber-300 border border-slate-700 font-medium"
+                          >
+                            <span>{m}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCustomMaterial(m)}
+                              title={`Supprimer « ${m} » de la boîte de sélection`}
+                              className="text-slate-400 hover:text-red-400 transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Liste détaillée de chaque partie avec saisie libre individuelle de la matière */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
-              {calculated.pieces.map((part, idx) => (
-                <div
-                  key={`${part.partId || part.partKey || idx}-${idx}`}
-                  className="p-3.5 rounded-2xl bg-slate-850 border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="w-3 h-3 rounded-full shrink-0"
-                        style={{ backgroundColor: part.color }}
-                      />
-                      <span className="text-xs sm:text-sm font-bold text-white">
-                        {part.role}
-                      </span>
-                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                        Qté : {part.quantity}
-                      </span>
-                    </div>
-                    <div className="text-xs font-mono text-emerald-400 pl-5">
-                      Dimensions débit : <strong>{part.length} × {part.width} mm</strong>
-                    </div>
-                    <div className="text-[11px] text-slate-400 pl-5 italic">
-                      {part.formula}
-                    </div>
-                  </div>
+              {calculated.pieces.map((part, idx) => {
+                const isPartMatUnsaved =
+                  part.material &&
+                  !DEFAULT_BASE_MATERIALS.includes(part.material.trim()) &&
+                  !customMaterials.includes(part.material.trim());
 
-                  {/* Saisie libre et sélecteur de matière spécifique pour cette partie */}
-                  <div className="sm:w-72 md:w-80 shrink-0 space-y-1.5">
-                    <div className="flex items-center justify-between gap-1">
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300">
-                        Matière de cette partie <span className="text-amber-400">*</span> :
-                      </label>
-                      {part.material ? (
-                        <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Saisie
+                return (
+                  <div
+                    key={`${part.partId || part.partKey || idx}-${idx}`}
+                    className="p-3.5 rounded-2xl bg-slate-850 border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: part.color }}
+                        />
+                        <span className="text-xs sm:text-sm font-bold text-white">
+                          {part.role}
                         </span>
-                      ) : (
-                        <span className="text-[10px] text-amber-400 font-mono">À renseigner</span>
-                      )}
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          Qté : {part.quantity}
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono text-emerald-400 pl-5">
+                        Dimensions débit : <strong>{part.length} × {part.width} mm</strong>
+                      </div>
+                      <div className="text-[11px] text-slate-400 pl-5 italic">
+                        {part.formula}
+                      </div>
                     </div>
 
-                    {/* Champ de saisie au clavier avec suggestions datalist */}
-                    <div className="relative">
-                      <input
-                        type="text"
-                        list={`part-mat-dl-${idx}`}
-                        value={part.material || ''}
-                        onChange={(e) => handlePartMaterialChange(part, e.target.value)}
-                        placeholder="Saisir la matière (ex: MDF 18mm)..."
-                        className={`w-full bg-slate-900 border rounded-xl px-2.5 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-amber-500 transition-all ${
-                          part.material ? 'border-emerald-500/60' : 'border-amber-500/80 shadow-sm'
-                        }`}
-                      />
-                      <datalist id={`part-mat-dl-${idx}`}>
-                        {selectableMaterials.map((m) => (
-                          <option key={`p-dl-${idx}-${m}`} value={m} />
-                        ))}
-                      </datalist>
-                    </div>
+                    {/* Saisie libre et sélecteur de matière spécifique pour cette partie */}
+                    <div className="sm:w-72 md:w-80 shrink-0 space-y-1.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                          Matière de cette partie <span className="text-amber-400">*</span> :
+                        </label>
+                        {part.material ? (
+                          <span className="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
+                            <Check className="w-3 h-3" /> Saisie
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-amber-400 font-mono">À renseigner</span>
+                        )}
+                      </div>
 
-                    {/* Menu déroulant de sélection rapide (stock / atelier / standards) */}
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          handlePartMaterialChange(part, e.target.value);
-                        }
-                      }}
-                      className="w-full bg-slate-900/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500 cursor-pointer"
-                    >
-                      <option value="">-- ou choisir dans le stock / liste --</option>
-                      {stockPanels.length > 0 && (
-                        <optgroup label="📦 En Stock Saisi (Panneaux projet)">
-                          {stockPanels.map((p, sIdx) => (
-                            <option key={`part-sp-${sIdx}`} value={p.material}>
-                              {p.material} ({p.length}×{p.width} mm)
-                            </option>
+                      {/* Champ de saisie au clavier avec suggestions datalist */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          list={`part-mat-dl-${idx}`}
+                          value={part.material || ''}
+                          onChange={(e) => handlePartMaterialChange(part, e.target.value)}
+                          placeholder="Saisir la matière (ex: MDF 19mm, Mela 19mm, OSB 18mm)..."
+                          className={`w-full bg-slate-900 border rounded-xl px-2.5 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-amber-500 transition-all ${
+                            part.material ? 'border-emerald-500/60' : 'border-amber-500/80 shadow-sm'
+                          }`}
+                        />
+                        <datalist id={`part-mat-dl-${idx}`}>
+                          {selectableMaterials.map((m) => (
+                            <option key={`p-dl-${idx}-${m}`} value={m} />
                           ))}
-                        </optgroup>
+                        </datalist>
+                      </div>
+
+                      {/* Si la matière saisie n'est pas encore enregistrée, proposer l'accord pour l'enregistrer */}
+                      {isPartMatUnsaved && (
+                        <button
+                          type="button"
+                          onClick={() => setMaterialToConfirmSave(part.material.trim())}
+                          className="text-[10px] text-amber-300 hover:text-amber-200 underline font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <BookmarkPlus className="w-3 h-3" />
+                          <span>Enregistrer « {part.material} » dans la boîte de sélection ?</span>
+                        </button>
                       )}
-                      {workshopStock.length > 0 && (
-                        <optgroup label="🏭 En Stock Atelier (Chutes)">
-                          {workshopStock.map((w, wIdx) => (
-                            <option key={`part-ws-${wIdx}`} value={w.material}>
-                              {w.material} ({w.length}×{w.width} mm)
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      <optgroup label="📋 Matières standards">
-                        {selectableMaterials
-                          .filter(
-                            (m) =>
-                              !stockPanels.some((p) => p.material === m) &&
-                              !workshopStock.some((w) => w.material === m)
-                          )
-                          .map((m) => (
-                            <option key={`part-std-${m}`} value={m}>
+
+                      {/* Menu déroulant de sélection rapide par ordre alphabétique */}
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value === '__ADD_NEW__') {
+                            setShowAddMaterialInput(true);
+                          } else if (e.target.value) {
+                            handlePartMaterialChange(part, e.target.value);
+                          }
+                        }}
+                        className="w-full bg-slate-900/80 border border-slate-700/80 hover:border-slate-600 rounded-lg px-2 py-1 text-[11px] text-slate-300 focus:outline-none focus:border-amber-500 cursor-pointer"
+                      >
+                        <option value="">-- ou choisir dans le stock / liste --</option>
+                        {stockPanels.length > 0 && (
+                          <optgroup label="📦 En Stock Saisi (Panneaux projet)">
+                            {stockPanels.map((p, sIdx) => (
+                              <option key={`part-sp-${sIdx}`} value={p.material}>
+                                {p.material} ({p.length}×{p.width} mm)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {workshopStock.length > 0 && (
+                          <optgroup label="🏭 En Stock Atelier (Chutes)">
+                            {workshopStock.map((w, wIdx) => (
+                              <option key={`part-ws-${wIdx}`} value={w.material}>
+                                {w.material} ({w.length}×{w.width} mm)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {customMaterials.length > 0 && (
+                          <optgroup label="⭐ Mes matières enregistrées">
+                            {customMaterials.map((m) => (
+                              <option key={`part-custom-${m}`} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        <optgroup label="📋 Matières de base (MDF, Mela, OSB)">
+                          {DEFAULT_BASE_MATERIALS.map((m) => (
+                            <option key={`part-base-${m}`} value={m}>
                               {m}
                             </option>
                           ))}
-                      </optgroup>
-                    </select>
+                        </optgroup>
+                        <optgroup label="✨ Personnalisation">
+                          <option value="__ADD_NEW__">➕ Enregistrer une nouvelle matière...</option>
+                        </optgroup>
+                      </select>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Pied de la fenêtre flottante */}
@@ -3205,6 +3354,57 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
               >
                 <Check className="w-4 h-4" />
                 <span>Valider la composition &amp; Voir les pièces</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODALE D'ACCORD UTILISATEUR : Enregistrement définitif d'une matière personnalisée */}
+      {materialToConfirmSave && (
+        <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bg-slate-900 border-2 border-amber-500/70 p-5 rounded-3xl max-w-md w-full shadow-2xl space-y-4 text-white"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0 border border-amber-500/40">
+                <BookmarkPlus className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-sm font-bold text-white truncate">
+                  Accord d&apos;enregistrement
+                </h4>
+                <p className="text-xs text-slate-400 truncate">
+                  Boîte de sélection des matières
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 font-mono text-sm font-bold text-amber-300 text-center">
+              {materialToConfirmSave}
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Donnez-vous votre accord pour enregistrer définitivement la matière{' '}
+              <strong className="text-white">« {materialToConfirmSave} »</strong> dans votre boîte de sélection ? Elle sera automatiquement conservée pour tous vos projets futurs.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setMaterialToConfirmSave(null)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+              >
+                Non, refuser
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmSaveMaterial(materialToConfirmSave)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Oui, j&apos;accepte et j&apos;enregistre</span>
               </button>
             </div>
           </div>

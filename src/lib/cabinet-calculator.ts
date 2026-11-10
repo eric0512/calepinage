@@ -19,6 +19,35 @@ export type CabinetPartKey =
   | 'doors'
   | 'drawers';
 
+/**
+ * Liste des matières de base standards (MDF, Mela, OSB) par ordre alphabétique et par épaisseurs
+ */
+export const DEFAULT_BASE_MATERIALS: string[] = [
+  // MDF (3, 6, 8, 9, 10, 12, 16, 19 mm)
+  'MDF 3mm',
+  'MDF 6mm',
+  'MDF 8mm',
+  'MDF 9mm',
+  'MDF 10mm',
+  'MDF 12mm',
+  'MDF 16mm',
+  'MDF 19mm',
+  // Mela (8, 12, 16, 19, 25 mm)
+  'Mela 8mm',
+  'Mela 12mm',
+  'Mela 16mm',
+  'Mela 19mm',
+  'Mela 25mm',
+  // OSB (9, 12, 15, 16, 18, 22, 25 mm)
+  'OSB 9mm',
+  'OSB 12mm',
+  'OSB 15mm',
+  'OSB 16mm',
+  'OSB 18mm',
+  'OSB 22mm',
+  'OSB 25mm',
+];
+
 export interface CabinetPieceCalculation {
   partKey?: CabinetPartKey;
   partId?: string;
