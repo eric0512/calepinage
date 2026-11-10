@@ -40,6 +40,12 @@ export type AssemblyType =
 export type BackType = 'none' | 'applique' | 'groove';
 export type DoorsType = 'none' | 'one_door' | 'two_doors';
 export type FacadePlacement = 'applique' | 'interieur';
+export type FacadeItemType = 'porte' | 'tiroir';
+
+export interface FacadeItem {
+  type: FacadeItemType; // Porte ou façade de tiroir
+  height: number | null; // Hauteur saisie (mm) ou null = calcul automatique
+}
 
 export interface CabinetConfig {
   name: string;
@@ -73,6 +79,9 @@ export interface CabinetConfig {
   facadesCount?: number; // Nombre de composants de façade (0 si aucune)
   facadePlacement?: FacadePlacement; // 'applique' ou 'interieur'
   facadeGap?: number; // Espace entre composants de façade (mm)
+  // Composition détaillée de la façade, du haut vers le bas (composants empilés sur toute la largeur).
+  // height = null → hauteur calculée automatiquement (espace restant, jeux et espacements déduits)
+  facadeItems?: FacadeItem[];
   hasDrawers?: boolean;
   drawersCount?: number; // Nombre de tiroirs (0 si aucun)
   drawerSlideThickness?: number; // Épaisseur des coulisses (mm par côté, ex: 13)

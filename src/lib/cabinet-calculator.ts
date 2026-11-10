@@ -4,9 +4,10 @@ import {
   BackType,
   DoorsType,
   CabinetConfig,
+  FacadeItem,
 } from '@/types/cutting';
 
-export type { AssemblyType, BackType, DoorsType, CabinetConfig };
+export type { AssemblyType, BackType, DoorsType, CabinetConfig, FacadeItem };
 
 export type CabinetPartKey =
   | 'sides'
@@ -50,6 +51,117 @@ const PIECE_COLORS = {
   door: '#cffafe', // Cyan très clair (pastel)
   drawers: '#fed7aa', // Orange très clair (pastel)
 };
+
+/** Jeu périphérique appliqué autour de la façade (2 mm en haut + 2 mm en bas, idem en largeur) */
+export const FACADE_EDGE_CLEARANCE = 2;
+/** Hauteur minimale d'un composant de façade (mm) */
+export const FACADE_MIN_HEIGHT = 50;
+
+export interface FacadeLayoutResult {
+  heights: number[]; // Hauteur résolue de chaque composant (0 si non déterminable)
+  autoIndex: number; // Index du composant calculé automatiquement (-1 si aucun)
+  available: number; // Hauteur totale disponible pour la façade (jeux périphériques déduits)
+  gapsTotal: number; // Somme des espacements entre composants
+  remaining: number; // Hauteur restante non attribuée (0 si tout est réparti)
+  error: string | null; // Erreur bloquante
+  warning: string | null; // Avertissement non bloquant
+}
+
+/**
+ * Hauteur disponible pour les façades selon leur positionnement.
+ * - En applique : hauteur extérieure - 2 × 2 mm de jeu
+ * - À l'intérieur : hauteur intérieure (H - 2 × épaisseur) - 2 × 2 mm de jeu
+ */
+export function getFacadeAvailableHeight(
+  height: number,
+  thickness: number,
+  placement: 'applique' | 'interieur' | undefined
+): number {
+  const base = placement === 'interieur' ? height - 2 * thickness : height;
+  return Math.max(0, base - 2 * FACADE_EDGE_CLEARANCE);
+}
+
+/**
+ * Répartit la hauteur de la façade entre ses composants empilés (tiroirs / portes).
+ * Un seul composant peut être laissé vide : sa hauteur est déduite automatiquement
+ * (hauteur disponible - hauteurs saisies - espacements entre composants).
+ * La hauteur des tiroirs doit toujours être saisie.
+ */
+export function computeFacadeLayout(
+  items: FacadeItem[],
+  availableHeight: number,
+  gap: number
+): FacadeLayoutResult {
+  const n = items.length;
+  const safeGap = gap > 0 ? gap : 0;
+  const gapsTotal = n > 1 ? (n - 1) * safeGap : 0;
+  const base: FacadeLayoutResult = {
+    heights: items.map((it) => (it.height && it.height > 0 ? it.height : 0)),
+    autoIndex: -1,
+    available: availableHeight,
+    gapsTotal,
+    remaining: 0,
+    error: null,
+    warning: null,
+  };
+  if (n === 0) return base;
+
+  const missingDrawer = items.findIndex(
+    (it) => it.type === 'tiroir' && !(it.height && it.height > 0)
+  );
+  if (missingDrawer >= 0) {
+    return {
+      ...base,
+      error: `La hauteur du tiroir (élément ${missingDrawer + 1}) est obligatoire.`,
+    };
+  }
+
+  const emptyIdx = items
+    .map((it, i) => (it.height && it.height > 0 ? -1 : i))
+    .filter((i) => i >= 0);
+  const fixedSum = base.heights.reduce((s, h) => s + h, 0);
+
+  if (emptyIdx.length > 1) {
+    return {
+      ...base,
+      error: `Saisissez la hauteur de ${n - 1} élément${n - 1 > 1 ? 's' : ''} sur ${n} : un seul élément peut être calculé automatiquement.`,
+    };
+  }
+
+  if (emptyIdx.length === 1) {
+    const autoIndex = emptyIdx[0];
+    const autoH = Math.floor(availableHeight - fixedSum - gapsTotal);
+    const heights = [...base.heights];
+    heights[autoIndex] = Math.max(0, autoH);
+    if (autoH < FACADE_MIN_HEIGHT) {
+      return {
+        ...base,
+        heights,
+        autoIndex,
+        error: `Hauteurs trop importantes : il ne reste que ${Math.max(0, autoH)} mm pour l'élément ${autoIndex + 1} (minimum ${FACADE_MIN_HEIGHT} mm).`,
+      };
+    }
+    return { ...base, heights, autoIndex };
+  }
+
+  // Toutes les hauteurs sont saisies
+  const remaining = Math.round((availableHeight - fixedSum - gapsTotal) * 10) / 10;
+  if (remaining < 0) {
+    return {
+      ...base,
+      remaining,
+      error: `La somme des hauteurs dépasse la hauteur disponible de ${Math.abs(remaining)} mm.`,
+    };
+  }
+  return {
+    ...base,
+    remaining,
+    warning:
+      remaining > 0
+        ? `Il reste ${remaining} mm non attribués sur la hauteur de la façade.`
+        : null,
+  };
+}
 
 /**
  * Calcule avec rigueur mathématique toutes les pièces à débiter pour un caisson.
@@ -329,7 +441,67 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     ? 1
     : 0;
 
-  if (activeFacadesCount > 0) {
+  // Hauteurs des façades de tiroirs (issues de la composition détaillée) pour dimensionner les bacs
+  let drawerFrontHeights: number[] = [];
+
+  if (activeFacadesCount > 0 && config.facadeItems && config.facadeItems.length > 0) {
+    // Composition détaillée : composants empilés du haut vers le bas, sur toute la largeur
+    const isInside = config.facadePlacement === 'interieur';
+    const gap = config.facadeGap !== undefined && config.facadeGap >= 0 ? config.facadeGap : 2;
+    const items = config.facadeItems;
+    const availH = getFacadeAvailableHeight(height, thickness, config.facadePlacement);
+    const facadeW = Math.max(
+      FACADE_MIN_HEIGHT,
+      (isInside ? interiorWidth : width) - 2 * FACADE_EDGE_CLEARANCE
+    );
+    const layout = computeFacadeLayout(items, availH, gap);
+    const placementLabel = isInside ? 'intérieure' : 'en applique';
+    const baseH = isInside ? interiorHeight : height;
+
+    drawerFrontHeights = items
+      .map((it, i) => (it.type === 'tiroir' ? layout.heights[i] : -1))
+      .filter((h) => h > 0);
+
+    // Regroupement des composants identiques (même type et même hauteur)
+    const groups = new Map<string, { type: FacadeItem['type']; h: number; count: number; auto: boolean }>();
+    items.forEach((it, i) => {
+      const h = Math.max(FACADE_MIN_HEIGHT, layout.heights[i] || FACADE_MIN_HEIGHT);
+      const key = `${it.type}-${h}`;
+      const g = groups.get(key);
+      if (g) {
+        g.count += 1;
+        g.auto = g.auto || i === layout.autoIndex;
+      } else {
+        groups.set(key, { type: it.type, h, count: 1, auto: i === layout.autoIndex });
+      }
+    });
+
+    const fixedDesc = items
+      .map((it, i) => (i === layout.autoIndex ? null : `${layout.heights[i]}`))
+      .filter(Boolean)
+      .join(' - ');
+
+    groups.forEach((g) => {
+      const totalQty = g.count * cabinetCount;
+      const label = g.type === 'tiroir' ? 'Façade tiroir' : 'Porte';
+      const autoFormula = g.auto
+        ? `Auto : ${baseH} - ${2 * FACADE_EDGE_CLEARANCE} (jeux)${fixedDesc ? ` - ${fixedDesc}` : ''}${
+            layout.gapsTotal > 0 ? ` - ${items.length - 1}×${gap} (espaces)` : ''
+          } = ${g.h} mm`
+        : `Hauteur saisie ${g.h} mm`;
+      pieces.push({
+        partKey: 'doors',
+        role: `${label} ${placementLabel} (H ${g.h} mm${g.count > 1 ? `, ${g.count} par caisson` : ''})`,
+        description: `${config.name} - ${label}`,
+        formula: `${autoFormula} × L ${facadeW} mm [${g.count} × ${cabinetCount} = ${totalQty} pcs]`,
+        length: Math.max(g.h, facadeW),
+        width: Math.min(g.h, facadeW),
+        quantity: totalQty,
+        material: resolvedDoorMaterial,
+        color: g.type === 'tiroir' ? PIECE_COLORS.drawers : PIECE_COLORS.door,
+      });
+    });
+  } else if (activeFacadesCount > 0) {
     const isInside = config.facadePlacement === 'interieur';
     const gap = config.facadeGap !== undefined && config.facadeGap >= 0 ? config.facadeGap : 2;
 
@@ -412,34 +584,49 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const drawerWallTh = 15;
     const drawerInnerW = Math.max(50, drawerOuterW - 2 * drawerWallTh);
 
-    const sidesQty = 2 * dCount * cabinetCount;
-    const frontBackQty = 2 * dCount * cabinetCount;
     const bottomQty = 1 * dCount * cabinetCount;
 
-    // Côtés de tiroir
-    pieces.push({
-      partKey: 'drawers',
-      role: `Côtés de tiroir (${dCount} tiroir${dCount > 1 ? 's' : ''}, coulisses ${slideLen} mm)`,
-      description: `${config.name} - Côtés tiroir`,
-      formula: `Coulisse ${slideLen} mm × H ${drawerBoxH} mm [2 × ${dCount} × ${cabinetCount} = ${sidesQty} pcs]`,
-      length: Math.max(slideLen, drawerBoxH),
-      width: Math.min(slideLen, drawerBoxH),
-      quantity: sidesQty,
-      material: resolvedDrawerMaterial,
-      color: PIECE_COLORS.drawers,
-    });
+    // Hauteur de chaque bac : déduite de la hauteur de sa façade (façade - 40 mm) si la composition
+    // détaillée est renseignée, sinon répartition standard
+    const useFrontHeights = drawerFrontHeights.length === dCount;
+    const boxGroups = new Map<number, number>();
+    for (let i = 0; i < dCount; i++) {
+      const boxH = useFrontHeights
+        ? Math.max(60, Math.min(Math.max(60, interiorHeight - 30), Math.floor(drawerFrontHeights[i] - 40)))
+        : drawerBoxH;
+      boxGroups.set(boxH, (boxGroups.get(boxH) || 0) + 1);
+    }
 
-    // Avant et arrière de bac tiroir
-    pieces.push({
-      partKey: 'drawers',
-      role: `Avant et arrière de tiroir (${dCount} tiroir${dCount > 1 ? 's' : ''})`,
-      description: `${config.name} - Avant/Arrière tiroir`,
-      formula: `Largeur ${drawerInnerW} mm × H ${drawerBoxH} mm [2 × ${dCount} × ${cabinetCount} = ${frontBackQty} pcs]`,
-      length: Math.max(drawerInnerW, drawerBoxH),
-      width: Math.min(drawerInnerW, drawerBoxH),
-      quantity: frontBackQty,
-      material: resolvedDrawerMaterial,
-      color: PIECE_COLORS.drawers,
+    boxGroups.forEach((n, boxH) => {
+      const sidesQty = 2 * n * cabinetCount;
+      const frontBackQty = 2 * n * cabinetCount;
+      const hNote = useFrontHeights ? ' (hauteur façade - 40 mm)' : '';
+
+      // Côtés de tiroir
+      pieces.push({
+        partKey: 'drawers',
+        role: `Côtés de tiroir (${n} tiroir${n > 1 ? 's' : ''}, H ${boxH} mm, coulisses ${slideLen} mm)`,
+        description: `${config.name} - Côtés tiroir`,
+        formula: `Coulisse ${slideLen} mm × H ${boxH} mm${hNote} [2 × ${n} × ${cabinetCount} = ${sidesQty} pcs]`,
+        length: Math.max(slideLen, boxH),
+        width: Math.min(slideLen, boxH),
+        quantity: sidesQty,
+        material: resolvedDrawerMaterial,
+        color: PIECE_COLORS.drawers,
+      });
+
+      // Avant et arrière de bac tiroir
+      pieces.push({
+        partKey: 'drawers',
+        role: `Avant et arrière de tiroir (${n} tiroir${n > 1 ? 's' : ''}, H ${boxH} mm)`,
+        description: `${config.name} - Avant/Arrière tiroir`,
+        formula: `Largeur ${drawerInnerW} mm × H ${boxH} mm${hNote} [2 × ${n} × ${cabinetCount} = ${frontBackQty} pcs]`,
+        length: Math.max(drawerInnerW, boxH),
+        width: Math.min(drawerInnerW, boxH),
+        quantity: frontBackQty,
+        material: resolvedDrawerMaterial,
+        color: PIECE_COLORS.drawers,
+      });
     });
 
     // Fond de tiroir

@@ -28,7 +28,28 @@ import {
   calculateCabinetPieces,
   parseCabinetPromptWithNLP,
   extractThicknessFromMaterialName,
+  computeFacadeLayout,
+  getFacadeAvailableHeight,
 } from '@/lib/cabinet-calculator';
+import type { FacadeItemType } from '@/types/cutting';
+
+/** Composant de façade en cours de saisie (hauteur vide = calcul automatique) */
+interface FacadeDraftItem {
+  type: FacadeItemType;
+  height: string;
+}
+
+/** Ajuste la liste des composants de façade au nombre demandé en conservant la saisie existante */
+function resizeFacadeDraft(items: FacadeDraftItem[], count: number): FacadeDraftItem[] {
+  const n = Math.max(1, Math.min(10, count));
+  if (items.length === n) return items;
+  if (items.length > n) return items.slice(0, n);
+  const added: FacadeDraftItem[] = Array.from({ length: n - items.length }, () => ({
+    type: 'porte' as FacadeItemType,
+    height: '',
+  }));
+  return [...items, ...added];
+}
 
 interface CabinetAssistantModalProps {
   isOpen: boolean;
@@ -222,6 +243,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     facadesCount: 1,
     facadePlacement: 'applique' as 'applique' | 'interieur',
     facadeGap: 2,
+    facadeItems: [{ type: 'porte', height: '' }] as FacadeDraftItem[],
     hasDrawers: false,
     drawersCount: 1,
     drawerSlideThickness: 13,
@@ -375,28 +397,40 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         600,
         Math.max(250, Math.floor((depthVal - 50) / 50) * 50)
       );
-      setCompositionState((prev) => ({
-        ...prev,
-        hasFacades: config.facadesCount !== undefined ? config.facadesCount > 0 : prev.hasFacades,
-        facadesCount:
+      setCompositionState((prev) => {
+        const nextCount =
           config.facadesCount && config.facadesCount > 0
             ? config.facadesCount
             : config.width >= 600
             ? 2
-            : 1,
-        facadePlacement: config.facadePlacement || prev.facadePlacement || 'applique',
-        facadeGap: config.facadeGap !== undefined ? config.facadeGap : prev.facadeGap || 2,
-        hasDrawers: config.drawersCount !== undefined ? config.drawersCount > 0 : prev.hasDrawers,
-        drawersCount: config.drawersCount && config.drawersCount > 0 ? config.drawersCount : 1,
-        drawerSlideThickness: config.drawerSlideThickness || prev.drawerSlideThickness || 13,
-        drawerSlideLength: config.drawerSlideLength || defaultSlideLen,
-      }));
+            : 1;
+        const fromConfig: FacadeDraftItem[] | null =
+          config.facadeItems && config.facadeItems.length > 0
+            ? config.facadeItems.map((it) => ({
+                type: it.type,
+                height: it.height && it.height > 0 ? String(it.height) : '',
+              }))
+            : null;
+        return {
+          ...prev,
+          hasFacades: config.facadesCount !== undefined ? config.facadesCount > 0 : prev.hasFacades,
+          facadesCount: nextCount,
+          facadeItems: resizeFacadeDraft(fromConfig || prev.facadeItems, nextCount),
+          facadePlacement: config.facadePlacement || prev.facadePlacement || 'applique',
+          facadeGap: config.facadeGap !== undefined ? config.facadeGap : prev.facadeGap || 2,
+          hasDrawers: config.drawersCount !== undefined ? config.drawersCount > 0 : prev.hasDrawers,
+          drawersCount: config.drawersCount && config.drawersCount > 0 ? config.drawersCount : 1,
+          drawerSlideThickness: config.drawerSlideThickness || prev.drawerSlideThickness || 13,
+          drawerSlideLength: config.drawerSlideLength || defaultSlideLen,
+        };
+      });
     }
   }, [
     showCompositionModal,
     config.depth,
     config.width,
     config.facadesCount,
+    config.facadeItems,
     config.facadePlacement,
     config.facadeGap,
     config.drawersCount,
@@ -405,15 +439,74 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     guidedFields.depth,
   ]);
 
+  // Calcul en direct de la répartition des hauteurs de la façade (jeux et espacements déduits)
+  const compoHeight = config.height || parseInt(guidedFields.height, 10) || 0;
+  const compoWidth = config.width || parseInt(guidedFields.width, 10) || 0;
+  const compoThickness = config.thickness || 18;
+  const facadeAvailableHeight = getFacadeAvailableHeight(
+    compoHeight,
+    compoThickness,
+    compositionState.facadePlacement
+  );
+  const facadeAvailableWidth = Math.max(
+    0,
+    (compositionState.facadePlacement === 'interieur'
+      ? compoWidth - 2 * compoThickness
+      : compoWidth) - 4
+  );
+  const facadeLayout = useMemo(
+    () =>
+      computeFacadeLayout(
+        compositionState.facadeItems.map((it) => {
+          const h = parseFloat(it.height);
+          return { type: it.type, height: !isNaN(h) && h > 0 ? h : null };
+        }),
+        facadeAvailableHeight,
+        compositionState.facadeGap
+      ),
+    [compositionState.facadeItems, compositionState.facadeGap, facadeAvailableHeight]
+  );
+  const facadeDrawerCount = compositionState.facadeItems.filter((it) => it.type === 'tiroir').length;
+
+  // Mise à jour d'un composant de la façade (type ou hauteur) avec synchronisation des tiroirs
+  const updateFacadeItem = (index: number, patch: Partial<FacadeDraftItem>) => {
+    setCompositionState((prev) => {
+      const items = prev.facadeItems.map((it, i) => (i === index ? { ...it, ...patch } : it));
+      const drawers = items.filter((it) => it.type === 'tiroir').length;
+      return {
+        ...prev,
+        facadeItems: items,
+        hasDrawers: drawers > 0 ? true : prev.hasDrawers,
+        drawersCount: drawers > 0 ? drawers : prev.drawersCount,
+      };
+    });
+  };
+
   const handleValidateComposition = () => {
+    if (compositionState.hasFacades && facadeLayout.error) return;
+    const useDetailed = compositionState.hasFacades;
+    const facadeItems = useDetailed
+      ? compositionState.facadeItems.map((it, i) => ({
+          type: it.type,
+          height: i === facadeLayout.autoIndex ? null : facadeLayout.heights[i] || null,
+        }))
+      : undefined;
+    const drawersFromFacade = useDetailed ? facadeDrawerCount : 0;
+    const hasDrawers = compositionState.hasDrawers || drawersFromFacade > 0;
+    const drawersCount = drawersFromFacade > 0
+      ? drawersFromFacade
+      : compositionState.hasDrawers
+      ? Math.max(1, compositionState.drawersCount)
+      : 0;
     setConfig((prev) => ({
       ...prev,
       hasFacades: compositionState.hasFacades,
       facadesCount: compositionState.hasFacades ? Math.max(1, compositionState.facadesCount) : 0,
+      facadeItems,
       facadePlacement: compositionState.facadePlacement,
       facadeGap: compositionState.facadeGap,
-      hasDrawers: compositionState.hasDrawers,
-      drawersCount: compositionState.hasDrawers ? Math.max(1, compositionState.drawersCount) : 0,
+      hasDrawers,
+      drawersCount,
       drawerSlideThickness: compositionState.drawerSlideThickness,
       drawerSlideLength: compositionState.drawerSlideLength,
       doors: compositionState.hasFacades
@@ -431,6 +524,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       ...prev,
       hasFacades: false,
       facadesCount: 0,
+      facadeItems: undefined,
       hasDrawers: false,
       drawersCount: 0,
       doors: 'none',
@@ -2679,10 +2773,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           value={compositionState.facadesCount}
                           onChange={(e) => {
                             const val = parseInt(e.target.value, 10);
-                            setCompositionState((prev) => ({
-                              ...prev,
-                              facadesCount: isNaN(val) || val < 1 ? 1 : val,
-                            }));
+                            const count = isNaN(val) || val < 1 ? 1 : Math.min(10, val);
+                            setCompositionState((prev) => {
+                              const items = resizeFacadeDraft(prev.facadeItems, count);
+                              const drawers = items.filter((it) => it.type === 'tiroir').length;
+                              return {
+                                ...prev,
+                                facadesCount: count,
+                                facadeItems: items,
+                                drawersCount: drawers > 0 ? drawers : prev.drawersCount,
+                              };
+                            });
                           }}
                           className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
                         />
@@ -2772,6 +2873,105 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         </button>
                       </div>
                     </div>
+
+                    {/* Composition de la façade : composants empilés du haut vers le bas */}
+                    <div className="pt-2.5 border-t border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="block text-[11px] font-semibold text-slate-300">
+                          Composition de la façade <span className="text-amber-400">*</span> :
+                        </label>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          Haut → Bas • L {facadeAvailableWidth} mm
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        Saisissez la hauteur de chaque élément ; laissez <b>une seule porte</b> vide pour que sa
+                        hauteur soit calculée automatiquement. La hauteur des tiroirs est toujours obligatoire.
+                      </p>
+
+                      <div className="space-y-1.5">
+                        {compositionState.facadeItems.map((item, idx) => {
+                          const isAuto = idx === facadeLayout.autoIndex;
+                          const resolved = facadeLayout.heights[idx];
+                          const missingDrawerH = item.type === 'tiroir' && !(parseFloat(item.height) > 0);
+                          return (
+                            <div
+                              key={idx}
+                              className="grid grid-cols-[1.5rem_1fr_1fr_5.5rem] items-center gap-2 p-2 rounded-xl bg-slate-900/70 border border-slate-800"
+                            >
+                              <span className="text-[11px] font-mono font-bold text-slate-500 text-center">
+                                {idx + 1}
+                              </span>
+                              <select
+                                value={item.type}
+                                onChange={(e) =>
+                                  updateFacadeItem(idx, { type: e.target.value as FacadeItemType })
+                                }
+                                className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2 py-1.5 text-xs text-white font-semibold"
+                              >
+                                <option value="porte">Porte</option>
+                                <option value="tiroir">Façade tiroir</option>
+                              </select>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={item.height}
+                                onChange={(e) => updateFacadeItem(idx, { height: e.target.value })}
+                                placeholder={item.type === 'tiroir' ? 'Hauteur *' : 'Auto'}
+                                title={
+                                  item.type === 'tiroir'
+                                    ? 'Hauteur de la façade du tiroir (obligatoire)'
+                                    : 'Hauteur de la porte (laisser vide pour un calcul automatique)'
+                                }
+                                className={`w-full bg-slate-900 border rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold ${
+                                  missingDrawerH
+                                    ? 'border-red-500/70 focus:border-red-400'
+                                    : 'border-slate-700 focus:border-amber-500'
+                                }`}
+                              />
+                              <span
+                                className={`text-[11px] font-mono font-bold text-right ${
+                                  isAuto ? 'text-emerald-400' : 'text-slate-400'
+                                }`}
+                              >
+                                {isAuto
+                                  ? `= ${resolved} mm`
+                                  : resolved > 0
+                                  ? `${resolved} mm`
+                                  : '—'}
+                                {isAuto && (
+                                  <span className="block text-[9px] font-semibold uppercase">auto</span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="text-[10px] font-mono text-slate-400 leading-relaxed bg-slate-950/50 rounded-lg px-2.5 py-1.5 border border-slate-800">
+                        Hauteur dispo : {facadeAvailableHeight} mm (
+                        {compositionState.facadePlacement === 'interieur'
+                          ? `${compoHeight} - 2×${compoThickness} - 2×2 jeu`
+                          : `${compoHeight} - 2×2 jeu`}
+                        )
+                        {facadeLayout.gapsTotal > 0 &&
+                          ` • Espaces : ${compositionState.facadeItems.length - 1} × ${compositionState.facadeGap} = ${facadeLayout.gapsTotal} mm`}
+                      </div>
+
+                      {facadeLayout.error && (
+                        <div className="flex items-start gap-1.5 text-[11px] text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>{facadeLayout.error}</span>
+                        </div>
+                      )}
+                      {!facadeLayout.error && facadeLayout.warning && (
+                        <div className="flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/40 rounded-lg px-2.5 py-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          <span>{facadeLayout.warning}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -2810,7 +3010,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           type="number"
                           min="1"
                           max="10"
-                          value={compositionState.drawersCount}
+                          value={
+                            compositionState.hasFacades && facadeDrawerCount > 0
+                              ? facadeDrawerCount
+                              : compositionState.drawersCount
+                          }
+                          disabled={compositionState.hasFacades && facadeDrawerCount > 0}
+                          title={
+                            compositionState.hasFacades && facadeDrawerCount > 0
+                              ? 'Défini par la composition de la façade'
+                              : undefined
+                          }
                           onChange={(e) => {
                             const val = parseInt(e.target.value, 10);
                             setCompositionState((prev) => ({
@@ -2818,7 +3028,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                               drawersCount: isNaN(val) || val < 1 ? 1 : val,
                             }));
                           }}
-                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold disabled:opacity-60"
                         />
                       </div>
 
@@ -2889,7 +3099,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
               <button
                 type="button"
                 onClick={handleValidateComposition}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1.5"
+                disabled={compositionState.hasFacades && !!facadeLayout.error}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Check className="w-4 h-4" />
                 <span>Valider la composition &amp; Voir les pièces</span>
