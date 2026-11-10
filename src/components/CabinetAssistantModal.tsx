@@ -18,6 +18,7 @@ import {
   Trash2,
   FileText,
   Check,
+  Pencil,
 } from 'lucide-react';
 import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
@@ -32,7 +33,9 @@ import {
   computeFacadeLayout,
   getFacadeAvailableHeight,
   DEFAULT_BASE_MATERIALS,
+  inferCabinetConfigFromItems,
 } from '@/lib/cabinet-calculator';
+import { getPieceCabinet, getPiecePart, UNASSIGNED_CABINET_LABEL } from '@/lib/piece-labels';
 import type { FacadeItemType } from '@/types/cutting';
 
 /** Composant de façade en cours de saisie (hauteur vide = calcul automatique) */
@@ -57,6 +60,9 @@ interface CabinetAssistantModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddPieces: (newItems: CutItem[]) => void;
+  onUpdateCabinetPieces?: (oldCabinetName: string, newItems: CutItem[]) => void;
+  existingItems?: CutItem[];
+  initialEditingCabinetName?: string | null;
   onAddAndOptimize?: (newItems: CutItem[]) => void;
   availableMaterials: string[];
   stockPanels?: StockPanel[];
@@ -227,12 +233,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   isOpen,
   onClose,
   onAddPieces,
+  onUpdateCabinetPieces,
+  existingItems = [],
+  initialEditingCabinetName = null,
   availableMaterials,
   stockPanels = [],
   workshopStock = [],
 }) => {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'visual' | 'ai'>('ai');
+  // Caisson existant sélectionné pour modification dans le projet en cours (null = création d'un nouveau caisson)
+  const [editingCabinetName, setEditingCabinetName] = useState<string | null>(null);
   // À la création d'un nouveau projet, tous les champs de l'assistant IA sont vides
   const [config, setConfig] = useState<CabinetConfig>(() => ({ ...EMPTY_CONFIG }));
   const [guidedFields, setGuidedFields] = useState<GuidedTemplateFields>(() => ({
@@ -255,6 +266,30 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const [bulkMaterial, setBulkMaterial] = useState('');
   const autoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Liste des caissons distincts déjà présents dans la liste de débit du projet en cours
+  const existingCabinets = useMemo(() => {
+    if (!existingItems || existingItems.length === 0) return [];
+    const map = new Map<string, CutItem[]>();
+    existingItems.forEach((it) => {
+      const cab =
+        getPieceCabinet(it.name) ||
+        (it.cabinetConfig?.name?.trim() ? it.cabinetConfig.name.trim() : null);
+      if (cab && cab !== UNASSIGNED_CABINET_LABEL) {
+        if (!map.has(cab)) map.set(cab, []);
+        map.get(cab)!.push(it);
+      }
+    });
+    return Array.from(map.entries()).map(([name, cabItems]) => {
+      const cfg = inferCabinetConfigFromItems(name, cabItems);
+      return {
+        name,
+        config: cfg,
+        totalQty: cabItems.reduce((acc, it) => acc + it.quantity, 0),
+        cabItems,
+      };
+    });
+  }, [existingItems]);
 
   // Prompt IA & Presets Personnalisés
   const [aiPrompt, setAiPrompt] = useState('');
@@ -307,6 +342,132 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     };
   }, []);
 
+  // Réinitialiser tous les champs à vide (nouveau caisson)
+  const resetAllAssistantFields = useCallback(() => {
+    setEditingCabinetName(null);
+    setConfig({ ...EMPTY_CONFIG });
+    setGuidedFields({ ...EMPTY_GUIDED_FIELDS });
+    setAiPrompt('');
+    setAiSuccessMessage(null);
+    setGuidedValidationError(null);
+    setShowPartsSummaryModal(false);
+    setShowCompositionModal(false);
+    setActiveTab('ai');
+    setShowGuidedTemplate(true);
+  }, []);
+
+  // Charger un caisson existant du projet pour le modifier dans l'assistant IA
+  const handleSelectCabinetToEdit = useCallback(
+    (cabName: string | null) => {
+      if (!cabName) {
+        resetAllAssistantFields();
+        return;
+      }
+      const found = existingCabinets.find((c) => c.name === cabName);
+      if (!found) return;
+
+      const c = found.config;
+      setEditingCabinetName(cabName);
+
+      // Récupérer et préserver toutes les matières personnalisées par partie
+      const partMaterials: Record<string, string> = { ...(c.partMaterials || {}) };
+      found.cabItems.forEach((it) => {
+        const part = getPiecePart(it.name).toLowerCase();
+        const mat = it.material?.trim();
+        if (!mat) return;
+        if (part.includes('côté') || part.includes('cote') || part.includes('montant')) {
+          if (!partMaterials['sides']) partMaterials['sides'] = mat;
+        } else if (part.includes('dessus') || part.includes('haut')) {
+          if (!partMaterials['top']) partMaterials['top'] = mat;
+        } else if (part.includes('dessous') || part.includes('bas')) {
+          if (!partMaterials['bottom']) partMaterials['bottom'] = mat;
+        } else if (part.includes('fond') || part.includes('dos') || part.includes('arrière')) {
+          if (!partMaterials['back']) partMaterials['back'] = mat;
+        } else if (part.includes('étagère') || part.includes('etagere')) {
+          if (!partMaterials['shelves']) partMaterials['shelves'] = mat;
+        } else if (part.includes('séparat') || part.includes('separat')) {
+          if (!partMaterials['partitions']) partMaterials['partitions'] = mat;
+        } else if (part.includes('porte')) {
+          if (!partMaterials['doors']) partMaterials['doors'] = mat;
+        }
+      });
+
+      // Mettre à jour la configuration
+      setConfig({
+        ...c,
+        name: c.name || cabName,
+        partMaterials,
+      });
+
+      // Mettre à jour les champs du gabarit guidé ("Remplir les cases")
+      setGuidedFields({
+        elementName: 'Caisson',
+        cabinetCount:
+          c.cabinetCount && c.cabinetCount > 0 ? String(c.cabinetCount) : '1',
+        customName: c.name || cabName,
+        height: c.height ? String(c.height) : '',
+        width: c.width ? String(c.width) : '',
+        depth: c.depth ? String(c.depth) : '',
+        partitionsCount:
+          c.partitionsCount !== undefined && c.partitionsCount >= 0
+            ? String(c.partitionsCount)
+            : '0',
+        shelvesCount:
+          c.shelvesCount !== undefined && c.shelvesCount >= 0
+            ? String(c.shelvesCount)
+            : '0',
+        assemblyType: c.assemblyType || 'sides_full',
+        topOverhangSides:
+          c.topOverhangSides !== undefined ? String(c.topOverhangSides) : '',
+        topOverhangFront:
+          c.topOverhangFront !== undefined ? String(c.topOverhangFront) : '',
+        backType: c.backType || 'groove',
+      });
+
+      // Mettre à jour la composition du meuble (façades & tiroirs)
+      const compCount =
+        c.facadesCount && c.facadesCount > 0
+          ? c.facadesCount
+          : c.facadeItems && c.facadeItems.length > 0
+          ? c.facadeItems.length
+          : c.doors === 'two_doors'
+          ? 2
+          : 1;
+
+      setCompositionState({
+        hasFacades: !!c.hasFacades,
+        facadesCount: compCount,
+        facadePlacement: c.facadePlacement || 'applique',
+        facadeGap: c.facadeGap ?? 2,
+        facadeItems:
+          c.facadeItems && c.facadeItems.length > 0
+            ? c.facadeItems.map((it) => ({
+                type: it.type,
+                height:
+                  it.height !== null && it.height !== undefined
+                    ? String(it.height)
+                    : '',
+              }))
+            : resizeFacadeDraft([], compCount),
+        hasDrawers: !!c.hasDrawers,
+        drawersCount: c.drawersCount || 1,
+        drawerSlideThickness: c.drawerSlideThickness ?? 13,
+        drawerSlideLength:
+          c.drawerSlideLength ??
+          (c.depth ? Math.max(250, c.depth - 50) : 500),
+      });
+
+      if (c.material) {
+        setBulkMaterial(c.material);
+      }
+
+      setAiPrompt(generatePromptFromConfig(c));
+      setAiSuccessMessage(`Caisson "${cabName}" chargé dans l'Assistant IA pour modification.`);
+      setGuidedValidationError(null);
+    },
+    [existingCabinets, resetAllAssistantFields]
+  );
+
   // À chaque ouverture de l'Assistant IA, ouvrir sur l'onglet IA et sur "Remplir les cases"
   useEffect(() => {
     if (isOpen) {
@@ -314,8 +475,14 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       setShowGuidedTemplate(true);
       setGuidedValidationError(null);
       setShowCompositionModal(false);
+
+      if (initialEditingCabinetName) {
+        handleSelectCabinetToEdit(initialEditingCabinetName);
+      } else {
+        setEditingCabinetName(null);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialEditingCabinetName, handleSelectCabinetToEdit]);
 
   // Vérifie si tous les champs obligatoires de "Remplir les cases" sont complétés
   const isGuidedFormComplete = useCallback((gf: GuidedTemplateFields): boolean => {
@@ -933,24 +1100,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     return calculated.pieces.every((p) => Boolean(p.material && p.material.trim()));
   }, [calculated.pieces]);
 
-  // Réinitialiser tous les champs à vide (utilisé après l'ajout d'un caisson)
-  const resetAllAssistantFields = () => {
-    setConfig({ ...EMPTY_CONFIG });
-    setGuidedFields({ ...EMPTY_GUIDED_FIELDS });
-    setAiPrompt('');
-    setAiSuccessMessage(null);
-    setGuidedValidationError(null);
-    setShowPartsSummaryModal(false);
-    setShowCompositionModal(false);
-    setActiveTab('ai');
-    setShowGuidedTemplate(true);
-  };
-
-  // Injection des pièces calculées dans la liste de débit
+  // Injection des pièces calculées dans la liste de débit (ajout ou mise à jour du caisson)
   const handleInjectPieces = () => {
     if (!hasValidDimensions || calculated.cutItems.length === 0) {
       alert(
-        'Veuillez renseigner les dimensions du caisson (Hauteur, Largeur, Profondeur) avant de l’ajouter au projet.'
+        'Veuillez renseigner les dimensions du caisson (Hauteur, Largeur, Profondeur) avant de l’enregistrer dans le projet.'
       );
       return;
     }
@@ -958,7 +1112,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       setShowPartsSummaryModal(true);
       return;
     }
-    onAddPieces(calculated.cutItems);
+    if (editingCabinetName && onUpdateCabinetPieces) {
+      onUpdateCabinetPieces(editingCabinetName, calculated.cutItems);
+    } else {
+      onAddPieces(calculated.cutItems);
+    }
     resetAllAssistantFields();
     onClose();
   };
@@ -1178,6 +1336,87 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
         {/* Corps de la modale scrollable */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          {/* Sélecteur Mode : Créer un nouveau caisson OU Modifier un caisson existant du projet */}
+          {existingCabinets.length > 0 && (
+            <div className="bg-slate-850 border border-slate-700/80 rounded-2xl p-3 sm:p-3.5 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-slate-300">Action :</span>
+                  <div className="inline-flex rounded-xl bg-slate-900 p-1 border border-slate-800 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCabinetToEdit(null)}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                        editingCabinetName === null
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Nouveau caisson</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (existingCabinets.length > 0) {
+                          handleSelectCabinetToEdit(
+                            editingCabinetName || existingCabinets[0].name
+                          );
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                        editingCabinetName !== null
+                          ? 'bg-amber-500 text-slate-950 shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Modifier un caisson existant</span>
+                    </button>
+                  </div>
+                </div>
+
+                {editingCabinetName !== null && (
+                  <div className="flex items-center gap-2 min-w-0">
+                    <label className="text-xs text-amber-300 font-bold shrink-0">
+                      Caisson à modifier :
+                    </label>
+                    <select
+                      value={editingCabinetName}
+                      onChange={(e) => handleSelectCabinetToEdit(e.target.value)}
+                      className="bg-slate-900 border border-amber-500/80 text-white rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500 max-w-[280px] truncate"
+                    >
+                      {existingCabinets.map((cab) => (
+                        <option key={cab.name} value={cab.name}>
+                          {cab.name} ({cab.config.height} × {cab.config.width} × {cab.config.depth} mm)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {editingCabinetName !== null && (
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 px-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs">
+                  <div className="flex items-center gap-2 font-medium min-w-0">
+                    <Pencil className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="truncate">
+                      Modification en cours du caisson :{' '}
+                      <strong className="text-amber-300 font-bold">{editingCabinetName}</strong>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCabinetToEdit(null)}
+                    className="text-[11px] underline text-amber-400 hover:text-amber-200 font-medium shrink-0"
+                  >
+                    Repasser en création de nouveau caisson
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* VUE 1 : ASSISTANT PROMPT IA & GABARITS */}
           {activeTab === 'ai' && (
             <div className="space-y-4">
@@ -1229,6 +1468,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-bold tracking-wide">
                             Caisson
                           </span>
+                          {editingCabinetName && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
+                              Modification en cours
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -2622,10 +2866,22 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
               type="button"
               onClick={handleInjectPieces}
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs transition-all shadow-lg active:scale-95"
-              title="Ajoute les coupes de ce caisson à la liste de débit. L'optimisation se lance ensuite depuis le projet, une fois tous les caissons saisis."
+              title={
+                editingCabinetName
+                  ? 'Mettre à jour les coupes de ce caisson dans la liste de débit'
+                  : "Ajoute les coupes de ce caisson à la liste de débit. L'optimisation se lance ensuite depuis le projet, une fois tous les caissons saisis."
+              }
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Ajouter ce caisson au projet</span>
+              {editingCabinetName ? (
+                <Check className="w-3.5 h-3.5" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {editingCabinetName
+                  ? 'Mettre à jour ce caisson dans le projet'
+                  : 'Ajouter ce caisson au projet'}
+              </span>
             </button>
           </div>
         </div>
@@ -2989,8 +3245,16 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   onClick={handleInjectPieces}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs transition-all shadow-md disabled:opacity-40"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Ajouter ce caisson au projet</span>
+                  {editingCabinetName ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {editingCabinetName
+                      ? 'Mettre à jour ce caisson dans le projet'
+                      : 'Ajouter ce caisson au projet'}
+                  </span>
                 </button>
               </div>
             </div>

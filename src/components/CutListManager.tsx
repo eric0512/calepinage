@@ -15,6 +15,7 @@ import {
   X,
   RefreshCw,
   Lock,
+  Sparkles,
 } from 'lucide-react';
 import { CabinetAssistantModal } from '@/components/CabinetAssistantModal';
 import {
@@ -31,6 +32,7 @@ interface CutListManagerProps {
   workshopStock?: WorkshopItem[];
   onRequestOptimize?: (newItems?: CutItem[]) => void;
   isCabinetModalOpen?: boolean;
+  onOpenCabinetModal?: () => void;
   onCloseCabinetModal?: () => void;
 }
 
@@ -202,12 +204,16 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   workshopStock,
   onRequestOptimize,
   isCabinetModalOpen = false,
+  onOpenCabinetModal,
   onCloseCabinetModal,
 }) => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Caisson actuellement sélectionné pour modification complète dans l'assistant IA
+  const [editingCabinetInAssistant, setEditingCabinetInAssistant] = useState<string | null>(null);
 
   // État d'édition des dimensions d'un caisson (verrouillé par défaut tant qu'on n'appuie pas sur le logo)
   const [editingCabinet, setEditingCabinet] = useState<string | null>(null);
@@ -422,6 +428,53 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
               : undefined,
           }));
     onChange([...items, ...renamed]);
+  };
+
+  // Mise à jour des coupes d'un caisson modifié via l'assistant IA
+  const handleUpdateCabinetPieces = (oldCabinetName: string, newPieces: CutItem[]) => {
+    if (newPieces.length === 0) return;
+    const existing = new Set(
+      items
+        .map((it) => getCabinetName(it.name))
+        .filter((name) => name !== oldCabinetName)
+    );
+    const baseName = getCabinetName(newPieces[0].name);
+    let finalName = baseName;
+    if (baseName !== UNASSIGNED_CABINET_LABEL && existing.has(baseName)) {
+      let n = 2;
+      while (existing.has(`${baseName} (${n})`)) n++;
+      finalName = `${baseName} (${n})`;
+    }
+    const finalPieces =
+      finalName === baseName
+        ? newPieces
+        : newPieces.map((p) => ({
+            ...p,
+            name: p.name.startsWith(`${baseName} - `)
+              ? `${finalName} - ${p.name.slice(baseName.length + 3)}`
+              : p.name,
+            cabinetConfig: p.cabinetConfig
+              ? { ...p.cabinetConfig, name: finalName }
+              : undefined,
+          }));
+
+    const resultItems: CutItem[] = [];
+    let inserted = false;
+    for (const it of items) {
+      if (getCabinetName(it.name) === oldCabinetName) {
+        if (!inserted) {
+          resultItems.push(...finalPieces);
+          inserted = true;
+        }
+      } else {
+        resultItems.push(it);
+      }
+    }
+    if (!inserted) {
+      resultItems.push(...finalPieces);
+    }
+    onChange(resultItems);
+    setEditingCabinetInAssistant(null);
   };
 
   // État local d'ajout rapide (tous les champs vides par défaut pour un nouveau projet)
@@ -730,9 +783,25 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                       <Tag className="w-3.5 h-3.5 shrink-0" />
                       <span className="truncate">{cab.cabinet}</span>
                     </h3>
-                    <span className="text-[11px] text-slate-400 font-mono shrink-0">
-                      {cab.totalQty} pce{cab.totalQty > 1 ? 's' : ''}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {cab.cabinet !== UNASSIGNED_CABINET_LABEL && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCabinetInAssistant(cab.cabinet);
+                            onOpenCabinetModal?.();
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-bold transition-all shadow-sm active:scale-95"
+                          title="Modifier ce caisson dans l'Assistant IA (dimensions, séparations, étagères, façades, coulisses...)"
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-400" />
+                          <span>Modifier dans l&apos;IA</span>
+                        </button>
+                      )}
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        {cab.totalQty} pce{cab.totalQty > 1 ? 's' : ''}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Dimensions du caisson sous le nom + logo à droite permettant de les modifier */}
@@ -1121,11 +1190,17 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           document.body
         )}
 
-      {/* Modal Assistant Caisson & Mobilier IA : ajoute uniquement les coupes (pas d'optimisation automatique) */}
+      {/* Modal Assistant Caisson & Mobilier IA : ajoute ou met à jour les coupes d'un caisson */}
       <CabinetAssistantModal
         isOpen={isCabinetModalOpen}
-        onClose={() => onCloseCabinetModal?.()}
+        onClose={() => {
+          setEditingCabinetInAssistant(null);
+          onCloseCabinetModal?.();
+        }}
         onAddPieces={handleAddCabinetPieces}
+        onUpdateCabinetPieces={handleUpdateCabinetPieces}
+        existingItems={items}
+        initialEditingCabinetName={editingCabinetInAssistant}
         availableMaterials={
           allAvailableMaterials && allAvailableMaterials.length > 0
             ? allAvailableMaterials

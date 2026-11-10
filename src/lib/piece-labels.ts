@@ -4,6 +4,8 @@
  * Ex : "Meuble bas de 500 - Côtés"
  */
 
+export const UNASSIGNED_CABINET_LABEL = 'Pièces diverses';
+
 /** Nom du meuble de destination (ou null si la pièce n'est rattachée à aucun meuble) */
 export function getPieceCabinet(name: string): string | null {
   if (!name || !name.includes(' - ')) return null;
