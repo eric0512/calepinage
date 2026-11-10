@@ -54,6 +54,10 @@ export default function Home() {
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState<boolean>(false);
   const [showCabinetModal, setShowCabinetModal] = useState<boolean>(false);
+  // Orientations individuelles des panneaux dans le plan de coupe (vertical / horizontal)
+  const [panelOrientations, setPanelOrientations] = useState<
+    Record<string, 'vertical' | 'horizontal'>
+  >({});
 
   // Onglet mobile
   const [mobileTab, setMobileTab] = useState<'input' | 'results'>('input');
@@ -717,6 +721,8 @@ export default function Home() {
           result={optimizationResult}
           cutItems={cutItems}
           settings={settings}
+          projectName={projectName}
+          panelOrientations={panelOrientations}
         />
       )}
 
@@ -847,6 +853,9 @@ export default function Home() {
                 <CuttingVisualizer
                   panels={optimizationResult.panels}
                   kerf={settings.kerf}
+                  projectName={projectName}
+                  panelOrientations={panelOrientations}
+                  onPanelOrientationsChange={setPanelOrientations}
                 />
 
                 {/* Statistiques Globales & Taux de chute */}

@@ -8,6 +8,8 @@ interface PrintDossierProps {
   result: OptimizationResult;
   cutItems: CutItem[];
   settings: CutSettings;
+  projectName?: string;
+  panelOrientations?: Record<string, 'vertical' | 'horizontal'>;
 }
 
 /**
@@ -31,6 +33,8 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
   result,
   cutItems,
   settings,
+  projectName = 'Projet Menuiserie',
+  panelOrientations,
 }) => {
   return (
     <div className="hidden print:block text-black bg-white p-6 font-sans">
@@ -41,7 +45,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
             Fiche de Débit & Plan de Calepinage
           </h1>
           <p className="text-sm text-gray-600 mt-1">
-            Généré par CalepinagePro Menuiserie — {new Date().toLocaleDateString('fr-FR')}
+            Projet : <strong className="text-black">{projectName}</strong> — Généré par CalepinagePro Menuiserie — {new Date().toLocaleDateString('fr-FR')}
           </p>
         </div>
         <div className="text-right text-xs">
@@ -103,11 +107,18 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
         </h2>
 
         {result.panels.map((panel, idx) => {
-          const isLandscape = panel.panelLength > panel.panelWidth;
+          const isPanelVertical =
+            (panelOrientations?.[String(panel.panelIndex)] || 'vertical') === 'vertical';
           const panelCabinets = getDistinctCabinets(panel.placedPieces.map((p) => p.name));
           const isMixedPanel = panelCabinets.length > 1;
-          const panelW = isLandscape ? panel.panelWidth : panel.panelLength; // petite dimension (horizontale)
-          const panelH = isLandscape ? panel.panelLength : panel.panelWidth; // grande dimension (verticale)
+          const panelW = isPanelVertical
+            ? Math.min(panel.panelLength, panel.panelWidth)
+            : Math.max(panel.panelLength, panel.panelWidth);
+          const panelH = isPanelVertical
+            ? Math.max(panel.panelLength, panel.panelWidth)
+            : Math.min(panel.panelLength, panel.panelWidth);
+          const isSwapped =
+            panelW === panel.panelWidth && panel.panelLength !== panel.panelWidth;
 
           const margin = 40;
           const svgW = panelW + margin * 2;
@@ -125,7 +136,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                   </strong>{' '}
                   <span className="font-semibold">{panel.material}</span> — Format brut :{' '}
                   <span className="font-mono">
-                    {panel.panelLength} × {panel.panelWidth} mm (Vertical {panelH} × Horizontal {panelW} mm)
+                    {panel.panelLength} × {panel.panelWidth} mm ({isPanelVertical ? 'Vertical' : 'Horizontal'} {panelH} × {panelW} mm)
                   </span>
                 </div>
                 <div className="font-mono">
@@ -139,7 +150,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                 </div>
               </div>
 
-              {/* Rendu SVG noir & blanc / contours nets pour imprimante (orienté verticalement) */}
+              {/* Rendu SVG noir & blanc / contours nets pour imprimante */}
               <div className="w-full border border-gray-400 bg-white p-2 flex justify-center">
                 <svg
                   viewBox={`0 0 ${svgW} ${svgH}`}
@@ -159,10 +170,10 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
 
                     {/* Chutes */}
                     {panel.offcuts.map((offcut) => {
-                      const ox = isLandscape ? offcut.y : offcut.x;
-                      const oy = isLandscape ? offcut.x : offcut.y;
-                      const ow = isLandscape ? offcut.width : offcut.length;
-                      const oh = isLandscape ? offcut.length : offcut.width;
+                      const ox = isSwapped ? offcut.y : offcut.x;
+                      const oy = isSwapped ? offcut.x : offcut.y;
+                      const ow = isSwapped ? offcut.width : offcut.length;
+                      const oh = isSwapped ? offcut.length : offcut.width;
 
                       return (
                         <g key={offcut.id}>
@@ -196,10 +207,10 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
 
                     {/* Traits de coupe */}
                     {panel.cutLines.map((line, i) => {
-                      const x1 = isLandscape ? line.y1 : line.x1;
-                      const y1 = isLandscape ? line.x1 : line.y1;
-                      const x2 = isLandscape ? line.y2 : line.x2;
-                      const y2 = isLandscape ? line.x2 : line.y2;
+                      const x1 = isSwapped ? line.y1 : line.x1;
+                      const y1 = isSwapped ? line.x1 : line.y1;
+                      const x2 = isSwapped ? line.y2 : line.x2;
+                      const y2 = isSwapped ? line.x2 : line.y2;
 
                       return (
                         <line
@@ -217,15 +228,15 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
 
                     {/* Pièces */}
                     {panel.placedPieces.map((piece) => {
-                      const px = isLandscape ? piece.y : piece.x;
+                      const px = isSwapped ? piece.y : piece.x;
                       const pieceCabinet = getPieceCabinet(piece.name);
                       const piecePart = getPiecePart(piece.name);
-                      const py = isLandscape ? piece.x : piece.y;
-                      const pw = isLandscape ? piece.width : piece.length;
-                      const ph = isLandscape ? piece.length : piece.width;
+                      const py = isSwapped ? piece.x : piece.y;
+                      const pw = isSwapped ? piece.width : piece.length;
+                      const ph = isSwapped ? piece.length : piece.width;
 
-                      const topDim = Math.round(isLandscape ? piece.width : piece.length);
-                      const leftDim = Math.round(isLandscape ? piece.length : piece.width);
+                      const topDim = Math.round(isSwapped ? piece.width : piece.length);
+                      const leftDim = Math.round(isSwapped ? piece.length : piece.width);
 
                       // Taille de police pour les cotations
                       const fSizeDim = Math.min(

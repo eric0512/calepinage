@@ -20,33 +20,42 @@ function toLightColorRgb(hexColor?: string): { r: number; g: number; b: number }
 }
 
 /**
- * Génère et télécharge un fichier PDF haute résolution (1 panneau par page A4 portrait),
- * avec les panneaux orientés verticalement (plus grande dimension à la verticale, plus petite à l'horizontale).
+ * Génère et télécharge un fichier PDF haute résolution (1 panneau par page A4),
+ * en respectant l'orientation choisie pour chaque panneau individuellement (Portrait ou Paysage).
  */
 export function exportCuttingPlansToPdf(
   panels: PanelResult[],
   kerf: number,
-  projectName: string = 'Projet Menuiserie'
+  projectName: string = 'Projet Menuiserie',
+  panelOrientations?: Record<string, 'vertical' | 'horizontal'>
 ) {
   if (!panels || panels.length === 0) return;
 
+  const firstPanelKey = String(panels[0]?.panelIndex ?? 1);
+  const firstIsVertical =
+    (panelOrientations?.[firstPanelKey] || 'vertical') === 'vertical';
+
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: firstIsVertical ? 'portrait' : 'landscape',
     unit: 'mm',
     format: 'a4',
   });
 
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const marginX = 12;
-  const marginTop = 12;
-  const marginBottom = 12;
-  const contentWidth = pageWidth - marginX * 2; // 186 mm
-
   panels.forEach((panel, idx) => {
+    const isPanelVertical =
+      (panelOrientations?.[String(panel.panelIndex)] || 'vertical') === 'vertical';
+    const pageOrientation = isPanelVertical ? 'portrait' : 'landscape';
+
     if (idx > 0) {
-      doc.addPage('a4', 'portrait');
+      doc.addPage('a4', pageOrientation);
     }
+
+    const pageWidth = isPanelVertical ? 210 : 297;
+    const pageHeight = isPanelVertical ? 297 : 210;
+    const marginX = 12;
+    const marginTop = 12;
+    const marginBottom = 12;
+    const contentWidth = pageWidth - marginX * 2;
 
     // 1. En-tête de la page A4 (Fond blanc avec texte noir pour impression et lisibilité optimale)
     const headerHeight = 22;
@@ -71,7 +80,7 @@ export function exportCuttingPlansToPdf(
     doc.setFont('helvetica', 'normal');
     const sourceLabel = panel.workshopSourceId ? 'Chute Atelier' : 'Panneau Stock';
     doc.text(
-      `Matière : ${panel.material} (${sourceLabel}) — Format brut : ${panel.panelLength} × ${panel.panelWidth} mm`,
+      `Matière : ${panel.material} (${sourceLabel}) — Format brut : ${panel.panelLength} × ${panel.panelWidth} mm (${isPanelVertical ? 'Vertical' : 'Horizontal'})`,
       marginX + 5,
       marginTop + 12.5
     );
@@ -96,11 +105,15 @@ export function exportCuttingPlansToPdf(
       marginTop + 18
     );
 
-    // 2. Dimensions du plan de coupe en orientation VERTICALE
-    // La plus grande dimension à la verticale, la plus petite à l'horizontale
-    const isLandscape = panel.panelLength > panel.panelWidth;
-    const panelW = isLandscape ? panel.panelWidth : panel.panelLength; // petite dimension (horizontale)
-    const panelH = isLandscape ? panel.panelLength : panel.panelWidth; // grande dimension (verticale)
+    // 2. Dimensions du plan de coupe selon l'orientation individuelle choisie
+    const panelW = isPanelVertical
+      ? Math.min(panel.panelLength, panel.panelWidth)
+      : Math.max(panel.panelLength, panel.panelWidth);
+    const panelH = isPanelVertical
+      ? Math.max(panel.panelLength, panel.panelWidth)
+      : Math.min(panel.panelLength, panel.panelWidth);
+    const isSwapped =
+      panelW === panel.panelWidth && panel.panelLength !== panel.panelWidth;
 
     // Dégagement garanti : réserve 14 mm au-dessus du panneau pour la cote supérieure
     const topDimensionMargin = 14;
@@ -128,10 +141,10 @@ export function exportCuttingPlansToPdf(
 
     // 3. Chutes (Offcuts)
     panel.offcuts.forEach((offcut) => {
-      const ox = isLandscape ? offcut.y : offcut.x;
-      const oy = isLandscape ? offcut.x : offcut.y;
-      const ow = isLandscape ? offcut.width : offcut.length;
-      const oh = isLandscape ? offcut.length : offcut.width;
+      const ox = isSwapped ? offcut.y : offcut.x;
+      const oy = isSwapped ? offcut.x : offcut.y;
+      const ow = isSwapped ? offcut.width : offcut.length;
+      const oh = isSwapped ? offcut.length : offcut.width;
 
       const bx = drawX + ox * scale;
       const by = drawY + oy * scale;
@@ -179,19 +192,19 @@ export function exportCuttingPlansToPdf(
     doc.setDrawColor(217, 119, 6); // amber-600
     doc.setLineWidth(0.35);
     panel.cutLines.forEach((line) => {
-      const lx1 = drawX + (isLandscape ? line.y1 : line.x1) * scale;
-      const ly1 = drawY + (isLandscape ? line.x1 : line.y1) * scale;
-      const lx2 = drawX + (isLandscape ? line.y2 : line.x2) * scale;
-      const ly2 = drawY + (isLandscape ? line.x2 : line.y2) * scale;
+      const lx1 = drawX + (isSwapped ? line.y1 : line.x1) * scale;
+      const ly1 = drawY + (isSwapped ? line.x1 : line.y1) * scale;
+      const lx2 = drawX + (isSwapped ? line.y2 : line.x2) * scale;
+      const ly2 = drawY + (isSwapped ? line.x2 : line.y2) * scale;
       doc.line(lx1, ly1, lx2, ly2);
     });
 
     // 5. Pièces placées
     panel.placedPieces.forEach((piece) => {
-      const px = isLandscape ? piece.y : piece.x;
-      const py = isLandscape ? piece.x : piece.y;
-      const pw = isLandscape ? piece.width : piece.length;
-      const ph = isLandscape ? piece.length : piece.width;
+      const px = isSwapped ? piece.y : piece.x;
+      const py = isSwapped ? piece.x : piece.y;
+      const pw = isSwapped ? piece.width : piece.length;
+      const ph = isSwapped ? piece.length : piece.width;
 
       const bx = drawX + px * scale;
       const by = drawY + py * scale;
@@ -207,8 +220,8 @@ export function exportCuttingPlansToPdf(
       doc.rect(bx, by, bw, bh, 'FD');
 
       // Cotations sur les arêtes haute et gauche, et désignation au centre
-      const topDim = Math.round(isLandscape ? piece.width : piece.length);
-      const leftDim = Math.round(isLandscape ? piece.length : piece.width);
+      const topDim = Math.round(isSwapped ? piece.width : piece.length);
+      const leftDim = Math.round(isSwapped ? piece.length : piece.width);
 
       if (bw >= 7 && bh >= 5) {
         // TEXTE EN NOIR PUR POUR LISIBILITÉ MAXIMALE SUR COULEURS TRÈS CLAIRES

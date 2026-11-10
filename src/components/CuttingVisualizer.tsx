@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useCallback } from 'react';
 import { PanelResult, PlacedPiece, OffcutArea } from '@/types/cutting';
 import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  RotateCw,
   ChevronLeft,
   ChevronRight,
   Layers,
@@ -18,11 +19,17 @@ import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-
 interface CuttingVisualizerProps {
   panels: PanelResult[];
   kerf: number;
+  projectName?: string;
+  panelOrientations?: Record<string, 'vertical' | 'horizontal'>;
+  onPanelOrientationsChange?: (orientations: Record<string, 'vertical' | 'horizontal'>) => void;
 }
 
 export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   panels,
   kerf,
+  projectName = 'Projet Menuiserie',
+  panelOrientations,
+  onPanelOrientationsChange,
 }) => {
   const [selectedPanelIdx, setSelectedPanelIdx] = useState(0);
   const [hoveredPiece, setHoveredPiece] = useState<PlacedPiece | null>(null);
@@ -30,13 +37,51 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [internalOrientations, setInternalOrientations] = useState<
+    Record<string, 'vertical' | 'horizontal'>
+  >({});
+
+  const effectiveOrientations = panelOrientations ?? internalOrientations;
+
+  const handleToggleOrientation = useCallback(
+    (panelIndex: number) => {
+      const key = String(panelIndex);
+      const current = effectiveOrientations[key] || 'vertical';
+      const updated: Record<string, 'vertical' | 'horizontal'> = {
+        ...effectiveOrientations,
+        [key]: current === 'vertical' ? 'horizontal' : 'vertical',
+      };
+      if (onPanelOrientationsChange) {
+        onPanelOrientationsChange(updated);
+      } else {
+        setInternalOrientations(updated);
+      }
+    },
+    [effectiveOrientations, onPanelOrientationsChange]
+  );
+
+  const handleToggleAllOrientations = useCallback(() => {
+    const allAreHorizontal = panels.every(
+      (p) => (effectiveOrientations[String(p.panelIndex)] || 'vertical') === 'horizontal'
+    );
+    const target: 'vertical' | 'horizontal' = allAreHorizontal ? 'vertical' : 'horizontal';
+    const updated: Record<string, 'vertical' | 'horizontal'> = { ...effectiveOrientations };
+    panels.forEach((p) => {
+      updated[String(p.panelIndex)] = target;
+    });
+    if (onPanelOrientationsChange) {
+      onPanelOrientationsChange(updated);
+    } else {
+      setInternalOrientations(updated);
+    }
+  }, [panels, effectiveOrientations, onPanelOrientationsChange]);
 
   const patternId = useId();
 
   const handleExportPDF = () => {
     setIsExportingPdf(true);
     try {
-      exportCuttingPlansToPdf(panels, kerf);
+      exportCuttingPlansToPdf(panels, kerf, projectName, effectiveOrientations);
     } catch (err) {
       console.error('Erreur export PDF:', err);
       alert('Une erreur est survenue lors de l\'exportation PDF.');
@@ -123,6 +168,17 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
               Tous les panneaux
             </button>
           </div>
+
+          {/* Bouton pour basculer tous les panneaux à la fois */}
+          <button
+            type="button"
+            onClick={handleToggleAllOrientations}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white text-xs font-medium transition-colors"
+            title="Basculer l'orientation de tous les panneaux à la fois"
+          >
+            <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Pivoter tous</span>
+          </button>
 
           {/* Zoom controls */}
           <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
@@ -218,6 +274,8 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
               hoveredOffcut={hoveredOffcut}
               setHoveredOffcut={setHoveredOffcut}
               patternId={`${patternId}-${panelIdx}`}
+              orientation={effectiveOrientations[String(panel.panelIndex)] || 'vertical'}
+              onToggleOrientation={() => handleToggleOrientation(panel.panelIndex)}
             />
           )
         )}
@@ -283,6 +341,8 @@ interface SinglePanelSVGProps {
   hoveredOffcut: OffcutArea | null;
   setHoveredOffcut: (o: OffcutArea | null) => void;
   patternId: string;
+  orientation?: 'vertical' | 'horizontal';
+  onToggleOrientation?: () => void;
 }
 
 const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
@@ -294,11 +354,22 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
   hoveredOffcut,
   setHoveredOffcut,
   patternId,
+  orientation = 'vertical',
+  onToggleOrientation,
 }) => {
-  // Orientation : la plus grande dimension à la verticale et la plus petite à l'horizontale
-  const isLandscape = panel.panelLength > panel.panelWidth;
-  const panelWidthDisplay = isLandscape ? panel.panelWidth : panel.panelLength; // Petite dimension (Horizontale)
-  const panelHeightDisplay = isLandscape ? panel.panelLength : panel.panelWidth; // Grande dimension (Verticale)
+  // Orientation individuelle du panneau : Verticale (défaut) ou Horizontale
+  const isPanelVertical = orientation === 'vertical';
+  const panelWidthDisplay = isPanelVertical
+    ? Math.min(panel.panelLength, panel.panelWidth)
+    : Math.max(panel.panelLength, panel.panelWidth);
+  const panelHeightDisplay = isPanelVertical
+    ? Math.max(panel.panelLength, panel.panelWidth)
+    : Math.min(panel.panelLength, panel.panelWidth);
+
+  // isSwapped indique si les coordonnées X et Y de l'optimiseur doivent être inversées pour le rendu
+  const isSwapped =
+    panelWidthDisplay === panel.panelWidth &&
+    panel.panelLength !== panel.panelWidth;
 
   // Marges pour afficher les cotes extérieures du panneau
   const margin = 70;
@@ -332,7 +403,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
           </span>
           <span className="text-slate-400">•</span>
           <span className="font-mono text-slate-300 font-semibold">
-            {panel.panelLength} × {panel.panelWidth} mm (Vertical {panelHeightDisplay} × Horizontal {panelWidthDisplay} mm)
+            {panel.panelLength} × {panel.panelWidth} mm ({isPanelVertical ? 'Vertical' : 'Horizontal'} {panelHeightDisplay} × {panelWidthDisplay} mm)
           </span>
           {isMixedPanel ? (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
@@ -345,29 +416,48 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
           ) : null}
         </div>
 
-        <div className="flex items-center gap-3 font-mono text-[11px]">
-          <span className="text-slate-400">
-            Pièces :{' '}
-            <strong className="text-white">{panel.placedPieces.length}</strong>
-          </span>
-          <span className="text-slate-400">
-            Rendement :{' '}
-            <strong
-              className={
-                panel.efficiencyPercentage >= 80
-                  ? 'text-emerald-400'
-                  : 'text-amber-400'
-              }
-            >
-              {panel.efficiencyPercentage}%
-            </strong>
-          </span>
-          <span className="text-slate-400">
-            Chutes exploitables :{' '}
-            <strong className="text-teal-300">
-              {panel.offcuts.filter((o) => o.reusable).length}
-            </strong>
-          </span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Bouton pour changer l'orientation individuelle de ce panneau */}
+          <button
+            type="button"
+            onClick={onToggleOrientation}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shadow-sm active:scale-95 border ${
+              isPanelVertical
+                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-amber-500/60'
+                : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/50'
+            }`}
+            title={`Basculer l'orientation du panneau N° ${panel.panelIndex} en ${
+              isPanelVertical ? 'Horizontal (Paysage)' : 'Vertical (Portrait)'
+            }`}
+          >
+            <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isPanelVertical ? 'Orientation : Verticale' : 'Orientation : Horizontale'}</span>
+          </button>
+
+          <div className="flex items-center gap-3 font-mono text-[11px]">
+            <span className="text-slate-400">
+              Pièces :{' '}
+              <strong className="text-white">{panel.placedPieces.length}</strong>
+            </span>
+            <span className="text-slate-400">
+              Rendement :{' '}
+              <strong
+                className={
+                  panel.efficiencyPercentage >= 80
+                    ? 'text-emerald-400'
+                    : 'text-amber-400'
+                }
+              >
+                {panel.efficiencyPercentage}%
+              </strong>
+            </span>
+            <span className="text-slate-400">
+              Chutes exploitables :{' '}
+              <strong className="text-teal-300">
+                {panel.offcuts.filter((o) => o.reusable).length}
+              </strong>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -429,7 +519,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
 
             {/* Groupe décalé par la marge pour les cotes extérieures */}
             <g transform={`translate(${margin}, ${margin})`}>
-              {/* 1. Rectangle brut du panneau (Vertical) */}
+              {/* 1. Rectangle brut du panneau */}
               <rect
                 x="0"
                 y="0"
@@ -442,10 +532,10 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
 
               {/* 2. Dessiner les chutes (offcuts) */}
               {panel.offcuts.map((offcut) => {
-                const ox = isLandscape ? offcut.y : offcut.x;
-                const oy = isLandscape ? offcut.x : offcut.y;
-                const ow = isLandscape ? offcut.width : offcut.length;
-                const oh = isLandscape ? offcut.length : offcut.width;
+                const ox = isSwapped ? offcut.y : offcut.x;
+                const oy = isSwapped ? offcut.x : offcut.y;
+                const ow = isSwapped ? offcut.width : offcut.length;
+                const oh = isSwapped ? offcut.length : offcut.width;
 
                 return (
                   <g
@@ -509,10 +599,10 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
 
               {/* 3. Lignes de coupe guillotine avec indication de trait de scie */}
               {panel.cutLines.map((line, idx) => {
-                const x1 = isLandscape ? line.y1 : line.x1;
-                const y1 = isLandscape ? line.x1 : line.y1;
-                const x2 = isLandscape ? line.y2 : line.x2;
-                const y2 = isLandscape ? line.x2 : line.y2;
+                const x1 = isSwapped ? line.y1 : line.x1;
+                const y1 = isSwapped ? line.x1 : line.y1;
+                const x2 = isSwapped ? line.y2 : line.x2;
+                const y2 = isSwapped ? line.x2 : line.y2;
 
                 return (
                   <line
@@ -531,17 +621,17 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
 
               {/* 4. Dessiner les pièces placées */}
               {panel.placedPieces.map((piece) => {
-                const px = isLandscape ? piece.y : piece.x;
-                const py = isLandscape ? piece.x : piece.y;
-                const pw = isLandscape ? piece.width : piece.length;
-                const ph = isLandscape ? piece.length : piece.width;
+                const px = isSwapped ? piece.y : piece.x;
+                const py = isSwapped ? piece.x : piece.y;
+                const pw = isSwapped ? piece.width : piece.length;
+                const ph = isSwapped ? piece.length : piece.width;
 
                 const isHovered = hoveredPiece?.id === piece.id;
                 const pieceCabinet = getPieceCabinet(piece.name);
                 const piecePart = getPiecePart(piece.name);
                 // Dimensions de la pièce sur le plan orienté
-                const topDim = Math.round(isLandscape ? piece.width : piece.length);
-                const leftDim = Math.round(isLandscape ? piece.length : piece.width);
+                const topDim = Math.round(isSwapped ? piece.width : piece.length);
+                const leftDim = Math.round(isSwapped ? piece.length : piece.width);
 
                 // Taille de police pour les cotations
                 const fontSizeDim = Math.min(
