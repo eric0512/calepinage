@@ -22,6 +22,12 @@ import {
   inferCabinetConfigFromItems,
   recalculateCabinetItems,
 } from '@/lib/cabinet-calculator';
+import {
+  classifyPiece,
+  SECTION_METAS,
+  CabinetSectionKey,
+  CabinetSectionInfo,
+} from '@/lib/piece-labels';
 
 interface CutListManagerProps {
   items: CutItem[];
@@ -187,12 +193,19 @@ export function getCabinetName(name: string): string {
   return cabinet || UNASSIGNED_CABINET_LABEL;
 }
 
+export interface CabinetSectionGroup {
+  info: CabinetSectionInfo;
+  groups: GroupedCutItems[];
+  totalQty: number;
+}
+
 interface CabinetGroup {
   cabinet: string;
   totalQty: number;
   config: CabinetConfig;
   cabItems: CutItem[];
   groups: GroupedCutItems[];
+  sections: CabinetSectionGroup[];
 }
 
 export const CutListManager: React.FC<CutListManagerProps> = ({
@@ -244,7 +257,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
     );
   }, [availableMaterials]);
 
-  // Regroupement : 1) par meuble (ordre de saisie), 2) par catégorie (Côtés, Haut et bas, Étagères, Fond...) et matière
+  // Regroupement sous le nom du caisson par sous-ensembles :
+  // 1. Éléments caisson (côtés, haut et bas, étagères)
+  // 2. Éléments façades (portes et tiroir)
+  // 3. Éléments tiroir (côtés droits et gauches, avant arrière, fond)
   const cabinetGroups = React.useMemo(() => {
     const cabinetMap = new Map<string, CutItem[]>();
     items.forEach((item) => {
@@ -255,46 +271,78 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
 
     const result: CabinetGroup[] = [];
     cabinetMap.forEach((cabItems, cabinet) => {
-      // Clé = catégorie + matière, pour afficher "Côtés ; MDF 19mm" et "Fond ; MDF 8mm" séparément
-      const map = new Map<string, { category: string; material: string; items: CutItem[] }>();
+      const sectionOrder: CabinetSectionKey[] = [
+        'caisson',
+        'facade',
+        'tiroir',
+        'divers',
+      ];
+
+      const sectionItemsMap = new Map<CabinetSectionKey, CutItem[]>();
       cabItems.forEach((item) => {
-        const cat = getPieceCategory(item.name);
-        const mat = item.material?.trim() || '';
-        const key = `${cat}__${mat}`;
-        if (!map.has(key)) map.set(key, { category: cat, material: mat, items: [] });
-        map.get(key)!.items.push(item);
+        const { sectionKey } = classifyPiece(item.name);
+        if (!sectionItemsMap.has(sectionKey)) {
+          sectionItemsMap.set(sectionKey, []);
+        }
+        sectionItemsMap.get(sectionKey)!.push(item);
       });
 
-      const groups: GroupedCutItems[] = [];
-      map.forEach(({ category, material: mat, items: catItems }) => {
-        const totalQty = catItems.reduce((acc, it) => acc + it.quantity, 0);
-        const color = CATEGORY_COLORS[category] || catItems[0]?.color || '#64748b';
-        groups.push({
-          category,
-          materials: mat ? [mat] : [],
-          color,
-          items: catItems,
-          totalQty,
+      const sections: CabinetSectionGroup[] = [];
+
+      sectionOrder.forEach((secKey) => {
+        const secItems = sectionItemsMap.get(secKey);
+        if (!secItems || secItems.length === 0) return;
+
+        // Clé = catégorie + matière
+        const map = new Map<string, { category: string; material: string; items: CutItem[] }>();
+        secItems.forEach((item) => {
+          const { category } = classifyPiece(item.name);
+          const mat = item.material?.trim() || '';
+          const key = `${category}__${mat}`;
+          if (!map.has(key)) map.set(key, { category, material: mat, items: [] });
+          map.get(key)!.items.push(item);
+        });
+
+        const groups: GroupedCutItems[] = [];
+        map.forEach(({ category, material: mat, items: catItems }) => {
+          const totalQty = catItems.reduce((acc, it) => acc + it.quantity, 0);
+          const { color } = classifyPiece(catItems[0]?.name || category);
+          const finalColor = color || CATEGORY_COLORS[category] || '#64748b';
+          groups.push({
+            category,
+            materials: mat ? [mat] : [],
+            color: finalColor,
+            items: catItems,
+            totalQty,
+          });
+        });
+
+        groups.sort((a, b) => {
+          const idxA = CATEGORY_PRIORITY.indexOf(a.category);
+          const idxB = CATEGORY_PRIORITY.indexOf(b.category);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return a.category.localeCompare(b.category, 'fr');
+        });
+
+        sections.push({
+          info: SECTION_METAS[secKey],
+          groups,
+          totalQty: secItems.reduce((acc, it) => acc + it.quantity, 0),
         });
       });
 
-      groups.sort((a, b) => {
-        const idxA = CATEGORY_PRIORITY.indexOf(a.category);
-        const idxB = CATEGORY_PRIORITY.indexOf(b.category);
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return a.category.localeCompare(b.category, 'fr');
-      });
-
       const config = inferCabinetConfigFromItems(cabinet, cabItems);
+      const allGroups = sections.flatMap((s) => s.groups);
 
       result.push({
         cabinet,
         totalQty: cabItems.reduce((acc, it) => acc + it.quantity, 0),
         config,
         cabItems,
-        groups,
+        groups: allGroups,
+        sections,
       });
     });
 
@@ -961,170 +1009,203 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                   </div>
                 </div>
 
-                {cab.groups.map((group) => (
-                  <div
-                    key={`${cab.cabinet}-${group.category}-${group.materials.join(',')}`}
-                    className="overflow-x-auto rounded-xl border border-slate-700/80 bg-slate-900/40"
-                  >
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
-                        <tr>
-                          {/* Titre de la catégorie + matière à la place de "Dimensions" (ex : Côtés ; MDF 19mm) */}
-                          <th className="py-2 px-1.5 sm:px-3 text-left">
-                            <span className="flex items-center gap-1.5 min-w-0">
-                              <span
-                                className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
-                                style={{ backgroundColor: group.color }}
-                              />
-                              <span className="font-bold text-slate-100 truncate">
-                                {group.category}
-                                {group.materials.length > 0 && (
-                                  <span className="text-slate-300 font-medium">
-                                    {' '}; <span className="text-emerald-400 font-semibold">{group.materials.join(', ')}</span>
-                                  </span>
-                                )}
-                              </span>
-                            </span>
-                          </th>
-                          <th className="py-2 px-1 text-center w-12 sm:w-16">Qté</th>
-                          <th className="py-2 px-1 text-center w-10 sm:w-20" title="Sens du fil du bois">
-                            Fil<span className="hidden sm:inline"> du bois</span>
-                          </th>
-                          <th className="py-2 px-1.5 sm:px-3 text-right w-16 sm:w-20">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-700/60 text-slate-200">
-                        {group.items.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="hover:bg-slate-750/50 transition-colors group"
+                {/* Sous-groupes du caisson : Éléments caisson, Éléments façades, Éléments tiroir */}
+                {cab.sections.map((section) => (
+                  <div key={`${cab.cabinet}-${section.info.key}`} className="space-y-2 pt-1">
+                    {/* En-tête de la sous-section avec pastille, titre et sous-titre */}
+                    <div className="flex items-center justify-between gap-2 px-1 pt-1.5 pb-0.5 border-t border-slate-700/50 first:border-t-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
+                          style={{ backgroundColor: section.info.color }}
+                        />
+                        <h4 className="text-xs font-bold text-slate-100 tracking-wide uppercase">
+                          {section.info.title}
+                        </h4>
+                        {section.info.subtitle && (
+                          <span className="text-[11px] text-slate-400 font-normal truncate hidden sm:inline">
+                            {section.info.subtitle}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border ${section.info.badgeBg} ${section.info.badgeBorder} ${section.info.badgeText}`}
+                      >
+                        {section.totalQty} pce{section.totalQty > 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {section.groups.map((group) => (
+                        <div
+                          key={`${cab.cabinet}-${section.info.key}-${group.category}-${group.materials.join(',')}`}
+                          className="overflow-x-auto rounded-xl border border-slate-700/80 bg-slate-900/40"
                         >
-                          <td className="py-1.5 sm:py-2 px-1.5 sm:px-3 font-mono">
-                            <div className="flex items-center gap-1 sm:gap-1.5">
-                              <input
-                                type="number"
-                                disabled={!isEditingCab}
-                                readOnly={!isEditingCab}
-                                value={item.length}
-                                onChange={(e) =>
-                                  handleUpdate(
-                                    item.id,
-                                    'length',
-                                    parseInt(e.target.value) || 0
-                                  )
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleCommitCabinetEdit(cab);
-                                  }
-                                }}
-                                title={
-                                  isEditingCab
-                                    ? 'Longueur de la pièce (mm)'
-                                    : 'Appuyez sur le logo de modification du caisson pour modifier les dimensions'
-                                }
-                                className={`rounded px-1 py-0.5 w-12 sm:w-16 font-semibold text-center sm:text-left text-xs ${
-                                  isEditingCab
-                                    ? 'bg-slate-950 border border-amber-500/60 focus:border-emerald-500 text-slate-100'
-                                    : 'bg-transparent border border-transparent text-slate-200 cursor-not-allowed select-none'
-                                }`}
-                              />
-                              <span className="text-slate-500 text-[11px]">×</span>
-                              <input
-                                type="number"
-                                disabled={!isEditingCab}
-                                readOnly={!isEditingCab}
-                                value={item.width}
-                                onChange={(e) =>
-                                  handleUpdate(
-                                    item.id,
-                                    'width',
-                                    parseInt(e.target.value) || 0
-                                  )
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleCommitCabinetEdit(cab);
-                                  }
-                                }}
-                                title={
-                                  isEditingCab
-                                    ? 'Largeur de la pièce (mm)'
-                                    : 'Appuyez sur le logo de modification du caisson pour modifier les dimensions'
-                                }
-                                className={`rounded px-1 py-0.5 w-12 sm:w-16 font-semibold text-center sm:text-left text-xs ${
-                                  isEditingCab
-                                    ? 'bg-slate-950 border border-amber-500/60 focus:border-emerald-500 text-slate-100'
-                                    : 'bg-transparent border border-transparent text-slate-200 cursor-not-allowed select-none'
-                                }`}
-                              />
-                              <span className="text-[10px] text-slate-500 hidden sm:inline">mm</span>
-                            </div>
-                          </td>
-                          <td className="py-1.5 sm:py-2 px-1 text-center">
-                            <input
-                              type="number"
-                              min="1"
-                              max="999"
-                              value={item.quantity}
-                              onChange={(e) =>
-                                handleUpdate(
-                                  item.id,
-                                  'quantity',
-                                  parseInt(e.target.value) || 1
-                                )
-                              }
-                              className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 font-mono text-center font-bold text-emerald-400 w-10 sm:w-12 text-xs"
-                            />
-                          </td>
-                          <td className="py-1.5 sm:py-2 px-1 text-center">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdate(item.id, 'canRotate', !item.canRotate)
-                              }
-                              className={`inline-flex items-center justify-center gap-1 h-7 w-7 sm:h-auto sm:w-auto p-1 sm:px-2 sm:py-0.5 rounded text-[11px] font-medium transition-colors ${
-                                item.canRotate
-                                  ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/30'
-                                  : 'bg-amber-950/70 text-amber-400 border border-amber-500/30'
-                              }`}
-                              title={
-                                item.canRotate
-                                  ? 'Rotation 90° autorisée (Pas de contrainte de fil)'
-                                  : 'Sens strict (Respect du fil du bois obligatoire)'
-                              }
-                            >
-                              <RotateCw className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">{item.canRotate ? 'Libre' : 'Fil fixe'}</span>
-                            </button>
-                          </td>
-                          <td className="py-1.5 sm:py-2 px-1.5 sm:px-3 text-right">
-                            <div className="flex items-center justify-end gap-0.5 sm:gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleDuplicate(item)}
-                                className="p-1 rounded hover:bg-slate-750 text-slate-400 hover:text-slate-200 transition-colors"
-                                title="Dupliquer la pièce"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDelete(item.id)}
-                                className="p-1 rounded hover:bg-red-950/60 text-slate-400 hover:text-red-400 transition-colors"
-                                title="Supprimer la découpe"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-slate-900/90 text-slate-400 font-medium border-b border-slate-700/80">
+                              <tr>
+                                {/* Titre de la catégorie + matière à la place de "Dimensions" (ex : Côtés ; MDF 19mm) */}
+                                <th className="py-2 px-1.5 sm:px-3 text-left">
+                                  <span className="flex items-center gap-1.5 min-w-0">
+                                    <span
+                                      className="w-2 h-2 rounded-full shrink-0 shadow-sm"
+                                      style={{ backgroundColor: group.color }}
+                                    />
+                                    <span className="font-bold text-slate-100 truncate">
+                                      {group.category}
+                                      {group.materials.length > 0 && (
+                                        <span className="text-slate-300 font-medium">
+                                          {' '};{' '}
+                                          <span className="text-emerald-400 font-semibold">
+                                            {group.materials.join(', ')}
+                                          </span>
+                                        </span>
+                                      )}
+                                    </span>
+                                  </span>
+                                </th>
+                                <th className="py-2 px-1 text-center w-12 sm:w-16">Qté</th>
+                                <th className="py-2 px-1 text-center w-10 sm:w-20" title="Sens du fil du bois">
+                                  Fil<span className="hidden sm:inline"> du bois</span>
+                                </th>
+                                <th className="py-2 px-1.5 sm:px-3 text-right w-16 sm:w-20">Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-700/60 text-slate-200">
+                              {group.items.map((item) => (
+                                <tr
+                                  key={item.id}
+                                  className="hover:bg-slate-750/50 transition-colors group"
+                                >
+                                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-3 font-mono">
+                                    <div className="flex items-center gap-1 sm:gap-1.5">
+                                      <input
+                                        type="number"
+                                        disabled={!isEditingCab}
+                                        readOnly={!isEditingCab}
+                                        value={item.length}
+                                        onChange={(e) =>
+                                          handleUpdate(
+                                            item.id,
+                                            'length',
+                                            parseInt(e.target.value) || 0
+                                          )
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleCommitCabinetEdit(cab);
+                                          }
+                                        }}
+                                        title={
+                                          isEditingCab
+                                            ? 'Longueur de la pièce (mm)'
+                                            : 'Appuyez sur le logo de modification du caisson pour modifier les dimensions'
+                                        }
+                                        className={`rounded px-1 py-0.5 w-12 sm:w-16 font-semibold text-center sm:text-left text-xs ${
+                                          isEditingCab
+                                            ? 'bg-slate-950 border border-amber-500/60 focus:border-emerald-500 text-slate-100'
+                                            : 'bg-transparent border border-transparent text-slate-200 cursor-not-allowed select-none'
+                                        }`}
+                                      />
+                                      <span className="text-slate-500 text-[11px]">×</span>
+                                      <input
+                                        type="number"
+                                        disabled={!isEditingCab}
+                                        readOnly={!isEditingCab}
+                                        value={item.width}
+                                        onChange={(e) =>
+                                          handleUpdate(
+                                            item.id,
+                                            'width',
+                                            parseInt(e.target.value) || 0
+                                          )
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleCommitCabinetEdit(cab);
+                                          }
+                                        }}
+                                        title={
+                                          isEditingCab
+                                            ? 'Largeur de la pièce (mm)'
+                                            : 'Appuyez sur le logo de modification du caisson pour modifier les dimensions'
+                                        }
+                                        className={`rounded px-1 py-0.5 w-12 sm:w-16 font-semibold text-center sm:text-left text-xs ${
+                                          isEditingCab
+                                            ? 'bg-slate-950 border border-amber-500/60 focus:border-emerald-500 text-slate-100'
+                                            : 'bg-transparent border border-transparent text-slate-200 cursor-not-allowed select-none'
+                                        }`}
+                                      />
+                                      <span className="text-[10px] text-slate-500 hidden sm:inline">mm</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-1.5 sm:py-2 px-1 text-center">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max="999"
+                                      value={item.quantity}
+                                      onChange={(e) =>
+                                        handleUpdate(
+                                          item.id,
+                                          'quantity',
+                                          parseInt(e.target.value) || 1
+                                        )
+                                      }
+                                      className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 font-mono text-center font-bold text-emerald-400 w-10 sm:w-12 text-xs"
+                                    />
+                                  </td>
+                                  <td className="py-1.5 sm:py-2 px-1 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdate(item.id, 'canRotate', !item.canRotate)
+                                      }
+                                      className={`inline-flex items-center justify-center gap-1 h-7 w-7 sm:h-auto sm:w-auto p-1 sm:px-2 sm:py-0.5 rounded text-[11px] font-medium transition-colors ${
+                                        item.canRotate
+                                          ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/30'
+                                          : 'bg-amber-950/70 text-amber-400 border border-amber-500/30'
+                                      }`}
+                                      title={
+                                        item.canRotate
+                                          ? 'Rotation 90° autorisée (Pas de contrainte de fil)'
+                                          : 'Sens strict (Respect du fil du bois obligatoire)'
+                                      }
+                                    >
+                                      <RotateCw className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">{item.canRotate ? 'Libre' : 'Fil fixe'}</span>
+                                    </button>
+                                  </td>
+                                  <td className="py-1.5 sm:py-2 px-1.5 sm:px-3 text-right">
+                                    <div className="flex items-center justify-end gap-0.5 sm:gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDuplicate(item)}
+                                        className="p-1 rounded hover:bg-slate-750 text-slate-400 hover:text-slate-200 transition-colors"
+                                        title="Dupliquer la pièce"
+                                      >
+                                        <Copy className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDelete(item.id)}
+                                        className="p-1 rounded hover:bg-red-950/60 text-slate-400 hover:text-red-400 transition-colors"
+                                        title="Supprimer la découpe"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                  </div>
                 ))}
               </div>
             );

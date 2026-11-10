@@ -1,7 +1,14 @@
 'use client';
 
-import React from 'react';
-import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-labels';
+import React, { useMemo } from 'react';
+import {
+  getDistinctCabinets,
+  getPieceCabinet,
+  getPiecePart,
+  classifyPiece,
+  SECTION_METAS,
+  CabinetSectionKey,
+} from '@/lib/piece-labels';
 import { OptimizationResult, CutItem, CutSettings } from '@/types/cutting';
 
 interface PrintDossierProps {
@@ -36,6 +43,39 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
   projectName = 'Projet Menuiserie',
   panelOrientations,
 }) => {
+  // Regroupement pour le pointage atelier : Caisson -> Sections (Caisson, Façades, Tiroir)
+  const groupedPrintItems = useMemo(() => {
+    const cabinetMap = new Map<string, CutItem[]>();
+    cutItems.forEach((it) => {
+      const cab = getPieceCabinet(it.name) || 'Pièces diverses';
+      if (!cabinetMap.has(cab)) cabinetMap.set(cab, []);
+      cabinetMap.get(cab)!.push(it);
+    });
+
+    const sectionOrder: CabinetSectionKey[] = ['caisson', 'facade', 'tiroir', 'divers'];
+
+    return Array.from(cabinetMap.entries()).map(([cabinet, items]) => {
+      const secMap = new Map<CabinetSectionKey, CutItem[]>();
+      items.forEach((it) => {
+        const { sectionKey } = classifyPiece(it.name);
+        if (!secMap.has(sectionKey)) secMap.set(sectionKey, []);
+        secMap.get(sectionKey)!.push(it);
+      });
+
+      const sections = sectionOrder
+        .filter((k) => secMap.has(k) && secMap.get(k)!.length > 0)
+        .map((k) => ({
+          info: SECTION_METAS[k],
+          items: secMap.get(k)!,
+        }));
+
+      return {
+        cabinet,
+        sections,
+      };
+    });
+  }, [cutItems]);
+
   return (
     <div className="hidden print:block text-black bg-white p-6 font-sans">
       {/* En-tête Dossier Atelier */}
@@ -83,23 +123,41 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {cutItems.map((item) => (
-              <tr key={item.id}>
-                <td className="p-1.5 text-center">
-                  <div className="w-4 h-4 border border-black mx-auto" />
-                </td>
-                <td className="p-1.5 font-semibold">{item.name}</td>
-                <td className="p-1.5">{item.material}</td>
-                <td className="p-1.5 font-mono">
-                  {item.length} × {item.width} mm
-                </td>
-                <td className="p-1.5 text-center font-bold font-mono">
-                  {item.quantity}
-                </td>
-                <td className="p-1.5 text-center">
-                  {item.canRotate ? 'Libre' : 'Sens du fil obligatoire'}
-                </td>
-              </tr>
+            {groupedPrintItems.map((cabGroup) => (
+              <React.Fragment key={cabGroup.cabinet}>
+                <tr className="bg-slate-200 font-bold border-t-2 border-b border-gray-400">
+                  <td colSpan={6} className="p-1.5 text-xs text-gray-900 tracking-wide">
+                    📦 {cabGroup.cabinet}
+                  </td>
+                </tr>
+                {cabGroup.sections.map((sec) => (
+                  <React.Fragment key={`${cabGroup.cabinet}-${sec.info.key}`}>
+                    <tr className="bg-gray-100 font-semibold border-b border-gray-300">
+                      <td colSpan={6} className="p-1 pl-4 text-[11px] text-gray-700 italic">
+                        ▸ {sec.info.title} {sec.info.subtitle}
+                      </td>
+                    </tr>
+                    {sec.items.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="p-1.5 text-center">
+                          <div className="w-4 h-4 border border-black mx-auto" />
+                        </td>
+                        <td className="p-1.5 font-semibold pl-6">{item.name}</td>
+                        <td className="p-1.5">{item.material}</td>
+                        <td className="p-1.5 font-mono">
+                          {item.length} × {item.width} mm
+                        </td>
+                        <td className="p-1.5 text-center font-bold font-mono">
+                          {item.quantity}
+                        </td>
+                        <td className="p-1.5 text-center">
+                          {item.canRotate ? 'Libre' : 'Sens du fil obligatoire'}
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
