@@ -273,6 +273,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const [showAddMaterialInput, setShowAddMaterialInput] = useState(false);
   const [newMaterialNameToAdd, setNewMaterialNameToAdd] = useState('');
 
+  // Épaisseurs de coulisses personnalisées enregistrées par l'utilisateur
+  const [customSlideThicknesses, setCustomSlideThicknesses] = useState<number[]>([]);
+
   useEffect(() => {
     setMounted(true);
     try {
@@ -287,6 +290,14 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       const savedMats = localStorage.getItem('calepinage_user_materials');
       if (savedMats) {
         setCustomMaterials(JSON.parse(savedMats));
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      const savedSlides = localStorage.getItem('calepinage_user_slide_thicknesses');
+      if (savedSlides) {
+        setCustomSlideThicknesses(JSON.parse(savedSlides));
       }
     } catch {
       // ignore
@@ -485,6 +496,47 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     [compositionState.facadeItems, compositionState.facadeGap, facadeAvailableHeight]
   );
   const facadeDrawerCount = compositionState.facadeItems.filter((it) => it.type === 'tiroir').length;
+
+  // Épaisseurs de coulisses de fermeture par ordre croissant (12,5mm, 12,7mm, 13mm, 19mm + personnalisées)
+  const allSlideThicknesses = useMemo(() => {
+    const set = new Set<number>([12.5, 12.7, 13, 19]);
+    customSlideThicknesses.forEach((th) => th > 0 && set.add(th));
+    if (compositionState.drawerSlideThickness > 0) {
+      set.add(compositionState.drawerSlideThickness);
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [customSlideThicknesses, compositionState.drawerSlideThickness]);
+
+  const handleSelectSlideThickness = (th: number) => {
+    setCompositionState((prev) => ({
+      ...prev,
+      drawerSlideThickness: th,
+      hasDrawers: true,
+    }));
+  };
+
+  const handleAddManualSlideThickness = (val: number) => {
+    if (isNaN(val) || val <= 0) return;
+    const rounded = Math.round(val * 10) / 10;
+    setCompositionState((prev) => ({
+      ...prev,
+      drawerSlideThickness: rounded,
+      hasDrawers: true,
+    }));
+    if (![12.5, 12.7, 13, 19].includes(rounded) && !customSlideThicknesses.includes(rounded)) {
+      const updated = [...customSlideThicknesses, rounded].sort((a, b) => a - b);
+      setCustomSlideThicknesses(updated);
+      try {
+        localStorage.setItem('calepinage_user_slide_thicknesses', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const formatSlideThickness = (val: number): string => {
+    return `${String(val).replace('.', ',')} mm`;
+  };
 
   // Mise à jour d'un composant de la façade (type ou hauteur) avec synchronisation des tiroirs
   const updateFacadeItem = (index: number, patch: Partial<FacadeDraftItem>) => {
@@ -3147,53 +3199,111 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           return (
                             <div
                               key={idx}
-                              className="grid grid-cols-[1.5rem_1fr_1fr_5.5rem] items-center gap-2 p-2 rounded-xl bg-slate-900/70 border border-slate-800"
+                              className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2"
                             >
-                              <span className="text-[11px] font-mono font-bold text-slate-500 text-center">
-                                {idx + 1}
-                              </span>
-                              <select
-                                value={item.type}
-                                onChange={(e) =>
-                                  updateFacadeItem(idx, { type: e.target.value as FacadeItemType })
-                                }
-                                className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2 py-1.5 text-xs text-white font-semibold"
-                              >
-                                <option value="porte">Porte</option>
-                                <option value="tiroir">Façade tiroir</option>
-                              </select>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.5"
-                                value={item.height}
-                                onChange={(e) => updateFacadeItem(idx, { height: e.target.value })}
-                                placeholder={item.type === 'tiroir' ? 'Hauteur *' : 'Auto'}
-                                title={
-                                  item.type === 'tiroir'
-                                    ? 'Hauteur de la façade du tiroir (obligatoire)'
-                                    : 'Hauteur de la porte (laisser vide pour un calcul automatique)'
-                                }
-                                className={`w-full bg-slate-900 border rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold ${
-                                  missingDrawerH
-                                    ? 'border-red-500/70 focus:border-red-400'
-                                    : 'border-slate-700 focus:border-amber-500'
-                                }`}
-                              />
-                              <span
-                                className={`text-[11px] font-mono font-bold text-right ${
-                                  isAuto ? 'text-emerald-400' : 'text-slate-400'
-                                }`}
-                              >
-                                {isAuto
-                                  ? `= ${resolved} mm`
-                                  : resolved > 0
-                                  ? `${resolved} mm`
-                                  : '—'}
-                                {isAuto && (
-                                  <span className="block text-[9px] font-semibold uppercase">auto</span>
-                                )}
-                              </span>
+                              <div className="grid grid-cols-[1.5rem_1fr_1fr_5.5rem] items-center gap-2">
+                                <span className="text-[11px] font-mono font-bold text-slate-500 text-center">
+                                  {idx + 1}
+                                </span>
+                                <select
+                                  value={item.type}
+                                  onChange={(e) =>
+                                    updateFacadeItem(idx, { type: e.target.value as FacadeItemType })
+                                  }
+                                  className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2 py-1.5 text-xs text-white font-semibold"
+                                >
+                                  <option value="porte">Porte</option>
+                                  <option value="tiroir">Façade tiroir</option>
+                                </select>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={item.height}
+                                  onChange={(e) => updateFacadeItem(idx, { height: e.target.value })}
+                                  placeholder={item.type === 'tiroir' ? 'Hauteur *' : 'Auto'}
+                                  title={
+                                    item.type === 'tiroir'
+                                      ? 'Hauteur de la façade du tiroir (obligatoire)'
+                                      : 'Hauteur de la porte (laisser vide pour un calcul automatique)'
+                                  }
+                                  className={`w-full bg-slate-900 border rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold ${
+                                    missingDrawerH
+                                      ? 'border-red-500/70 focus:border-red-400'
+                                      : 'border-slate-700 focus:border-amber-500'
+                                  }`}
+                                />
+                                <span
+                                  className={`text-[11px] font-mono font-bold text-right ${
+                                    isAuto ? 'text-emerald-400' : 'text-slate-400'
+                                  }`}
+                                >
+                                  {isAuto
+                                    ? `= ${resolved} mm`
+                                    : resolved > 0
+                                    ? `${resolved} mm`
+                                    : '—'}
+                                  {isAuto && (
+                                    <span className="block text-[9px] font-semibold uppercase">auto</span>
+                                  )}
+                                </span>
+                              </div>
+
+                              {/* Proposition de sélection de l'épaisseur des coulisses dès que Façade tiroir est sélectionné */}
+                              {item.type === 'tiroir' && (
+                                <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 bg-slate-950/60 p-2 rounded-lg animate-in fade-in duration-150">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <Sliders className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                    <span className="text-[11px] font-semibold text-amber-300">
+                                      Épaisseur coulisses :
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {allSlideThicknesses.map((th) => {
+                                      const isSelected = compositionState.drawerSlideThickness === th;
+                                      return (
+                                        <button
+                                          key={`item-${idx}-th-${th}`}
+                                          type="button"
+                                          onClick={() => handleSelectSlideThickness(th)}
+                                          className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
+                                            isSelected
+                                              ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                              : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                                          }`}
+                                        >
+                                          {formatSlideThickness(th)}
+                                        </button>
+                                      );
+                                    })}
+                                    {/* Saisie manuelle d'une épaisseur */}
+                                    <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 focus-within:border-amber-500 rounded-md px-1.5 py-0.5">
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        min="1"
+                                        max="50"
+                                        placeholder="Autre"
+                                        value={
+                                          ![12.5, 12.7, 13, 19].includes(
+                                            compositionState.drawerSlideThickness
+                                          )
+                                            ? compositionState.drawerSlideThickness
+                                            : ''
+                                        }
+                                        onChange={(e) => {
+                                          const val = parseFloat(e.target.value.replace(',', '.'));
+                                          if (!isNaN(val) && val > 0) {
+                                            handleAddManualSlideThickness(val);
+                                          }
+                                        }}
+                                        className="w-12 bg-transparent text-[11px] font-mono font-bold text-white focus:outline-none placeholder:text-slate-500"
+                                      />
+                                      <span className="text-[10px] text-slate-400 font-mono">mm</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -3284,30 +3394,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                          Épaisseur coulisses (mm) <span className="text-amber-400">*</span> :
-                        </label>
-                        <input
-                          type="number"
-                          min="5"
-                          max="30"
-                          step="0.5"
-                          value={compositionState.drawerSlideThickness}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            setCompositionState((prev) => ({
-                              ...prev,
-                              drawerSlideThickness: isNaN(val) || val <= 0 ? 13 : val,
-                            }));
-                          }}
-                          placeholder="Ex: 13"
-                          title="Épaisseur par coulisse latérale (ex: 13 mm standard)"
-                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
-                        />
-                        <span className="text-[10px] text-slate-500 block mt-0.5">Par côté (ex: 13 mm)</span>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                           Longueur coulisses (mm) <span className="text-amber-400">*</span> :
                         </label>
                         <input
@@ -3329,6 +3415,59 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         />
                         <span className="text-[10px] text-slate-500 block mt-0.5">
                           Profondeur caisson : {config.depth || guidedFields.depth || '—'} mm
+                        </span>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-semibold text-slate-300 mb-1.5">
+                          Épaisseur coulisses de fermeture (mm) <span className="text-amber-400">*</span> :
+                        </label>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {allSlideThicknesses.map((th) => {
+                            const isSelected = compositionState.drawerSlideThickness === th;
+                            return (
+                              <button
+                                key={`sec-th-${th}`}
+                                type="button"
+                                onClick={() => handleSelectSlideThickness(th)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
+                                  isSelected
+                                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                    : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                                }`}
+                              >
+                                {formatSlideThickness(th)}
+                              </button>
+                            );
+                          })}
+                          {/* Saisie manuelle d'une épaisseur */}
+                          <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 focus-within:border-amber-500 rounded-lg px-2 py-1">
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="1"
+                              max="50"
+                              placeholder="Autre"
+                              value={
+                                ![12.5, 12.7, 13, 19].includes(
+                                  compositionState.drawerSlideThickness
+                                )
+                                  ? compositionState.drawerSlideThickness
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value.replace(',', '.'));
+                                if (!isNaN(val) && val > 0) {
+                                  handleAddManualSlideThickness(val);
+                                }
+                              }}
+                              className="w-14 bg-transparent text-xs font-mono font-bold text-white focus:outline-none placeholder:text-slate-500"
+                            />
+                            <span className="text-[10px] text-slate-400 font-mono">mm</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-slate-500 block mt-1">
+                          Par côté (ordre croissant : 12,5 mm, 12,7 mm, 13 mm, 19 mm ou saisie manuelle)
                         </span>
                       </div>
                     </div>
