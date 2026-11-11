@@ -22,10 +22,35 @@ create index if not exists idx_cutting_projects_updated_at
 -- 3. Activation du Row Level Security (RLS)
 alter table public.cutting_projects enable row level security;
 
--- 4. Politique d'accès public (lecture, écriture, modification, suppression via la clé anon)
-create policy "Autoriser l'accès public pour CalepinagePro"
+-- 4. Politiques d'accès public (lecture, écriture, modification, suppression via la clé anon)
+drop policy if exists "Autoriser l'accès public pour CalepinagePro" on public.cutting_projects;
+drop policy if exists "Lecture publique cutting_projects" on public.cutting_projects;
+drop policy if exists "Insertion publique cutting_projects" on public.cutting_projects;
+drop policy if exists "Modification publique cutting_projects" on public.cutting_projects;
+drop policy if exists "Suppression publique cutting_projects" on public.cutting_projects;
+
+create policy "Lecture publique cutting_projects"
   on public.cutting_projects
-  for all
-  using (true)
-  with check (true);
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy "Insertion publique cutting_projects"
+  on public.cutting_projects
+  for insert
+  to anon, authenticated
+  with check (current_user in ('anon', 'authenticated', 'service_role', 'postgres'));
+
+create policy "Modification publique cutting_projects"
+  on public.cutting_projects
+  for update
+  to anon, authenticated
+  using (current_user in ('anon', 'authenticated', 'service_role', 'postgres'))
+  with check (current_user in ('anon', 'authenticated', 'service_role', 'postgres'));
+
+create policy "Suppression publique cutting_projects"
+  on public.cutting_projects
+  for delete
+  to anon, authenticated
+  using (current_user in ('anon', 'authenticated', 'service_role', 'postgres'));
 

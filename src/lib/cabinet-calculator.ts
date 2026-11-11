@@ -236,7 +236,6 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     backType,
     backThickness,
     shelvesCount,
-    shelfRecess,
     partitionsCount,
     doors,
     material,
@@ -396,9 +395,13 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   }
 
   // Dimensions intérieures brutes
+  const chosenBackMat = getPartMat('back', resolvedBackMaterial);
+  const effectiveBackThickness =
+    extractThicknessFromMaterialName(chosenBackMat) ||
+    (backThickness && backThickness > 0 ? backThickness : 8);
   const interiorWidth = width - 2 * thickness;
   const interiorHeight = height - 2 * thickness;
-  const interiorDepth = backType === 'applique' ? depth : depth - backThickness;
+  const interiorDepth = backType === 'groove' ? depth - effectiveBackThickness : depth;
 
   // 3. Séparations verticales (Montants intermédiaires, de 1 à 4)
   if (partitionsCount > 0) {
@@ -431,7 +434,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     });
   }
 
-  // 4. Étagères intérieures
+  // 4. Étagères intérieures (tenant compte du fond encastré ou non + marge fixe de -5 mm)
   if (shelvesCount > 0) {
     let shelfWidth = interiorWidth;
     let shelfFormula = `Largeur intérieure : ${width} - (2 × ${thickness}) = ${shelfWidth} mm`;
@@ -444,7 +447,16 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       }) / ${partitionsCount + 1} = ${shelfWidth} mm`;
     }
 
-    const shelfDepth = Math.max(50, structuralDepth - shelfRecess);
+    const shelfMargin = 5;
+    const isBackGrooved = backType === 'groove';
+    const baseShelfDepth = isBackGrooved
+      ? structuralDepth - effectiveBackThickness
+      : structuralDepth;
+    const shelfDepth = Math.max(50, baseShelfDepth - shelfMargin);
+    const depthFormulaDesc = isBackGrooved
+      ? `${structuralDepth} - ${effectiveBackThickness} (ép. fond encastré) - ${shelfMargin} (marge) = ${shelfDepth} mm`
+      : `${structuralDepth} - ${shelfMargin} (marge) = ${shelfDepth} mm`;
+
     const compartmentsCount = partitionsCount > 0 ? partitionsCount + 1 : 1;
     const shelvesPerCabinet = shelvesCount * compartmentsCount;
     const totalShelvesQty = shelvesPerCabinet * cabinetCount;
@@ -454,12 +466,12 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       partId: 'shelves',
       role:
         partitionsCount > 0
-          ? `Étagères (${shelvesCount} par compartiment × ${compartmentsCount} = ${shelvesPerCabinet} pcs)`
-          : `Étagère(s) (${shelvesCount} pcs) [Retrait ${shelfRecess} mm]`,
+          ? `Étagères (${shelvesCount} par compartiment × ${compartmentsCount} = ${shelvesPerCabinet} pcs, ${isBackGrooved ? `fond encastré -${effectiveBackThickness} mm, ` : ''}marge -${shelfMargin} mm)`
+          : `Étagère(s) (${shelvesCount} pcs) [${isBackGrooved ? `Fond encastré -${effectiveBackThickness} mm, ` : ''}Marge -${shelfMargin} mm]`,
       description: `${config.name} - Étagère`,
       formula: cabinetCount > 1
-        ? `${shelfFormula} × Profondeur (${structuralDepth} - ${shelfRecess} = ${shelfDepth} mm) [${shelvesPerCabinet} × ${cabinetCount} = ${totalShelvesQty} pcs]`
-        : `${shelfFormula} × Profondeur (${structuralDepth} - ${shelfRecess} = ${shelfDepth} mm)`,
+        ? `${shelfFormula} × Profondeur (${depthFormulaDesc}) [${shelvesPerCabinet} × ${cabinetCount} = ${totalShelvesQty} pcs]`
+        : `${shelfFormula} × Profondeur (${depthFormulaDesc})`,
       length: Math.max(shelfWidth, shelfDepth),
       width: Math.min(shelfWidth, shelfDepth),
       quantity: totalShelvesQty,
@@ -475,15 +487,15 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     pieces.push({
       partKey: 'back',
       partId: 'back',
-      role: `Fond (applique arrière)${resolvedBackMaterial ? ` [${resolvedBackMaterial}]` : ''}`,
+      role: `Fond (applique arrière)${chosenBackMat ? ` [${chosenBackMat}]` : ''}`,
       description: `${config.name} - Fond applique`,
       formula: cabinetCount > 1
-        ? `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${backThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
-        : `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${backThickness} mm${resolvedBackMaterial ? ` - Matière : ${resolvedBackMaterial}` : ''})`,
+        ? `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${effectiveBackThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
+        : `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${effectiveBackThickness} mm${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
       length: Math.max(height, width),
       width: Math.min(height, width),
       quantity: backQty,
-      material: getPartMat('back', resolvedBackMaterial),
+      material: chosenBackMat,
       color: PIECE_COLORS.back,
     });
   } else if (backType === 'groove') {
@@ -495,15 +507,15 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     pieces.push({
       partKey: 'back',
       partId: 'back',
-      role: `Fond (rainure encastrée)${resolvedBackMaterial ? ` [${resolvedBackMaterial}]` : ''}`,
+      role: `Fond (rainure encastrée)${chosenBackMat ? ` [${chosenBackMat}]` : ''}`,
       description: `${config.name} - Fond encastré`,
       formula: cabinetCount > 1
-        ? `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
-        : `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${backThickness} mm${resolvedBackMaterial ? ` - Matière : ${resolvedBackMaterial}` : ''})`,
+        ? `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
+        : `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
       length: Math.max(backH, backW),
       width: Math.min(backH, backW),
       quantity: backQty,
-      material: getPartMat('back', resolvedBackMaterial),
+      material: chosenBackMat,
       color: PIECE_COLORS.back,
     });
   }
@@ -854,6 +866,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
   const finalConfig: CabinetConfig = {
     ...config,
+    shelfRecess: 5,
     ...(resolvedDrawerSlideLen !== undefined
       ? { drawerSlideLength: resolvedDrawerSlideLen }
       : {}),
@@ -912,10 +925,30 @@ export function repairSavedCabinetDrawers(items: CutItem[]): {
       nameLower.includes('avant/arriere tiroir') ||
       nameLower.includes('fond tiroir');
 
-    const backTh =
-      cfg.backType === 'applique' || cfg.backType === 'none'
-        ? 0
-        : cfg.backThickness || 8;
+    const isShelfPiece =
+      nameLower.includes('étagère') ||
+      nameLower.includes('etagere') ||
+      nameLower.includes('tablette');
+
+    const cabBackItem = items.find(
+      (it) =>
+        it.cabinetConfig?.name === cfg.name &&
+        (it.name.toLowerCase().includes('fond') || it.name.toLowerCase().includes('dos')) &&
+        !it.name.toLowerCase().includes('tiroir')
+    );
+    const effectiveBackMat =
+      cabBackItem?.material ||
+      cfg.partMaterials?.['back'] ||
+      cfg.backMaterial ||
+      '';
+    const effectiveBackTh =
+      extractThicknessFromMaterialName(effectiveBackMat) ||
+      (cfg.backThickness && cfg.backThickness > 0 ? cfg.backThickness : 8);
+    const isGrooveBack =
+      cfg.backType === 'groove' ||
+      Boolean(cabBackItem && cabBackItem.name.toLowerCase().includes('encastr'));
+
+    const backTh = isGrooveBack ? effectiveBackTh : 0;
     const interiorDepth = cfg.depth - backTh;
     const maxAllowedSlideLen = Math.max(100, interiorDepth - 10);
     const autoSlideLen = Math.min(
@@ -928,14 +961,58 @@ export function repairSavedCabinetDrawers(items: CutItem[]): {
         ? oldSlideLen
         : autoSlideLen;
 
+    if (isShelfPiece) {
+      const mainTh = cfg.thickness && cfg.thickness > 0 ? cfg.thickness : 18;
+      const interiorW = cfg.width - 2 * mainTh;
+      const pCount = cfg.partitionsCount && cfg.partitionsCount > 0 ? cfg.partitionsCount : 0;
+      const expectedShelfW =
+        pCount > 0
+          ? Math.floor((interiorW - pCount * mainTh) / (pCount + 1))
+          : interiorW;
+      const expectedShelfD = Math.max(
+        50,
+        (isGrooveBack ? cfg.depth - effectiveBackTh : cfg.depth) - 5
+      );
+      const expL = Math.max(expectedShelfW, expectedShelfD);
+      const expW = Math.min(expectedShelfW, expectedShelfD);
+
+      if (
+        item.length !== expL ||
+        item.width !== expW ||
+        cfg.shelfRecess !== 5 ||
+        (cfg.drawerSlideLength && cfg.drawerSlideLength > maxAllowedSlideLen)
+      ) {
+        modified = true;
+        return {
+          ...item,
+          length: expL,
+          width: expW,
+          cabinetConfig: {
+            ...cfg,
+            shelfRecess: 5,
+            ...(cfg.drawerSlideLength && cfg.drawerSlideLength > maxAllowedSlideLen
+              ? { drawerSlideLength: resolvedSlideLen }
+              : {}),
+          },
+        };
+      }
+      return item;
+    }
+
     if (!isDrawerPiece) {
-      if (cfg.drawerSlideLength && cfg.drawerSlideLength > maxAllowedSlideLen) {
+      if (
+        (cfg.drawerSlideLength && cfg.drawerSlideLength > maxAllowedSlideLen) ||
+        cfg.shelfRecess !== 5
+      ) {
         modified = true;
         return {
           ...item,
           cabinetConfig: {
             ...cfg,
-            drawerSlideLength: resolvedSlideLen,
+            shelfRecess: 5,
+            ...(cfg.drawerSlideLength && cfg.drawerSlideLength > maxAllowedSlideLen
+              ? { drawerSlideLength: resolvedSlideLen }
+              : {}),
           },
         };
       }
@@ -1200,15 +1277,7 @@ export function inferCabinetConfigFromItems(
       ? Math.max(1, Math.round(shelvesTotalQty / (compartments * cabinetCount)))
       : 0;
 
-  let shelfRecess = 20;
-  if (shelves[0]) {
-    const sMin = Math.min(shelves[0].length, shelves[0].width);
-    const sMax = Math.max(shelves[0].length, shelves[0].width);
-    const candidateDepth = Math.abs(depth - sMin) < Math.abs(depth - sMax) ? sMin : sMax;
-    if (depth > candidateDepth && depth - candidateDepth <= 150) {
-      shelfRecess = depth - candidateDepth;
-    }
-  }
+  const shelfRecess = 5;
 
   let backType: BackType = 'none';
   let backMaterial = 'MDF 8mm';

@@ -62,7 +62,7 @@ Tu dois analyser la description en langage naturel d'un meuble ou caisson et en 
   "backType": "applique" | "groove" (utiliser 'groove' si le fond est encastré ou en rainure) | "none",
   "backThickness": number (épaisseur du fond en mm, ex: 9 si fond en MDF de 9mm),
   "shelvesCount": number (nombre d'étagères par compartiment, ex: 2 si 2 étagères de chaque côté de la séparation),
-  "shelfRecess": number (retrait de façade des étagères en mm, défaut: 20),
+  "shelfRecess": number (marge de retrait des étagères en mm, défaut: 5),
   "partitionsCount": number (séparations verticales intérieures, de 0 à 4. Ex: 1 si séparation au milieu, 2 pour deux montants intermédiaires, jusqu'à 4),
   "doors": "none" | "one_door" | "two_doors",
   "material": "string (matière choisie en priorité dans les stocks de l'utilisateur pour le caisson)",

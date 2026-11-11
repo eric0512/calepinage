@@ -98,9 +98,9 @@ export function generatePromptFromConfig(c: CabinetConfig): string {
 
   if (c.shelvesCount > 0) {
     if (c.partitionsCount > 0) {
-      parts.push(`${c.shelvesCount} étagères de chaque côté (retrait ${c.shelfRecess || 20} mm)`);
+      parts.push(`${c.shelvesCount} étagères de chaque côté (marge -5 mm)`);
     } else {
-      parts.push(`${c.shelvesCount} étagère(s) intérieure(s)`);
+      parts.push(`${c.shelvesCount} étagère(s) intérieure(s) (marge -5 mm)`);
     }
   }
 
@@ -153,7 +153,7 @@ const EMPTY_CONFIG: CabinetConfig = {
   backThickness: 0,
   backMaterial: '',
   shelvesCount: -1,
-  shelfRecess: 0,
+  shelfRecess: 5,
   partitionsCount: -1,
   doors: 'none',
   material: '',
@@ -1140,7 +1140,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       backType: (config.backType || 'none') as BackType,
       backThickness: config.backThickness > 0 ? config.backThickness : 8,
       shelvesCount: config.shelvesCount >= 0 ? config.shelvesCount : 0,
-      shelfRecess: config.shelfRecess > 0 ? config.shelfRecess : 20,
+      shelfRecess: 5,
       partitionsCount: config.partitionsCount >= 0 ? config.partitionsCount : 0,
       cabinetCount: config.cabinetCount && config.cabinetCount > 0 ? config.cabinetCount : 1,
     };
@@ -2520,22 +2520,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
                   {config.shelvesCount > 0 && (
                     <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-                      <span>Retrait façade :</span>
-                      <div className="inline-flex items-center gap-1">
-                        <input
-                          type="number"
-                          placeholder="20"
-                          value={config.shelfRecess > 0 ? config.shelfRecess : ''}
-                          onChange={(e) =>
-                            setConfig({
-                              ...config,
-                              shelfRecess: parseInt(e.target.value, 10) || 0,
-                            })
-                          }
-                          className="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-center text-white font-mono placeholder-slate-500"
-                        />
-                        <span>mm</span>
-                      </div>
+                      <span>Profondeur étagère :</span>
+                      <span className="font-mono font-bold text-amber-300">
+                        {config.backType === 'groove'
+                          ? `P - ép. fond - 5 mm`
+                          : `P - 5 mm`}
+                      </span>
                     </div>
                   )}
                 </div>
