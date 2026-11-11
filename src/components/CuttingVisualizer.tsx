@@ -79,8 +79,85 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const [internalOrientations, setInternalOrientations] = useState<
     Record<string, 'vertical' | 'horizontal'>
   >({});
+  const [panelRotations, setPanelRotations] = useState<Record<string, number>>(
+    {}
+  );
 
   const effectiveOrientations = panelOrientations ?? internalOrientations;
+
+  const getPanelRotationDeg = useCallback(
+    (panelIndex: number): number => {
+      const key = String(panelIndex);
+      if (typeof panelRotations[key] === 'number') {
+        return ((panelRotations[key] % 360) + 360) % 360;
+      }
+      return effectiveOrientations[key] === 'horizontal' ? 90 : 0;
+    },
+    [panelRotations, effectiveOrientations]
+  );
+
+  const handleRotatePanel = useCallback(
+    (panelIndex: number, deltaDeg: number) => {
+      const key = String(panelIndex);
+      const current = getPanelRotationDeg(panelIndex);
+      const next = ((current + deltaDeg) % 360 + 360) % 360;
+      setPanelRotations((prev) => ({ ...prev, [key]: next }));
+
+      const nextOrientation: 'vertical' | 'horizontal' =
+        next === 90 || next === 270 ? 'horizontal' : 'vertical';
+      const updatedOrientations: Record<string, 'vertical' | 'horizontal'> = {
+        ...effectiveOrientations,
+        [key]: nextOrientation,
+      };
+      if (onPanelOrientationsChange) {
+        onPanelOrientationsChange(updatedOrientations);
+      } else {
+        setInternalOrientations(updatedOrientations);
+      }
+    },
+    [getPanelRotationDeg, effectiveOrientations, onPanelOrientationsChange]
+  );
+
+  const handleResetPanelRotation = useCallback(
+    (panelIndex: number) => {
+      const key = String(panelIndex);
+      setPanelRotations((prev) => ({ ...prev, [key]: 0 }));
+      const updatedOrientations: Record<string, 'vertical' | 'horizontal'> = {
+        ...effectiveOrientations,
+        [key]: 'vertical',
+      };
+      if (onPanelOrientationsChange) {
+        onPanelOrientationsChange(updatedOrientations);
+      } else {
+        setInternalOrientations(updatedOrientations);
+      }
+    },
+    [effectiveOrientations, onPanelOrientationsChange]
+  );
+
+  const handleRotateAllPanels = useCallback(
+    (deltaDeg: number) => {
+      const nextRotations: Record<string, number> = { ...panelRotations };
+      const updatedOrientations: Record<string, 'vertical' | 'horizontal'> = {
+        ...effectiveOrientations,
+      };
+      panels.forEach((p) => {
+        const key = String(p.panelIndex);
+        const current = getPanelRotationDeg(p.panelIndex);
+        const next = ((current + deltaDeg) % 360 + 360) % 360;
+        nextRotations[key] = next;
+        updatedOrientations[key] =
+          next === 90 || next === 270 ? 'horizontal' : 'vertical';
+      });
+      setPanelRotations(nextRotations);
+      if (onPanelOrientationsChange) {
+        onPanelOrientationsChange(updatedOrientations);
+      } else {
+        setInternalOrientations(updatedOrientations);
+      }
+    },
+    [panels, panelRotations, effectiveOrientations, getPanelRotationDeg, onPanelOrientationsChange]
+  );
 
   // Ouvrir un panneau en plein écran verrouillé en mode Portrait (à l'endroit)
   const handleOpenFullscreen = useCallback(async (idx: number) => {
@@ -194,39 +271,6 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [fullscreenPanelIdx, handleCloseFullscreen]);
-
-  const handleToggleOrientation = useCallback(
-    (panelIndex: number) => {
-      const key = String(panelIndex);
-      const current = effectiveOrientations[key] || 'vertical';
-      const updated: Record<string, 'vertical' | 'horizontal'> = {
-        ...effectiveOrientations,
-        [key]: current === 'vertical' ? 'horizontal' : 'vertical',
-      };
-      if (onPanelOrientationsChange) {
-        onPanelOrientationsChange(updated);
-      } else {
-        setInternalOrientations(updated);
-      }
-    },
-    [effectiveOrientations, onPanelOrientationsChange]
-  );
-
-  const handleToggleAllOrientations = useCallback(() => {
-    const allAreHorizontal = panels.every(
-      (p) => (effectiveOrientations[String(p.panelIndex)] || 'vertical') === 'horizontal'
-    );
-    const target: 'vertical' | 'horizontal' = allAreHorizontal ? 'vertical' : 'horizontal';
-    const updated: Record<string, 'vertical' | 'horizontal'> = { ...effectiveOrientations };
-    panels.forEach((p) => {
-      updated[String(p.panelIndex)] = target;
-    });
-    if (onPanelOrientationsChange) {
-      onPanelOrientationsChange(updated);
-    } else {
-      setInternalOrientations(updated);
-    }
-  }, [panels, effectiveOrientations, onPanelOrientationsChange]);
 
   const patternId = useId();
 
@@ -344,16 +388,27 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             </button>
           </div>
 
-          {/* Bouton pour basculer tous les panneaux à la fois */}
-          <button
-            type="button"
-            onClick={handleToggleAllOrientations}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white text-xs font-medium transition-colors"
-            title="Basculer l'orientation de tous les panneaux à la fois"
-          >
-            <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Pivoter tous</span>
-          </button>
+          {/* Boutons pour tourner tous les panneaux par tranche de 90° */}
+          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
+            <button
+              type="button"
+              onClick={() => handleRotateAllPanels(-90)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors"
+              title="Tourner tous les panneaux de -90° (sens anti-horaire)"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span>-90°</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRotateAllPanels(90)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors border-l border-slate-800"
+              title="Tourner tous les panneaux de +90° (sens horaire)"
+            >
+              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>+90°</span>
+            </button>
+          </div>
 
           {/* Zoom controls */}
           <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
@@ -453,7 +508,10 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                 setHoveredOffcut={setHoveredOffcut}
                 patternId={`${patternId}-${panelIdx}`}
                 orientation={effectiveOrientations[String(panel.panelIndex)] || 'vertical'}
-                onToggleOrientation={() => handleToggleOrientation(panel.panelIndex)}
+                rotationDeg={getPanelRotationDeg(panel.panelIndex)}
+                onRotatePanel={(delta) => handleRotatePanel(panel.panelIndex, delta)}
+                onResetRotation={() => handleResetPanelRotation(panel.panelIndex)}
+                onToggleOrientation={() => handleRotatePanel(panel.panelIndex, 90)}
                 onOpenFullscreen={() => handleOpenFullscreen(actualPanelIdx)}
               />
             );
@@ -682,17 +740,36 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                   </div>
                 </div>
 
-                {/* Contrôles Zoom, 180° & Fermeture */}
+                {/* Contrôles Rotation par tranche de 90°, Zoom & Fermeture */}
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setIsFlipped180((v) => !v)}
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 text-xs font-bold flex items-center gap-1"
-                    title="Inverser le sens de lecture (180°)"
-                  >
-                    <RotateCw className="w-3.5 h-3.5" />
-                    <span className="text-[10px]">180°</span>
-                  </button>
+                  <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => handleRotatePanel(fsPanel.panelIndex, -90)}
+                      className="px-1.5 py-1 rounded text-amber-400 hover:text-white hover:bg-slate-700 font-bold flex items-center gap-1 transition-colors"
+                      title="Tourner de -90° (sens anti-horaire)"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span className="text-[10px]">-90°</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleResetPanelRotation(fsPanel.panelIndex)}
+                      className="px-1.5 py-1 text-[10px] font-mono font-bold text-slate-300 hover:text-amber-300 border-x border-slate-700/80"
+                      title="Angle actuel (cliquer pour remettre à 0°)"
+                    >
+                      {getPanelRotationDeg(fsPanel.panelIndex)}°
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRotatePanel(fsPanel.panelIndex, 90)}
+                      className="px-1.5 py-1 rounded text-amber-400 hover:text-white hover:bg-slate-700 font-bold flex items-center gap-1 transition-colors"
+                      title="Tourner de +90° (sens horaire)"
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                      <span className="text-[10px]">+90°</span>
+                    </button>
+                  </div>
 
                   <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
                     <button
@@ -765,6 +842,9 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                   setHoveredOffcut={setHoveredOffcut}
                   patternId={`${patternId}-fullscreen-${fsPanel.panelIndex}`}
                   orientation="vertical"
+                  rotationDeg={getPanelRotationDeg(fsPanel.panelIndex)}
+                  onRotatePanel={(delta) => handleRotatePanel(fsPanel.panelIndex, delta)}
+                  onResetRotation={() => handleResetPanelRotation(fsPanel.panelIndex)}
                   isFullscreen={true}
                 />
               </div>
@@ -862,6 +942,9 @@ interface SinglePanelSVGProps {
   setHoveredOffcut: (o: OffcutArea | null) => void;
   patternId: string;
   orientation?: 'vertical' | 'horizontal';
+  rotationDeg?: number;
+  onRotatePanel?: (deltaDeg: number) => void;
+  onResetRotation?: () => void;
   onToggleOrientation?: () => void;
   onOpenFullscreen?: () => void;
   isFullscreen?: boolean;
@@ -879,28 +962,41 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
   setHoveredOffcut,
   patternId,
   orientation = 'vertical',
+  rotationDeg = 0,
+  onRotatePanel,
+  onResetRotation,
   onToggleOrientation,
   onOpenFullscreen,
   isFullscreen = false,
 }) => {
-  // En mode plein écran, l'orientation reste toujours en mode Portrait (vertical)
-  const isPanelVertical = isFullscreen ? true : orientation === 'vertical';
-  const panelWidthDisplay = isPanelVertical
-    ? Math.min(panel.panelLength, panel.panelWidth)
-    : Math.max(panel.panelLength, panel.panelWidth);
-  const panelHeightDisplay = isPanelVertical
-    ? Math.max(panel.panelLength, panel.panelWidth)
-    : Math.min(panel.panelLength, panel.panelWidth);
+  const normRot = ((rotationDeg % 360) + 360) % 360;
+  const isRotated90or270 = normRot === 90 || normRot === 270;
+  const isPanelVertical = !isRotated90or270 && (isFullscreen ? true : orientation === 'vertical');
 
-  // isSwapped indique si les coordonnées X et Y de l'optimiseur doivent être inversées pour le rendu
+  // Dimensions de base (0° portrait)
+  const panelWidthDisplay = Math.min(panel.panelLength, panel.panelWidth);
+  const panelHeightDisplay = Math.max(panel.panelLength, panel.panelWidth);
+
+  // isSwapped indique si les coordonnées X et Y de l'optimiseur doivent être inversées pour le rendu de base
   const isSwapped =
     panelWidthDisplay === panel.panelWidth &&
     panel.panelLength !== panel.panelWidth;
 
   // Marges pour afficher les cotes extérieures du panneau
   const margin = 70;
-  const svgWidth = panelWidthDisplay + margin * 2;
-  const svgHeight = panelHeightDisplay + margin * 2;
+  const baseSvgWidth = panelWidthDisplay + margin * 2;
+  const baseSvgHeight = panelHeightDisplay + margin * 2;
+  const svgWidth = isRotated90or270 ? baseSvgHeight : baseSvgWidth;
+  const svgHeight = isRotated90or270 ? baseSvgWidth : baseSvgHeight;
+
+  const rootGroupTransform =
+    normRot === 90
+      ? `translate(${baseSvgHeight}, 0) rotate(90) translate(${margin}, ${margin})`
+      : normRot === 180
+        ? `translate(${baseSvgWidth}, ${baseSvgHeight}) rotate(180) translate(${margin}, ${margin})`
+        : normRot === 270
+          ? `translate(0, ${baseSvgWidth}) rotate(270) translate(${margin}, ${margin})`
+          : `translate(${margin}, ${margin})`;
 
   // Meubles de destination présents sur ce panneau
   const panelCabinets = getDistinctCabinets(panel.placedPieces.map((p) => p.name));
@@ -972,22 +1068,39 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
               </button>
             )}
 
-            {/* Bouton pour changer l'orientation individuelle de ce panneau */}
-            <button
-              type="button"
-              onClick={onToggleOrientation}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shadow-sm active:scale-95 border ${
-                isPanelVertical
-                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-amber-500/60'
-                  : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/50'
-              }`}
-              title={`Basculer l'orientation du panneau N° ${panel.panelIndex} en ${
-                isPanelVertical ? 'Horizontal (Paysage)' : 'Vertical (Portrait)'
-              }`}
-            >
-              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-              <span>{isPanelVertical ? 'Orientation : Verticale' : 'Orientation : Horizontale'}</span>
-            </button>
+            {/* Boutons pour tourner ce panneau par tranche de 90° */}
+            <div className="inline-flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs shadow-sm">
+              <button
+                type="button"
+                onClick={() =>
+                  onRotatePanel ? onRotatePanel(-90) : onToggleOrientation?.()
+                }
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-slate-700 text-slate-200 hover:text-amber-300 font-semibold transition-colors active:scale-95"
+                title={`Tourner le panneau N° ${panel.panelIndex} de -90° (sens anti-horaire)`}
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                <span>-90°</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onResetRotation?.()}
+                className="px-2 py-1 font-mono font-bold text-amber-400 hover:text-amber-300 border-x border-slate-700/80"
+                title="Angle de rotation actuel (cliquer pour remettre à 0°)"
+              >
+                {normRot}°
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onRotatePanel ? onRotatePanel(90) : onToggleOrientation?.()
+                }
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md hover:bg-slate-700 text-slate-200 hover:text-amber-300 font-semibold transition-colors active:scale-95"
+                title={`Tourner le panneau N° ${panel.panelIndex} de +90° (sens horaire)`}
+              >
+                <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+                <span>+90°</span>
+              </button>
+            </div>
 
             <div className="flex items-center gap-3 font-mono text-[11px]">
               <span className="text-slate-400">
@@ -1103,8 +1216,8 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
               </pattern>
             </defs>
 
-            {/* Groupe décalé par la marge pour les cotes extérieures */}
-            <g transform={`translate(${margin}, ${margin})`}>
+            {/* Groupe décalé par la marge et orienté par tranche de 90° (0°, 90°, 180°, 270°) */}
+            <g transform={rootGroupTransform}>
               {/* 1. Rectangle brut du panneau */}
               <rect
                 x="0"
