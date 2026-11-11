@@ -654,32 +654,42 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   }
 
   // 7. Tiroirs (calcul des bacs de tiroirs : côtés, façades intérieures/dos et fond)
+  let resolvedDrawerSlideLen = config.drawerSlideLength;
   if (config.drawersCount && config.drawersCount > 0) {
     const dCount = config.drawersCount;
-    // Épaisseur coulisse par côté (ex: 13 mm standard)
+    // Épaisseur coulisse par côté (ex: 12,7 mm ou 13 mm standard)
     const slideTh =
       config.drawerSlideThickness && config.drawerSlideThickness > 0
         ? config.drawerSlideThickness
         : 13;
-    // Longueur des coulisses (ex: 500 mm ou déduite de la profondeur)
+    // Profondeur maximale disponible pour un tiroir à l'intérieur du caisson
+    // (profondeur intérieure moins un retrait minimal de 10 mm, jamais supérieure à la profondeur du caisson)
+    const maxAllowedSlideLen = Math.max(100, interiorDepth - 10);
+    // Longueur standard de coulisse déduite de la profondeur du caisson (retrait standard ~50 mm, par pas de 50 mm)
+    const autoSlideLen = Math.min(
+      maxAllowedSlideLen,
+      Math.min(600, Math.max(150, Math.floor((depth - 50) / 50) * 50))
+    );
+    // Longueur des coulisses / côtés de tiroir (interdit toute valeur supérieure à la profondeur disponible du caisson)
     const slideLen =
-      config.drawerSlideLength && config.drawerSlideLength > 0
+      config.drawerSlideLength &&
+      config.drawerSlideLength > 0 &&
+      config.drawerSlideLength <= maxAllowedSlideLen
         ? config.drawerSlideLength
-        : Math.min(500, Math.max(250, Math.floor(interiorDepth / 50) * 50));
+        : autoSlideLen;
+    resolvedDrawerSlideLen = slideLen;
 
-    // Largeur de l'alvéole intérieure recevant les tiroirs
+    // Largeur de l'alvéole intérieure recevant les tiroirs (largeur extérieure - 2 × épaisseur côtés caisson principal)
     const compartmentW =
       partitionsCount > 0
-        ? Math.floor((interiorWidth - partitionsCount * thickness) / (partitionsCount + 1))
+        ? Math.round(((interiorWidth - partitionsCount * thickness) / (partitionsCount + 1)) * 10) / 10
         : interiorWidth;
 
-    // Largeur extérieure du bloc tiroir
-    const drawerOuterW = Math.max(50, compartmentW - 2 * slideTh);
-    // Hauteur du bac de tiroir (hauteur disponible divisée par nb de tiroirs avec jeu de 25-30 mm)
+    const slidesTotalTh = Math.round(2 * slideTh * 10) / 10;
+    // Largeur extérieure du bloc tiroir (alvéole intérieure - épaisseur des 2 coulisses)
+    const drawerOuterW = Math.max(50, Math.round((compartmentW - slidesTotalTh) * 10) / 10);
+    // Hauteur du bac de tiroir par défaut (hauteur disponible divisée par nb de tiroirs avec jeu de 25-30 mm)
     const drawerBoxH = Math.min(220, Math.max(80, Math.floor((interiorHeight / dCount) - 30)));
-    // Épaisseur des parois du tiroir (15 mm standard)
-    const drawerWallTh = 15;
-    const drawerInnerW = Math.max(50, drawerOuterW - 2 * drawerWallTh);
 
     const bottomQty = 1 * dCount * cabinetCount;
 
@@ -711,6 +721,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       }
     }
 
+    const mainSidesTotalTh = Math.round(2 * thickness * 10) / 10;
+
     boxGroups.forEach(({ count: n, isCustomHeight }, boxH) => {
       const sidesQty = 2 * n * cabinetCount;
       const frontBackQty = 2 * n * cabinetCount;
@@ -722,6 +734,19 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       const sidesPartId = `drawer_sides_${boxH}`;
       const frontBackPartId = `drawer_front_back_${boxH}`;
 
+      const sidesMat = getPartMat(
+        sidesPartId,
+        getPartMat('drawer_sides', getPartMat('drawers', resolvedDrawerMaterial))
+      );
+      // Épaisseur des côtés droit et gauche du caisson tiroir (extraite de la matière des côtés du tiroir ou égale à l'épaisseur du caisson)
+      const drawerWallTh = extractThicknessFromMaterialName(sidesMat) || thickness;
+      const drawerSidesTotalTh = Math.round(2 * drawerWallTh * 10) / 10;
+      // Largeur avant/arrière = largeur caisson - 2×ép. côtés caisson - 2×ép. coulisses - 2×ép. côtés tiroir
+      const drawerInnerW = Math.max(
+        50,
+        Math.round((drawerOuterW - drawerSidesTotalTh) * 10) / 10
+      );
+
       // Côtés de tiroir
       pieces.push({
         partKey: 'drawers',
@@ -732,9 +757,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         length: Math.max(slideLen, boxH),
         width: Math.min(slideLen, boxH),
         quantity: sidesQty,
-        material: getPartMat(sidesPartId, getPartMat('drawer_sides', resolvedDrawerMaterial)),
+        material: sidesMat,
         color: PIECE_COLORS.drawers,
       });
+
+      const widthFormulaDesc =
+        partitionsCount > 0
+          ? `${compartmentW} - ${slidesTotalTh} (2 coulisses) - ${drawerSidesTotalTh} (côtés tiroir) = ${drawerInnerW} mm`
+          : `${width} - ${mainSidesTotalTh} (côtés caisson) - ${slidesTotalTh} (2 coulisses) - ${drawerSidesTotalTh} (côtés tiroir) = ${drawerInnerW} mm`;
 
       // Avant et arrière de bac tiroir
       pieces.push({
@@ -742,11 +772,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         partId: frontBackPartId,
         role: `Avant et arrière de tiroir (${n} tiroir${n > 1 ? 's' : ''}, H ${boxH} mm)`,
         description: `${config.name} - Avant/Arrière tiroir`,
-        formula: `Largeur ${drawerInnerW} mm × H ${boxH} mm${hNote} [2 × ${n} × ${cabinetCount} = ${frontBackQty} pcs]`,
+        formula: `${widthFormulaDesc} × H ${boxH} mm${hNote} [2 × ${n} × ${cabinetCount} = ${frontBackQty} pcs]`,
         length: Math.max(drawerInnerW, boxH),
         width: Math.min(drawerInnerW, boxH),
         quantity: frontBackQty,
-        material: getPartMat(frontBackPartId, getPartMat('drawer_front_back', resolvedDrawerMaterial)),
+        material: getPartMat(
+          frontBackPartId,
+          getPartMat('drawer_front_back', getPartMat('drawers', resolvedDrawerMaterial))
+        ),
         color: PIECE_COLORS.drawers,
       });
     });
@@ -761,10 +794,17 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       length: Math.max(slideLen, drawerOuterW),
       width: Math.min(slideLen, drawerOuterW),
       quantity: bottomQty,
-      material: getPartMat('drawer_bottom', resolvedDrawerMaterial),
+      material: getPartMat('drawer_bottom', getPartMat('drawers', resolvedDrawerMaterial)),
       color: PIECE_COLORS.drawers,
     });
   }
+
+  const finalConfig: CabinetConfig = {
+    ...config,
+    ...(resolvedDrawerSlideLen !== undefined
+      ? { drawerSlideLength: resolvedDrawerSlideLen }
+      : {}),
+  };
 
   // Conversion en CutItem pour la liste de débit
   const cutItems: CutItem[] = pieces.map((p, idx) => ({
@@ -776,11 +816,11 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     quantity: p.quantity,
     canRotate: true,
     color: p.color,
-    cabinetConfig: { ...config },
+    cabinetConfig: { ...finalConfig },
   }));
 
   return {
-    config,
+    config: finalConfig,
     pieces,
     cutItems,
     interiorDimensions: {
@@ -789,6 +829,155 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       depth: interiorDepth,
     },
   };
+}
+
+/**
+ * Corrige automatiquement les pièces de tiroirs des caissons existants sauvegardés
+ * lorsque :
+ * 1) La longueur des côtés/fond de tiroir dépassait la profondeur du caisson (ex: 500 mm pour un caisson de 450 mm)
+ * 2) L'avant/arrière de tiroir avait été calculé avec une épaisseur de paroi fixe de 15 mm (2×15 = 30 mm)
+ *    au lieu de l'épaisseur réelle des côtés du tiroir (ex: 2×18 = 36 mm).
+ */
+export function repairSavedCabinetDrawers(items: CutItem[]): {
+  items: CutItem[];
+  modified: boolean;
+} {
+  if (!items || items.length === 0) {
+    return { items, modified: false };
+  }
+
+  let modified = false;
+  const nextItems = items.map((item) => {
+    const cfg = item.cabinetConfig;
+    if (!cfg || !cfg.depth || !cfg.width) return item;
+
+    const nameLower = item.name.toLowerCase();
+    const isDrawerPiece =
+      nameLower.includes('côtés tiroir') ||
+      nameLower.includes('cotes tiroir') ||
+      nameLower.includes('avant/arrière tiroir') ||
+      nameLower.includes('avant/arriere tiroir') ||
+      nameLower.includes('fond tiroir');
+
+    const backTh =
+      cfg.backType === 'applique' || cfg.backType === 'none'
+        ? 0
+        : cfg.backThickness || 8;
+    const interiorDepth = cfg.depth - backTh;
+    const maxAllowedSlideLen = Math.max(100, interiorDepth - 10);
+    const autoSlideLen = Math.min(
+      maxAllowedSlideLen,
+      Math.min(600, Math.max(150, Math.floor((cfg.depth - 50) / 50) * 50))
+    );
+    const oldSlideLen = cfg.drawerSlideLength || 500;
+    const resolvedSlideLen =
+      oldSlideLen > 0 && oldSlideLen <= maxAllowedSlideLen
+        ? oldSlideLen
+        : autoSlideLen;
+
+    if (!isDrawerPiece) {
+      if (cfg.drawerSlideLength && cfg.drawerSlideLength > maxAllowedSlideLen) {
+        modified = true;
+        return {
+          ...item,
+          cabinetConfig: {
+            ...cfg,
+            drawerSlideLength: resolvedSlideLen,
+          },
+        };
+      }
+      return item;
+    }
+
+    const mainTh = cfg.thickness && cfg.thickness > 0 ? cfg.thickness : 18;
+    const interiorWidth = cfg.width - 2 * mainTh;
+    const pCount = cfg.partitionsCount && cfg.partitionsCount > 0 ? cfg.partitionsCount : 0;
+    const compartmentW =
+      pCount > 0
+        ? Math.round(((interiorWidth - pCount * mainTh) / (pCount + 1)) * 10) / 10
+        : interiorWidth;
+    const slideTh =
+      cfg.drawerSlideThickness && cfg.drawerSlideThickness > 0
+        ? cfg.drawerSlideThickness
+        : 13;
+    const slidesTotalTh = Math.round(2 * slideTh * 10) / 10;
+    const drawerOuterW = Math.max(50, Math.round((compartmentW - slidesTotalTh) * 10) / 10);
+
+    const cabName = cfg.name;
+    const drawerSidesItem = items.find(
+      (it) =>
+        it.cabinetConfig?.name === cabName &&
+        (it.name.toLowerCase().includes('côtés tiroir') ||
+          it.name.toLowerCase().includes('cotes tiroir'))
+    );
+    const drawerSidesMat =
+      drawerSidesItem?.material ||
+      cfg.partMaterials?.['drawer_sides'] ||
+      cfg.drawerMaterial ||
+      item.material ||
+      cfg.material ||
+      '';
+    const drawerWallTh = extractThicknessFromMaterialName(drawerSidesMat) || mainTh;
+    const drawerSidesTotalTh = Math.round(2 * drawerWallTh * 10) / 10;
+    const trueInnerW = Math.max(50, Math.round((drawerOuterW - drawerSidesTotalTh) * 10) / 10);
+    const oldInnerW15 = Math.max(50, Math.round((drawerOuterW - 30) * 10) / 10);
+
+    let newL = item.length;
+    let newW = item.width;
+
+    if (nameLower.includes('côtés tiroir') || nameLower.includes('cotes tiroir')) {
+      if (oldSlideLen > maxAllowedSlideLen) {
+        if (Math.abs(item.length - oldSlideLen) <= 1) {
+          const boxH = item.width;
+          newL = Math.max(resolvedSlideLen, boxH);
+          newW = Math.min(resolvedSlideLen, boxH);
+        } else if (Math.abs(item.width - oldSlideLen) <= 1) {
+          const boxH = item.length;
+          newL = Math.max(resolvedSlideLen, boxH);
+          newW = Math.min(resolvedSlideLen, boxH);
+        }
+      }
+    } else if (
+      nameLower.includes('avant/arrière tiroir') ||
+      nameLower.includes('avant/arriere tiroir')
+    ) {
+      if (Math.abs(item.length - oldInnerW15) <= 0.5) {
+        const boxH = item.width;
+        newL = Math.max(trueInnerW, boxH);
+        newW = Math.min(trueInnerW, boxH);
+      } else if (Math.abs(item.width - oldInnerW15) <= 0.5) {
+        const boxH = item.length;
+        newL = Math.max(trueInnerW, boxH);
+        newW = Math.min(trueInnerW, boxH);
+      }
+    } else if (nameLower.includes('fond tiroir')) {
+      if (oldSlideLen > maxAllowedSlideLen) {
+        newL = Math.max(resolvedSlideLen, drawerOuterW);
+        newW = Math.min(resolvedSlideLen, drawerOuterW);
+      }
+    }
+
+    if (
+      newL !== item.length ||
+      newW !== item.width ||
+      cfg.drawerSlideLength !== resolvedSlideLen
+    ) {
+      modified = true;
+      return {
+        ...item,
+        length: newL,
+        width: newW,
+        cabinetConfig: {
+          ...cfg,
+          drawerSlideLength: resolvedSlideLen,
+        },
+      };
+    }
+
+    return item;
+  });
+
+  return { items: nextItems, modified };
 }
 
 /**
@@ -819,6 +1008,7 @@ export function inferCabinetConfigFromItems(
     const r = getRolePart(it.name);
     return (
       (r.includes('côté') || r.includes('cote') || r.includes('montant') || r.includes('flanc')) &&
+      !r.includes('tiroir') &&
       !r.includes('séparat') &&
       !r.includes('separat') &&
       !r.includes('central')
@@ -848,6 +1038,7 @@ export function inferCabinetConfigFromItems(
     const r = getRolePart(it.name);
     return (
       (r.includes('fond') || r.includes('dos') || r.includes('arrière') || r.includes('arriere')) &&
+      !r.includes('tiroir') &&
       !r.includes('horizontal')
     );
   });

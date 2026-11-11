@@ -171,7 +171,7 @@ const EMPTY_CONFIG: CabinetConfig = {
   facadeGap: 2,
   drawersCount: 0,
   drawerSlideThickness: 13,
-  drawerSlideLength: 500,
+  drawerSlideLength: 0,
 };
 
 interface GuidedTemplateFields {
@@ -264,7 +264,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     hasDrawers: false,
     drawersCount: 1,
     drawerSlideThickness: 13,
-    drawerSlideLength: 500,
+    drawerSlideLength: 0,
   });
   const [bulkMaterial, setBulkMaterial] = useState('');
   const autoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -378,7 +378,18 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         const part = getPiecePart(it.name).toLowerCase();
         const mat = it.material?.trim();
         if (!mat) return;
-        if (part.includes('côté') || part.includes('cote') || part.includes('montant')) {
+        if (part.includes('façade tiroir') || part.includes('facade tiroir')) {
+          if (!partMaterials['facade_tiroir']) partMaterials['facade_tiroir'] = mat;
+        } else if (part.includes('tiroir')) {
+          if (part.includes('côté') || part.includes('cote')) {
+            if (!partMaterials['drawer_sides']) partMaterials['drawer_sides'] = mat;
+          } else if (part.includes('avant') || part.includes('arrière') || part.includes('arriere')) {
+            if (!partMaterials['drawer_front_back']) partMaterials['drawer_front_back'] = mat;
+          } else if (part.includes('fond')) {
+            if (!partMaterials['drawer_bottom']) partMaterials['drawer_bottom'] = mat;
+          }
+          if (!partMaterials['drawers']) partMaterials['drawers'] = mat;
+        } else if (part.includes('côté') || part.includes('cote') || part.includes('montant')) {
           if (!partMaterials['sides']) partMaterials['sides'] = mat;
         } else if (part.includes('dessus') || part.includes('haut')) {
           if (!partMaterials['top']) partMaterials['top'] = mat;
@@ -395,10 +406,27 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         }
       });
 
+      const editBackTh =
+        c.backType === 'applique' || c.backType === 'none' ? 0 : c.backThickness || 8;
+      const editMaxSlideLen = c.depth ? Math.max(100, c.depth - editBackTh - 10) : 500;
+      const editDefaultSlideLen = c.depth
+        ? Math.min(
+            editMaxSlideLen,
+            Math.min(600, Math.max(150, Math.floor((c.depth - 50) / 50) * 50))
+          )
+        : 500;
+      const resolvedEditSlideLen =
+        c.drawerSlideLength &&
+        c.drawerSlideLength > 0 &&
+        c.drawerSlideLength <= editMaxSlideLen
+          ? c.drawerSlideLength
+          : editDefaultSlideLen;
+
       // Mettre à jour la configuration
       setConfig({
         ...c,
         name: c.name || cabName,
+        drawerSlideLength: resolvedEditSlideLen,
         partMaterials,
       });
 
@@ -459,9 +487,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         hasDrawers: !!c.hasDrawers,
         drawersCount: c.drawersCount || 1,
         drawerSlideThickness: c.drawerSlideThickness ?? 13,
-        drawerSlideLength:
-          c.drawerSlideLength ??
-          (c.depth ? Math.max(250, c.depth - 50) : 500),
+        drawerSlideLength: resolvedEditSlideLen,
       });
 
       if (c.material) {
@@ -569,6 +595,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       next.height = !isNaN(h) && h > 0 ? h : 0;
       next.width = !isNaN(w) && w > 0 ? w : 0;
       next.depth = !isNaN(d) && d > 0 ? d : 0;
+      if (field === 'depth') {
+        next.drawerSlideLength = 0;
+      }
       next.partitionsCount = nextGf.partitionsCount !== '' && !isNaN(p) ? p : -1;
       next.shelvesCount = nextGf.shelvesCount !== '' && !isNaN(sh) ? sh : -1;
       next.assemblyType = (nextGf.assemblyType || '') as AssemblyType;
@@ -596,9 +625,15 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   useEffect(() => {
     if (showCompositionModal) {
       const depthVal = config.depth || parseInt(guidedFields.depth, 10) || 560;
+      const effectiveBackType = config.backType || guidedFields.backType || 'groove';
+      const backThVal =
+        effectiveBackType === 'applique' || effectiveBackType === 'none'
+          ? 0
+          : config.backThickness || 8;
+      const maxAllowedSlideLen = Math.max(100, depthVal - backThVal - 10);
       const defaultSlideLen = Math.min(
-        600,
-        Math.max(250, Math.floor((depthVal - 50) / 50) * 50)
+        maxAllowedSlideLen,
+        Math.min(600, Math.max(150, Math.floor((depthVal - 50) / 50) * 50))
       );
       setCompositionState((prev) => {
         const nextCount =
@@ -616,6 +651,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   it.drawerHeight && it.drawerHeight > 0 ? String(it.drawerHeight) : '',
               }))
             : null;
+        const candidateSlideLen = config.drawerSlideLength || prev.drawerSlideLength || 0;
+        const resolvedSlideLen =
+          candidateSlideLen > 0 && candidateSlideLen <= maxAllowedSlideLen
+            ? candidateSlideLen
+            : defaultSlideLen;
         return {
           ...prev,
           hasFacades: config.facadesCount !== undefined ? config.facadesCount > 0 : prev.hasFacades,
@@ -626,7 +666,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           hasDrawers: config.drawersCount !== undefined ? config.drawersCount > 0 : prev.hasDrawers,
           drawersCount: config.drawersCount && config.drawersCount > 0 ? config.drawersCount : 1,
           drawerSlideThickness: config.drawerSlideThickness || prev.drawerSlideThickness || 13,
-          drawerSlideLength: config.drawerSlideLength || defaultSlideLen,
+          drawerSlideLength: resolvedSlideLen,
         };
       });
     }
@@ -634,6 +674,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     showCompositionModal,
     config.depth,
     config.width,
+    config.backType,
+    config.backThickness,
     config.facadesCount,
     config.facadeItems,
     config.facadePlacement,
@@ -642,6 +684,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     config.drawerSlideThickness,
     config.drawerSlideLength,
     guidedFields.depth,
+    guidedFields.backType,
   ]);
 
   // Calcul en direct de la répartition des hauteurs de la façade (jeux et espacements déduits)
@@ -889,6 +932,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       } else if (partKey === 'drawers') {
         if (!partId || partId === 'drawers') {
           next.drawerMaterial = newMat;
+        } else if (partId.startsWith('drawer_sides')) {
+          nextPartMaterials['drawer_sides'] = newMat;
         }
       }
       return next;
@@ -3790,26 +3835,39 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                           Longueur coulisses (mm) <span className="text-amber-400">*</span> :
                         </label>
-                        <input
-                          type="number"
-                          min="150"
-                          max="1000"
-                          step="50"
-                          value={compositionState.drawerSlideLength}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            setCompositionState((prev) => ({
-                              ...prev,
-                              drawerSlideLength: isNaN(val) || val <= 0 ? 500 : val,
-                            }));
-                          }}
-                          placeholder="Ex: 500"
-                          title="Longueur des coulisses (ex: 300, 350, 400, 450, 500 mm)"
-                          className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
-                        />
-                        <span className="text-[10px] text-slate-500 block mt-0.5">
-                          Profondeur caisson : {config.depth || guidedFields.depth || '—'} mm
-                        </span>
+                        {(() => {
+                          const dVal = config.depth || parseInt(guidedFields.depth, 10) || 0;
+                          const bType = config.backType || guidedFields.backType || 'groove';
+                          const bTh = bType === 'applique' || bType === 'none' ? 0 : config.backThickness || 8;
+                          const maxSlide = dVal > 0 ? Math.max(100, dVal - bTh - 10) : 1000;
+                          return (
+                            <>
+                              <input
+                                type="number"
+                                min="100"
+                                max={maxSlide}
+                                step="50"
+                                value={compositionState.drawerSlideLength}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10);
+                                  setCompositionState((prev) => ({
+                                    ...prev,
+                                    drawerSlideLength:
+                                      isNaN(val) || val <= 0
+                                        ? Math.min(maxSlide, 400)
+                                        : Math.min(maxSlide, val),
+                                  }));
+                                }}
+                                placeholder="Ex: 400"
+                                title={`Longueur des coulisses (maximum ${maxSlide} mm pour une profondeur de ${dVal} mm)`}
+                                className="w-full bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                              />
+                              <span className="text-[10px] text-slate-500 block mt-0.5">
+                                Profondeur caisson : {dVal || '—'} mm{dVal > 0 ? ` (max ${maxSlide} mm)` : ''}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       <div className="sm:col-span-2">

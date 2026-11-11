@@ -12,6 +12,7 @@ import {
 } from '@/types/cutting';
 import { DEFAULT_SETTINGS, PRESETS, ProjectPreset } from '@/lib/presets';
 import { optimizeCutting } from '@/lib/optimizer/guillotine';
+import { repairSavedCabinetDrawers } from '@/lib/cabinet-calculator';
 import {
   getProjects,
   saveProjectToCloud,
@@ -233,7 +234,18 @@ export default function Home() {
           );
         }
       } else {
-        setSavedProjects(projects || []);
+        const repairedProjects = (projects || []).map((proj) => {
+          const { items: repairedItems, modified } = repairSavedCabinetDrawers(
+            proj.cutItems || []
+          );
+          if (modified) {
+            const updatedProj = { ...proj, cutItems: repairedItems };
+            saveProjectToCloud(updatedProj);
+            return updatedProj;
+          }
+          return proj;
+        });
+        setSavedProjects(repairedProjects);
       }
     });
   }, []);
@@ -317,23 +329,34 @@ export default function Home() {
 
   // Ouverture d'un PROJET EXISTANT
   const handleOpenProject = (project: SavedProject) => {
+    const { items: repairedItems, modified } = repairSavedCabinetDrawers(
+      project.cutItems || []
+    );
+    if (modified) {
+      const updatedProj = { ...project, cutItems: repairedItems };
+      saveProjectToCloud(updatedProj);
+      setSavedProjects((prev) =>
+        prev.map((p) => (p.id === updatedProj.id ? updatedProj : p))
+      );
+    }
+
     setCurrentProjectId(project.id);
     setProjectName(project.name);
     setSettings(project.settings || DEFAULT_SETTINGS);
     setStockPanels(project.stockPanels || []);
-    setCutItems(project.cutItems || []);
+    setCutItems(repairedItems);
     setIsSaved(true);
 
     // Lancer automatiquement l'optimisation si des panneaux et pièces sont présents
     if (
-      project.cutItems &&
-      project.cutItems.length > 0 &&
+      repairedItems &&
+      repairedItems.length > 0 &&
       project.stockPanels &&
       project.stockPanels.length > 0
     ) {
       const res = optimizeCutting(
         project.stockPanels,
-        project.cutItems,
+        repairedItems,
         project.settings || DEFAULT_SETTINGS
       );
       setOptimizationResult(res);
