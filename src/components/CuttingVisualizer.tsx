@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useId, useCallback, useEffect } from 'react';
+import React, { useState, useId, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { PanelResult, PlacedPiece, OffcutArea } from '@/types/cutting';
 import {
@@ -47,6 +47,29 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const [isExportingLabelsPdf, setIsExportingLabelsPdf] = useState<boolean>(false);
   const [fullscreenPanelIdx, setFullscreenPanelIdx] = useState<number | null>(null);
   const [fullscreenZoom, setFullscreenZoom] = useState<number>(1);
+  const [fullscreenPan, setFullscreenPan] = useState<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
+  const [isTouchGesturing, setIsTouchGesturing] = useState<boolean>(false);
+  const [isFlipped180, setIsFlipped180] = useState<boolean>(false);
+  const touchGestureRef = useRef<{
+    mode: 'none' | 'pinch' | 'pan';
+    startDist: number;
+    startZoom: number;
+    startX: number;
+    startY: number;
+    startPanX: number;
+    startPanY: number;
+  }>({
+    mode: 'none',
+    startDist: 1,
+    startZoom: 1,
+    startX: 0,
+    startY: 0,
+    startPanX: 0,
+    startPanY: 0,
+  });
   const [viewportState, setViewportState] = useState<{
     w: number;
     h: number;
@@ -59,10 +82,12 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
 
   const effectiveOrientations = panelOrientations ?? internalOrientations;
 
-  // Ouvrir un panneau en plein écran verrouillé en mode Portrait
+  // Ouvrir un panneau en plein écran verrouillé en mode Portrait (à l'endroit)
   const handleOpenFullscreen = useCallback(async (idx: number) => {
     setFullscreenPanelIdx(idx);
     setFullscreenZoom(1);
+    setFullscreenPan({ x: 0, y: 0 });
+    setIsFlipped180(false);
     try {
       const docEl = document.documentElement as HTMLElement & {
         webkitRequestFullscreen?: () => Promise<void>;
@@ -86,7 +111,10 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
         }
       )?.orientation;
       if (screenOrientation?.lock) {
-        await screenOrientation.lock('portrait').catch(() => {});
+        await screenOrientation
+          .lock('portrait-primary')
+          .catch(() => screenOrientation.lock?.('portrait'))
+          .catch(() => {});
       }
     } catch {
       // Ignorer si non supporté par le navigateur mobile
@@ -97,6 +125,8 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const handleCloseFullscreen = useCallback(async () => {
     setFullscreenPanelIdx(null);
     setFullscreenZoom(1);
+    setFullscreenPan({ x: 0, y: 0 });
+    setIsFlipped180(false);
     try {
       const screenOrientation = (
         window.screen as Screen & {
@@ -434,10 +464,13 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
         typeof document !== 'undefined' &&
         (() => {
           const fsPanel = panels[fullscreenPanelIdx] || panels[0];
-          const counterRotate =
-            viewportState.angle === 270 || viewportState.angle === -90
-              ? 'rotate(90deg)'
-              : 'rotate(-90deg)';
+          const baseRotateDeg = viewportState.isLandscapeOnPhone
+            ? viewportState.angle === 270 || viewportState.angle === -90
+              ? -90
+              : 90
+            : 0;
+          const effectiveRotateDeg =
+            (baseRotateDeg + (isFlipped180 ? 180 : 0) + 360) % 360;
 
           const containerStyle: React.CSSProperties =
             viewportState.isLandscapeOnPhone
@@ -447,7 +480,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                   left: '50%',
                   width: `${viewportState.h}px`,
                   height: `${viewportState.w}px`,
-                  transform: `translate(-50%, -50%) ${counterRotate}`,
+                  transform: `translate(-50%, -50%) rotate(${effectiveRotateDeg}deg)`,
                   transformOrigin: 'center center',
                   zIndex: 9999,
                 }
@@ -456,8 +489,129 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                   inset: 0,
                   width: '100dvw',
                   height: '100dvh',
+                  transform: isFlipped180 ? 'rotate(180deg)' : undefined,
+                  transformOrigin: 'center center',
                   zIndex: 9999,
                 };
+
+          const toLocalDelta = (rawDx: number, rawDy: number) => {
+            if (effectiveRotateDeg === 90) {
+              return { dx: rawDy, dy: -rawDx };
+            }
+            if (effectiveRotateDeg === 270) {
+              return { dx: -rawDy, dy: rawDx };
+            }
+            if (effectiveRotateDeg === 180) {
+              return { dx: -rawDx, dy: -rawDy };
+            }
+            return { dx: rawDx, dy: rawDy };
+          };
+
+          const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+            if (e.touches.length === 2) {
+              const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+              );
+              const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+              const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+              setIsTouchGesturing(true);
+              touchGestureRef.current = {
+                mode: 'pinch',
+                startDist: Math.max(10, dist),
+                startZoom: fullscreenZoom,
+                startX: midX,
+                startY: midY,
+                startPanX: fullscreenPan.x,
+                startPanY: fullscreenPan.y,
+              };
+            } else if (e.touches.length === 1 && fullscreenZoom > 1) {
+              setIsTouchGesturing(true);
+              touchGestureRef.current = {
+                mode: 'pan',
+                startDist: 1,
+                startZoom: fullscreenZoom,
+                startX: e.touches[0].clientX,
+                startY: e.touches[0].clientY,
+                startPanX: fullscreenPan.x,
+                startPanY: fullscreenPan.y,
+              };
+            }
+          };
+
+          const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+            if (e.touches.length === 2) {
+              const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+              );
+              const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+              const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+              if (touchGestureRef.current.mode !== 'pinch') {
+                touchGestureRef.current = {
+                  mode: 'pinch',
+                  startDist: Math.max(10, dist),
+                  startZoom: fullscreenZoom,
+                  startX: midX,
+                  startY: midY,
+                  startPanX: fullscreenPan.x,
+                  startPanY: fullscreenPan.y,
+                };
+                return;
+              }
+
+              const scaleFactor = dist / Math.max(10, touchGestureRef.current.startDist);
+              const nextZoom = Math.min(
+                6,
+                Math.max(1, +(touchGestureRef.current.startZoom * scaleFactor).toFixed(3))
+              );
+              setFullscreenZoom(nextZoom);
+
+              if (nextZoom <= 1.02) {
+                setFullscreenPan({ x: 0, y: 0 });
+              } else {
+                const { dx, dy } = toLocalDelta(
+                  midX - touchGestureRef.current.startX,
+                  midY - touchGestureRef.current.startY
+                );
+                setFullscreenPan({
+                  x: touchGestureRef.current.startPanX + dx,
+                  y: touchGestureRef.current.startPanY + dy,
+                });
+              }
+            } else if (
+              e.touches.length === 1 &&
+              touchGestureRef.current.mode === 'pan' &&
+              fullscreenZoom > 1
+            ) {
+              const { dx, dy } = toLocalDelta(
+                e.touches[0].clientX - touchGestureRef.current.startX,
+                e.touches[0].clientY - touchGestureRef.current.startY
+              );
+              setFullscreenPan({
+                x: touchGestureRef.current.startPanX + dx,
+                y: touchGestureRef.current.startPanY + dy,
+              });
+            }
+          };
+
+          const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+            if (e.touches.length === 1 && fullscreenZoom > 1) {
+              touchGestureRef.current = {
+                mode: 'pan',
+                startDist: 1,
+                startZoom: fullscreenZoom,
+                startX: e.touches[0].clientX,
+                startY: e.touches[0].clientY,
+                startPanX: fullscreenPan.x,
+                startPanY: fullscreenPan.y,
+              };
+            } else if (e.touches.length === 0) {
+              touchGestureRef.current.mode = 'none';
+              setIsTouchGesturing(false);
+            }
+          };
 
           return createPortal(
             <div
@@ -467,18 +621,20 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
               className="fixed bg-slate-950 text-white flex flex-col overflow-hidden select-none"
             >
               {/* Barre supérieure compacte du mode plein écran portrait */}
-              <div className="shrink-0 bg-slate-900 border-b border-slate-800 px-3 py-2.5 flex items-center justify-between gap-2 shadow-md">
+              <div className="shrink-0 bg-slate-900 border-b border-slate-800 px-3 py-2.5 flex items-center justify-between gap-2 shadow-md z-10">
                 <div className="flex items-center gap-2 min-w-0">
                   {panels.length > 1 && (
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
                         disabled={fullscreenPanelIdx === 0}
-                        onClick={() =>
+                        onClick={() => {
+                          setFullscreenZoom(1);
+                          setFullscreenPan({ x: 0, y: 0 });
                           setFullscreenPanelIdx((i) =>
                             i !== null ? Math.max(0, i - 1) : 0
-                          )
-                        }
+                          );
+                        }}
                         className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-200 transition-colors"
                         title="Panneau précédent"
                       >
@@ -487,13 +643,15 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                       <button
                         type="button"
                         disabled={fullscreenPanelIdx === panels.length - 1}
-                        onClick={() =>
+                        onClick={() => {
+                          setFullscreenZoom(1);
+                          setFullscreenPan({ x: 0, y: 0 });
                           setFullscreenPanelIdx((i) =>
                             i !== null
                               ? Math.min(panels.length - 1, i + 1)
                               : 0
-                          )
-                        }
+                          );
+                        }}
                         className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-200 transition-colors"
                         title="Panneau suivant"
                       >
@@ -522,14 +680,28 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                   </div>
                 </div>
 
-                {/* Contrôles Zoom & Fermeture */}
+                {/* Contrôles Zoom, 180° & Fermeture */}
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsFlipped180((v) => !v)}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 text-xs font-bold flex items-center gap-1"
+                    title="Inverser le sens de lecture (180°)"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    <span className="text-[10px]">180°</span>
+                  </button>
+
                   <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
                     <button
                       type="button"
-                      onClick={() =>
-                        setFullscreenZoom((z) => Math.max(0.8, +(z - 0.25).toFixed(2)))
-                      }
+                      onClick={() => {
+                        setFullscreenZoom((z) => {
+                          const next = Math.max(1, +(z - 0.35).toFixed(2));
+                          if (next <= 1) setFullscreenPan({ x: 0, y: 0 });
+                          return next;
+                        });
+                      }}
                       className="p-1.5 text-slate-300 hover:text-white"
                       title="Zoom arrière"
                     >
@@ -537,7 +709,10 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFullscreenZoom(1)}
+                      onClick={() => {
+                        setFullscreenZoom(1);
+                        setFullscreenPan({ x: 0, y: 0 });
+                      }}
                       className="px-1.5 text-[11px] font-mono text-amber-400 font-bold"
                       title="Réinitialiser le zoom"
                     >
@@ -546,7 +721,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                     <button
                       type="button"
                       onClick={() =>
-                        setFullscreenZoom((z) => Math.min(3.0, +(z + 0.25).toFixed(2)))
+                        setFullscreenZoom((z) => Math.min(6.0, +(z + 0.35).toFixed(2)))
                       }
                       className="p-1.5 text-slate-300 hover:text-white"
                       title="Zoom avant"
@@ -567,12 +742,21 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                 </div>
               </div>
 
-              {/* Zone centrale : Panneau forcé en orientation Portrait (Verticale) occupant tout l'écran */}
-              <div className="flex-1 min-h-0 w-full overflow-auto bg-slate-950 flex items-center justify-center p-1 sm:p-3">
+              {/* Zone centrale : Panneau forcé en orientation Portrait avec zoom à 2 doigts (pinch-to-zoom) */}
+              <div
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchEnd}
+                style={{ touchAction: 'none' }}
+                className="flex-1 min-h-0 w-full overflow-hidden bg-slate-950 flex items-center justify-center p-1 sm:p-3"
+              >
                 <SinglePanelSVG
                   panel={fsPanel}
                   kerf={kerf}
                   zoomLevel={fullscreenZoom}
+                  panOffset={fullscreenPan}
+                  isGesturing={isTouchGesturing}
                   hoveredPiece={hoveredPiece}
                   setHoveredPiece={setHoveredPiece}
                   hoveredOffcut={hoveredOffcut}
@@ -583,8 +767,8 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                 />
               </div>
 
-              {/* Barre d'information en bas (affiche les détails d'une pièce touchée ou le rappel du mode portrait) */}
-              <div className="shrink-0 bg-slate-900 border-t border-slate-800 px-3 py-2 text-xs flex items-center justify-between gap-2">
+              {/* Barre d'information en bas */}
+              <div className="shrink-0 bg-slate-900 border-t border-slate-800 px-3 py-2 text-xs flex items-center justify-between gap-2 z-10">
                 {hoveredPiece ? (
                   <div className="flex items-center justify-between w-full gap-2">
                     <div className="truncate font-semibold text-white">
@@ -600,7 +784,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                 ) : (
                   <div className="text-[11px] text-slate-400 flex items-center justify-between w-full">
                     <span>
-                      Touchez une pièce pour voir ses cotes • Mode Portrait verrouillé
+                      Écartez 2 doigts pour zoomer • Touchez une pièce pour ses cotes
                     </span>
                     <span className="font-mono text-slate-300">
                       {fsPanel.placedPieces.length} pièce(s)
@@ -668,6 +852,8 @@ interface SinglePanelSVGProps {
   panel: PanelResult;
   kerf: number;
   zoomLevel: number;
+  panOffset?: { x: number; y: number };
+  isGesturing?: boolean;
   hoveredPiece: PlacedPiece | null;
   setHoveredPiece: (p: PlacedPiece | null) => void;
   hoveredOffcut: OffcutArea | null;
@@ -683,6 +869,8 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
   panel,
   kerf,
   zoomLevel,
+  panOffset = { x: 0, y: 0 },
+  isGesturing = false,
   hoveredPiece,
   setHoveredPiece,
   hoveredOffcut,
@@ -828,7 +1016,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
         }
         className={
           isFullscreen
-            ? 'w-full h-full flex items-center justify-center overflow-auto'
+            ? 'w-full h-full flex items-center justify-center overflow-hidden'
             : 'w-full overflow-auto bg-slate-950 rounded-lg p-2 border border-slate-800/80 hover:border-amber-500/50 transition-colors flex justify-center cursor-pointer'
         }
       >
@@ -836,9 +1024,9 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
           style={
             isFullscreen
               ? {
-                  transform: `scale(${zoomLevel})`,
+                  transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${zoomLevel})`,
                   transformOrigin: 'center center',
-                  transition: 'transform 0.15s ease-out',
+                  transition: isGesturing ? 'none' : 'transform 0.12s ease-out',
                   width: '100%',
                   height: '100%',
                   display: 'flex',
@@ -1067,21 +1255,35 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                         </text>
                       )}
 
-                      {/* 2. Cote sur l'arête gauche (hauteur, verticale) */}
+                      {/* 2. Cote sur l'arête gauche (hauteur) : à l'endroit (horizontale) en plein écran */}
                       {ph >= 28 && (
-                        <text
-                          x={px + fontSizeDim * 1.15}
-                          y={py + ph / 2}
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          transform={`rotate(-90, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
-                          fill="#0f172a"
-                          fontSize={fontSizeDim}
-                          fontWeight="bold"
-                          fontFamily="monospace"
-                        >
-                          {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
-                        </text>
+                        isFullscreen && pw >= 48 && ph >= fontSizeDim * 3.8 ? (
+                          <text
+                            x={px + 6}
+                            y={py + fontSizeDim * 2.25}
+                            textAnchor="start"
+                            fill="#0f172a"
+                            fontSize={fontSizeDim}
+                            fontWeight="bold"
+                            fontFamily="monospace"
+                          >
+                            {pw >= 75 ? `↕ ${leftDim} mm` : `↕${leftDim}`}
+                          </text>
+                        ) : (
+                          <text
+                            x={px + fontSizeDim * 1.15}
+                            y={py + ph / 2}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            transform={`rotate(${isFullscreen ? 90 : -90}, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
+                            fill="#0f172a"
+                            fontSize={fontSizeDim}
+                            fontWeight="bold"
+                            fontFamily="monospace"
+                          >
+                            {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
+                          </text>
+                        )
                       )}
 
                       {/* 3. Nom de la pièce et destination au centre */}
@@ -1094,21 +1296,32 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                         const tentativeFSize = Math.min(36, Math.max(15, Math.max(pw, ph) / 12));
                         const estimatedHorizWidth = textToMeasure.length * tentativeFSize * 0.58;
 
-                        // Le texte est orienté verticalement lorsque la pièce est plus haute que large
-                        // et qu'il ne tient pas confortablement à l'horizontale
-                        const isVertical = ph > pw && (
-                          estimatedHorizWidth > (pw - 20) ||
-                          ph >= pw * 1.3
-                        );
+                        // En mode plein écran portrait, l'écriture reste toujours à l'endroit (horizontale)
+                        const isVertical = isFullscreen
+                          ? false
+                          : ph > pw && (
+                              estimatedHorizWidth > (pw - 20) ||
+                              ph >= pw * 1.3
+                            );
 
                         const effTitleFSize = isVertical
                           ? Math.min(32, Math.max(13, Math.min(ph / 14, pw / 7)))
-                          : Math.min(36, Math.max(14, pw / 10, ph / 14));
+                          : Math.min(36, Math.max(14, pw / 8, ph / 12));
 
                         const cx = px + pw / 2;
-                        const cy = py + ph / 2;
+                        const cy =
+                          isFullscreen && ph >= fontSizeDim * 3.8
+                            ? py + ph * 0.56
+                            : py + ph / 2;
                         // Marge pour ne pas chevaucher les cotes affichées sur les bords
-                            const availLength = Math.max(20, isVertical ? ph - 56 : pw - 56);
+                            const availLength = Math.max(
+                              18,
+                              isVertical
+                                ? ph - 56
+                                : isFullscreen
+                                  ? pw - 12
+                                  : pw - 56
+                            );
                         // Réduction automatique de la police pour afficher le nom complet
                             const fitLen = isMixedPanel && pieceCabinet
                               ? Math.max(pieceCabinet.length + 2, piecePart.length)
@@ -1131,7 +1344,10 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                             : piecePart
                           : '';
 
-                        const showTwoLines = isMixedPanel && pieceCabinet && (isVertical ? pw >= 45 : ph >= 55);
+                        const showTwoLines =
+                          (isMixedPanel || isFullscreen) &&
+                          pieceCabinet &&
+                          (isVertical ? pw >= 45 : ph >= 48);
 
                         return (
                           <text
@@ -1233,7 +1449,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 fontSize="22"
                 fontWeight="bold"
                 fontFamily="monospace"
-                transform={`rotate(-90, -28, ${panelHeightDisplay / 2})`}
+                transform={`rotate(${isFullscreen ? 90 : -90}, -28, ${panelHeightDisplay / 2})`}
               >
                 {panelHeightDisplay} mm
               </text>
