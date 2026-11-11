@@ -2945,7 +2945,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           </div>
         )}
 
-        {/* Pied de la modale avec bouton principal d'injection */}
+        {/* Pied de la modale */}
         <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="text-xs text-slate-400 text-center sm:text-left">
             Total :{' '}
@@ -2965,38 +2965,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             {config.thickness > 0
               ? `calculée(s) selon l'épaisseur de ${config.thickness} mm.`
               : 'calculée(s).'}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition-colors"
-            >
-              Annuler
-            </button>
-
-            <button
-              type="button"
-              onClick={handleInjectPieces}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs transition-all shadow-lg active:scale-95"
-              title={
-                editingCabinetName
-                  ? 'Mettre à jour les coupes de ce caisson dans la liste de débit'
-                  : "Ajoute les coupes de ce caisson à la liste de débit. L'optimisation se lance ensuite depuis le projet, une fois tous les caissons saisis."
-              }
-            >
-              {editingCabinetName ? (
-                <Check className="w-3.5 h-3.5" />
-              ) : (
-                <Plus className="w-3.5 h-3.5" />
-              )}
-              <span>
-                {editingCabinetName
-                  ? 'Mettre à jour ce caisson dans le projet'
-                  : 'Ajouter ce caisson au projet'}
-              </span>
-            </button>
           </div>
         </div>
       </div>
