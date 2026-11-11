@@ -12,8 +12,9 @@ import {
   Layers,
   Info,
   FileDown,
+  Tag,
 } from 'lucide-react';
-import { exportCuttingPlansToPdf } from '@/lib/pdf-export';
+import { exportCuttingPlansToPdf, exportLabelsToPdf } from '@/lib/pdf-export';
 import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-labels';
 
 interface CuttingVisualizerProps {
@@ -39,6 +40,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [isExportingLabelsPdf, setIsExportingLabelsPdf] = useState<boolean>(false);
   const [internalOrientations, setInternalOrientations] = useState<
     Record<string, 'vertical' | 'horizontal'>
   >({});
@@ -92,6 +94,18 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
     }
   };
 
+  const handleExportLabelsPDF = () => {
+    setIsExportingLabelsPdf(true);
+    try {
+      exportLabelsToPdf(panels, projectName);
+    } catch (err) {
+      console.error('Erreur export étiquettes PDF:', err);
+      alert('Une erreur est survenue lors de la génération des étiquettes PDF.');
+    } finally {
+      setIsExportingLabelsPdf(false);
+    }
+  };
+
   if (panels.length === 0) {
     return (
       <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-8 text-center text-slate-400">
@@ -123,8 +137,8 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             </span>
           </div>
 
-          {/* Bouton Export PDF sous le texte X panneau(x) optimisé */}
-          <div className="mt-2">
+          {/* Boutons Export PDF (Plans de coupe & Étiquettes 70x36mm) sous le texte X panneau(x) optimisé */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleExportPDF}
@@ -134,6 +148,17 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             >
               <FileDown className="w-4 h-4 text-white" />
               <span>{isExportingPdf ? 'Génération du PDF...' : 'Exporter PDF (1 panneau / feuille A4)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportLabelsPDF}
+              disabled={isExportingLabelsPdf}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-900/30 transition-all active:scale-95 disabled:opacity-50"
+              title="Créer un PDF d'étiquettes au format A4 (3 × 7 étiquettes de 70 × 36 mm)"
+            >
+              <Tag className="w-4 h-4 text-slate-950" />
+              <span>{isExportingLabelsPdf ? 'Création du PDF...' : 'Étiquettes PDF (A4 - 70×36 mm)'}</span>
             </button>
           </div>
 

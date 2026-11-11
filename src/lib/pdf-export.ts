@@ -392,3 +392,190 @@ export function exportCuttingPlansToPdf(
   doc.save(`${cleanName}_plans_de_coupe.pdf`);
 }
 
+/**
+ * Génère et télécharge un fichier PDF d'étiquettes au format A4 Portrait :
+ * Grille de 3 colonnes × 7 lignes = 21 étiquettes par page (dimensions : 70 × 36 mm).
+ * Chaque étiquette indique :
+ * - Panneau n° X
+ * - Nom du panneau (pièce débitée)
+ * - Destination (meuble / caisson)
+ * - Dimensions (L × l en mm)
+ */
+export function exportLabelsToPdf(
+  panels: PanelResult[],
+  projectName: string = 'Projet Menuiserie'
+) {
+  if (!panels || panels.length === 0) return;
+
+  interface LabelItem {
+    panelNumber: number;
+    material: string;
+    panelName: string;
+    destination: string;
+    dimensions: string;
+  }
+
+  const labels: LabelItem[] = [];
+
+  panels.forEach((panel) => {
+    if (panel.placedPieces && panel.placedPieces.length > 0) {
+      panel.placedPieces.forEach((piece) => {
+        const cab = getPieceCabinet(piece.name);
+        const part = getPiecePart(piece.name);
+        const len = Math.round(piece.originalLength || piece.length);
+        const wid = Math.round(piece.originalWidth || piece.width);
+
+        labels.push({
+          panelNumber: panel.panelIndex,
+          material: piece.material || panel.material || '',
+          panelName: part || piece.name || 'Panneau',
+          destination: cab || projectName || 'Pièces diverses',
+          dimensions: `${len} × ${wid} mm`,
+        });
+      });
+    } else {
+      labels.push({
+        panelNumber: panel.panelIndex,
+        material: panel.material || '',
+        panelName: panel.panelName || `Panneau ${panel.panelIndex}`,
+        destination: projectName || 'Atelier',
+        dimensions: `${Math.round(panel.panelLength)} × ${Math.round(panel.panelWidth)} mm`,
+      });
+    }
+  });
+
+  if (labels.length === 0) return;
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  // Planche A4 (210 × 297 mm) : 3 étiquettes en largeur (3 × 70 = 210 mm) sur 7 en hauteur (7 × 36 = 252 mm)
+  const cols = 3;
+  const rows = 7;
+  const labelsPerPage = cols * rows; // 21 étiquettes par page A4
+  const labelW = 70;
+  const labelH = 36;
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const marginX = (pageWidth - cols * labelW) / 2; // 0 mm
+  const marginY = (pageHeight - rows * labelH) / 2; // 22.5 mm
+
+  // Ajuste automatiquement la taille de police pour qu'un texte tienne dans maxW (en mm)
+  const drawFittedText = (
+    text: string,
+    x: number,
+    y: number,
+    maxW: number,
+    initialFontSize: number,
+    minFontSize: number = 6
+  ) => {
+    let fSize = initialFontSize;
+    doc.setFontSize(fSize);
+    while (doc.getTextWidth(text) > maxW && fSize > minFontSize) {
+      fSize -= 0.4;
+      doc.setFontSize(fSize);
+    }
+    let finalStr = text;
+    if (doc.getTextWidth(finalStr) > maxW) {
+      while (finalStr.length > 3 && doc.getTextWidth(finalStr + '…') > maxW) {
+        finalStr = finalStr.slice(0, -1);
+      }
+      finalStr += '…';
+    }
+    doc.text(finalStr, x, y);
+  };
+
+  labels.forEach((item, index) => {
+    const idxOnPage = index % labelsPerPage;
+    if (index > 0 && idxOnPage === 0) {
+      doc.addPage('a4', 'portrait');
+    }
+
+    const col = idxOnPage % cols;
+    const row = Math.floor(idxOnPage / cols);
+
+    const x = marginX + col * labelW;
+    const y = marginY + row * labelH;
+
+    // Cadre de découpe / repère de l'étiquette (70 × 36 mm)
+    doc.setDrawColor(203, 213, 225); // Gris clair
+    doc.setLineWidth(0.2);
+    doc.rect(x, y, labelW, labelH, 'S');
+
+    // Marge interne de sécurité (4.5 mm à gauche/droite pour compatibilité imprimantes)
+    const padX = 4.5;
+    const maxTextW = labelW - padX * 2; // 61 mm utiles
+
+    // Bandeau supérieur : Panneau n° X (et matière à droite)
+    doc.setFillColor(241, 245, 249);
+    doc.rect(x + 2, y + 2, labelW - 4, 6.8, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Panneau n° ${item.panelNumber}`, x + padX, y + 6.6);
+
+    if (item.material) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(71, 85, 105);
+      let matStr = item.material;
+      const maxMatW = maxTextW - 26;
+      while (matStr.length > 3 && doc.getTextWidth(matStr) > maxMatW) {
+        matStr = matStr.slice(0, -1);
+      }
+      doc.text(matStr, x + labelW - padX, y + 6.5, { align: 'right' });
+    }
+
+    // Ligne de séparation sous l'en-tête
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.2);
+    doc.line(x + 2, y + 9, x + labelW - 2, y + 9);
+
+    // 2. Nom du panneau (pièce)
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    drawFittedText(
+      `Nom du panneau : ${item.panelName}`,
+      x + padX,
+      y + 15.5,
+      maxTextW,
+      8.5,
+      6
+    );
+
+    // 3. Destination (nom du caisson / meuble)
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 41, 59);
+    drawFittedText(
+      `Destination : ${item.destination}`,
+      x + padX,
+      y + 22.5,
+      maxTextW,
+      8.2,
+      6
+    );
+
+    // 4. Dimensions
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    drawFittedText(
+      `Dimensions : ${item.dimensions}`,
+      x + padX,
+      y + 30,
+      maxTextW,
+      9,
+      6.5
+    );
+  });
+
+  const cleanName = (projectName || 'etiquettes')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '_');
+  doc.save(`${cleanName}_etiquettes_70x36mm.pdf`);
+}
+
+
