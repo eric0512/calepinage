@@ -666,7 +666,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                         Panneau N° {fsPanel.panelIndex}
                         {panels.length > 1 ? `/${panels.length}` : ''}
                       </span>
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-300">
+                      <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-300">
                         <Smartphone className="w-3 h-3" />
                         <span>Portrait fixe</span>
                       </span>
@@ -1141,17 +1141,26 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                       }
                     />
 
-                    {/* Étiquette sur la chute si dimensions suffisantes */}
-                    {ow >= 100 && oh >= 80 && (
+                    {/* Étiquette sur la chute si dimensions suffisantes (orientée dans le sens de la plus grande longueur) */}
+                    {Math.max(ow, oh) >= 100 && Math.min(ow, oh) >= 70 && (
                       <text
                         x={ox + ow / 2}
                         y={oy + oh / 2}
                         textAnchor="middle"
                         dominantBaseline="middle"
+                        transform={
+                          oh > ow
+                            ? `rotate(90, ${ox + ow / 2}, ${oy + oh / 2})`
+                            : undefined
+                        }
                         fill={offcut.reusable ? '#34d399' : '#94a3b8'}
                         fontSize={Math.min(
                           32,
-                          Math.max(16, ow / 10, oh / 15)
+                          Math.max(
+                            16,
+                            Math.max(ow, oh) / 10,
+                            Math.min(ow, oh) / 12
+                          )
                         )}
                         fontWeight="bold"
                         fontFamily="monospace"
@@ -1255,75 +1264,47 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                         </text>
                       )}
 
-                      {/* 2. Cote sur l'arête gauche (hauteur) : à l'endroit (horizontale) en plein écran */}
+                      {/* 2. Cote sur l'arête gauche (hauteur, verticale dans le sens de la longueur) */}
                       {ph >= 28 && (
-                        isFullscreen && pw >= 48 && ph >= fontSizeDim * 3.8 ? (
-                          <text
-                            x={px + 6}
-                            y={py + fontSizeDim * 2.25}
-                            textAnchor="start"
-                            fill="#0f172a"
-                            fontSize={fontSizeDim}
-                            fontWeight="bold"
-                            fontFamily="monospace"
-                          >
-                            {pw >= 75 ? `↕ ${leftDim} mm` : `↕${leftDim}`}
-                          </text>
-                        ) : (
-                          <text
-                            x={px + fontSizeDim * 1.15}
-                            y={py + ph / 2}
-                            textAnchor="middle"
-                            dominantBaseline="central"
-                            transform={`rotate(${isFullscreen ? 90 : -90}, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
-                            fill="#0f172a"
-                            fontSize={fontSizeDim}
-                            fontWeight="bold"
-                            fontFamily="monospace"
-                          >
-                            {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
-                          </text>
-                        )
+                        <text
+                          x={px + fontSizeDim * 1.15}
+                          y={py + ph / 2}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          transform={`rotate(90, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
+                          fill="#0f172a"
+                          fontSize={fontSizeDim}
+                          fontWeight="bold"
+                          fontFamily="monospace"
+                        >
+                          {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
+                        </text>
                       )}
 
-                      {/* 3. Nom de la pièce et destination au centre */}
+                      {/* 3. Nom de la pièce et destination au centre (toujours dans le sens de la plus grande longueur de chaque coupe) */}
                       {pw >= 28 && ph >= 28 && (() => {
-                        const textToMeasure = isMixedPanel && pieceCabinet
-                          ? (piecePart.length > pieceCabinet.length ? piecePart : pieceCabinet)
-                          : piece.name;
-
-                        // Estimation de la largeur nécessaire du texte à l'horizontale
-                        const tentativeFSize = Math.min(36, Math.max(15, Math.max(pw, ph) / 12));
-                        const estimatedHorizWidth = textToMeasure.length * tentativeFSize * 0.58;
-
-                        // En mode plein écran portrait, l'écriture reste toujours à l'endroit (horizontale)
-                        const isVertical = isFullscreen
-                          ? false
-                          : ph > pw && (
-                              estimatedHorizWidth > (pw - 20) ||
-                              ph >= pw * 1.3
-                            );
+                        // Toujours orienter le texte dans le sens de la plus grande longueur de la coupe
+                        const isVertical = ph > pw;
 
                         const effTitleFSize = isVertical
-                          ? Math.min(32, Math.max(13, Math.min(ph / 14, pw / 7)))
-                          : Math.min(36, Math.max(14, pw / 8, ph / 12));
+                          ? Math.min(34, Math.max(16, Math.min(ph / 10, pw / 4.8)))
+                          : Math.min(36, Math.max(16, Math.min(pw / 9, ph / 4.8)));
 
-                        const cx = px + pw / 2;
+                        const cx =
+                          isVertical && pw >= 65
+                            ? px + (pw + fontSizeDim * 1.3) / 2
+                            : px + pw / 2;
                         const cy =
-                          isFullscreen && ph >= fontSizeDim * 3.8
-                            ? py + ph * 0.56
+                          pw >= 28 && ph >= 65
+                            ? py + (ph + fontSizeDim * 1.3) / 2
                             : py + ph / 2;
-                        // Marge pour ne pas chevaucher les cotes affichées sur les bords
-                            const availLength = Math.max(
-                              18,
-                              isVertical
-                                ? ph - 56
-                                : isFullscreen
-                                  ? pw - 12
-                                  : pw - 56
-                            );
+                        // Longueur disponible dans le sens de la plus grande dimension de la coupe
+                        const availLength = Math.max(
+                          24,
+                          isVertical ? ph - 36 : pw - 40
+                        );
                         // Réduction automatique de la police pour afficher le nom complet
-                            const fitLen = isMixedPanel && pieceCabinet
+                            const fitLen = (isMixedPanel || isFullscreen) && pieceCabinet
                               ? Math.max(pieceCabinet.length + 2, piecePart.length)
                               : piece.name.length;
                             const fitFSize = Math.max(6, Math.min(effTitleFSize, availLength / (Math.max(1, fitLen) * 0.6)));
@@ -1355,7 +1336,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                             y={cy}
                             textAnchor="middle"
                             dominantBaseline="middle"
-                            transform={isVertical ? `rotate(-90, ${cx}, ${cy})` : undefined}
+                            transform={isVertical ? `rotate(90, ${cx}, ${cy})` : undefined}
                             fill="#0f172a"
                             fontSize={fitFSize}
                             fontWeight="bold"
