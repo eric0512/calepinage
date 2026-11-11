@@ -95,7 +95,8 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
       const isMobileOrTouch =
         typeof window !== 'undefined' &&
         (window.matchMedia('(pointer: coarse)').matches ||
-          Math.min(window.innerWidth, window.innerHeight) <= 920);
+          /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) &&
+        Math.min(window.screen.width, window.screen.height) <= 920;
 
       if (isMobileOrTouch && !document.fullscreenElement) {
         if (docEl.requestFullscreen) {
@@ -151,9 +152,10 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
     const updateViewport = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      const minDim = Math.min(w, h);
       const isPhoneOrTouch =
-        window.matchMedia('(pointer: coarse)').matches || minDim <= 920;
+        (window.matchMedia('(pointer: coarse)').matches ||
+          /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) &&
+        Math.min(window.screen.width, window.screen.height) <= 920;
       const isLandscape = w > h && isPhoneOrTouch;
 
       let rawAngle = 0;
@@ -904,6 +906,15 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
   const panelCabinets = getDistinctCabinets(panel.placedPieces.map((p) => p.name));
   const isMixedPanel = panelCabinets.length > 1;
 
+  // Sur ordinateur (et hors plein écran mobile), les textes verticaux sont à -90° (sens de lecture naturel sur écran d'ordinateur).
+  // En plein écran sur téléphone, ils sont à +90° pour être à l'endroit lorsqu'on incline le téléphone vers la gauche.
+  const isPhoneDevice =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(pointer: coarse)').matches ||
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) &&
+    Math.min(window.screen.width, window.screen.height) <= 920;
+  const vertTextAngle = isFullscreen && isPhoneDevice ? 90 : -90;
+
   return (
     <div
       className={
@@ -1150,7 +1161,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                         dominantBaseline="middle"
                         transform={
                           oh > ow
-                            ? `rotate(90, ${ox + ow / 2}, ${oy + oh / 2})`
+                            ? `rotate(${vertTextAngle}, ${ox + ow / 2}, ${oy + oh / 2})`
                             : undefined
                         }
                         fill={offcut.reusable ? '#34d399' : '#94a3b8'}
@@ -1271,7 +1282,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                           y={py + ph / 2}
                           textAnchor="middle"
                           dominantBaseline="central"
-                          transform={`rotate(90, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
+                          transform={`rotate(${vertTextAngle}, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
                           fill="#0f172a"
                           fontSize={fontSizeDim}
                           fontWeight="bold"
@@ -1336,7 +1347,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                             y={cy}
                             textAnchor="middle"
                             dominantBaseline="middle"
-                            transform={isVertical ? `rotate(90, ${cx}, ${cy})` : undefined}
+                            transform={isVertical ? `rotate(${vertTextAngle}, ${cx}, ${cy})` : undefined}
                             fill="#0f172a"
                             fontSize={fitFSize}
                             fontWeight="bold"
@@ -1430,7 +1441,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 fontSize="22"
                 fontWeight="bold"
                 fontFamily="monospace"
-                transform={`rotate(${isFullscreen ? 90 : -90}, -28, ${panelHeightDisplay / 2})`}
+                transform={`rotate(${vertTextAngle}, -28, ${panelHeightDisplay / 2})`}
               >
                 {panelHeightDisplay} mm
               </text>
