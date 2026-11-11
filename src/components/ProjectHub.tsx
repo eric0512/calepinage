@@ -6,8 +6,6 @@ import {
   FolderPlus,
   FolderOpen,
   Scissors,
-  Layers,
-  ListPlus,
   Trash2,
   Calendar,
   ArrowRight,
@@ -188,95 +186,61 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto pr-1">
-                {savedProjects.map((project) => {
-                  const panelsCount = project.stockPanels.reduce(
-                    (acc, p) => acc + p.quantity,
-                    0
-                  );
-                  const itemsCount = project.cutItems.reduce(
-                    (acc, i) => acc + i.quantity,
-                    0
-                  );
-
-                  return (
-                    <div
-                      key={project.id}
-                      className="bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 transition-all flex flex-col justify-between group"
-                    >
-                      <div>
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <h3 className="font-bold text-white text-sm group-hover:text-amber-400 transition-colors">
-                            {project.name}
-                          </h3>
-                          {project.description && (
-                            <span className="text-[10px] text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 shrink-0">
-                              Modèle
-                            </span>
-                          )}
-                        </div>
-
-                        {project.description && (
-                          <p className="text-xs text-slate-400 line-clamp-2 mb-3">
-                            {project.description}
-                          </p>
-                        )}
-
-                        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 mb-4">
-                          <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
-                            <Layers className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                            <span>
-                              {panelsCount} panneau(x)
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
-                            <ListPlus className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                            <span>{itemsCount} pièce(s)</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 text-xs">
-                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {new Date(project.updatedAt).toLocaleDateString(
-                            'fr-FR'
-                          )}
+              <div className="grid grid-cols-1 gap-2.5 max-h-[60vh] overflow-y-auto pr-1">
+                {savedProjects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="bg-slate-950/80 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 rounded-2xl px-4 py-3 transition-all flex items-center justify-between gap-3 group"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <h3 className="font-bold text-white text-sm group-hover:text-amber-400 transition-colors truncate">
+                        {project.name}
+                      </h3>
+                      {project.description && (
+                        <span className="text-[10px] text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 shrink-0">
+                          Modèle
                         </span>
-
-                        <div className="flex items-center gap-2">
-                          {/* Bouton supprimer */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (
-                                window.confirm(
-                                  `Supprimer définitivement le projet "${project.name}" et effacer tous ses enregistrements sur Supabase Cloud ?`
-                                )
-                              ) {
-                                onDeleteProject(project.id);
-                              }
-                            }}
-                            className="p-2 sm:p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/40 transition-colors"
-                            title="Supprimer ce projet"
-                          >
-                            <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => onOpenProject(project)}
-                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors flex items-center gap-1 shadow-sm"
-                          >
-                            <span>Ouvrir</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  );
-                })}
+
+                    <div className="flex items-center gap-2.5 shrink-0 text-xs">
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1 whitespace-nowrap">
+                        <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                        {new Date(project.updatedAt).toLocaleDateString(
+                          'fr-FR'
+                        )}
+                      </span>
+
+                      {/* Bouton supprimer */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (
+                            window.confirm(
+                              `Supprimer définitivement le projet "${project.name}" et effacer tous ses enregistrements sur Supabase Cloud ?`
+                            )
+                          ) {
+                            onDeleteProject(project.id);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-950/40 transition-colors"
+                        title="Supprimer ce projet"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onOpenProject(project)}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors flex items-center gap-1 shadow-sm whitespace-nowrap"
+                      >
+                        <span>Ouvrir</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
