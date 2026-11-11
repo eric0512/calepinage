@@ -37,7 +37,7 @@ import {
   inferCabinetConfigFromItems,
 } from '@/lib/cabinet-calculator';
 import { getPieceCabinet, getPiecePart, UNASSIGNED_CABINET_LABEL } from '@/lib/piece-labels';
-import type { FacadeItemType } from '@/types/cutting';
+import type { FacadeItemType, DrawerBottomType } from '@/types/cutting';
 
 /** Composant de façade en cours de saisie (hauteur vide = calcul automatique) */
 interface FacadeDraftItem {
@@ -172,6 +172,8 @@ const EMPTY_CONFIG: CabinetConfig = {
   drawersCount: 0,
   drawerSlideThickness: 13,
   drawerSlideLength: 0,
+  drawerBottomType: 'groove',
+  drawerGrooveDepth: 6,
 };
 
 interface GuidedTemplateFields {
@@ -265,6 +267,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     drawersCount: 1,
     drawerSlideThickness: 13,
     drawerSlideLength: 0,
+    drawerBottomType: 'groove' as DrawerBottomType,
+    drawerGrooveDepth: 6,
   });
   const [bulkMaterial, setBulkMaterial] = useState('');
   const autoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -488,6 +492,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         drawersCount: c.drawersCount || 1,
         drawerSlideThickness: c.drawerSlideThickness ?? 13,
         drawerSlideLength: resolvedEditSlideLen,
+        drawerBottomType: c.drawerBottomType || 'groove',
+        drawerGrooveDepth:
+          c.drawerGrooveDepth && c.drawerGrooveDepth > 0
+            ? c.drawerGrooveDepth
+            : Math.round(((c.thickness || 18) / 3) * 10) / 10,
       });
 
       if (c.material) {
@@ -656,6 +665,16 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           candidateSlideLen > 0 && candidateSlideLen <= maxAllowedSlideLen
             ? candidateSlideLen
             : defaultSlideLen;
+        const drawerWallMat =
+          config.partMaterials?.['drawer_sides'] ||
+          config.partMaterials?.['drawers'] ||
+          config.drawerMaterial ||
+          config.sidesMaterial ||
+          config.material ||
+          '';
+        const drawerWallTh =
+          extractThicknessFromMaterialName(drawerWallMat) || config.thickness || 18;
+        const autoGrv = Math.round((drawerWallTh / 3) * 10) / 10;
         return {
           ...prev,
           hasFacades: config.facadesCount !== undefined ? config.facadesCount > 0 : prev.hasFacades,
@@ -667,6 +686,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           drawersCount: config.drawersCount && config.drawersCount > 0 ? config.drawersCount : 1,
           drawerSlideThickness: config.drawerSlideThickness || prev.drawerSlideThickness || 13,
           drawerSlideLength: resolvedSlideLen,
+          drawerBottomType: config.drawerBottomType || prev.drawerBottomType || 'groove',
+          drawerGrooveDepth:
+            config.drawerGrooveDepth && config.drawerGrooveDepth > 0
+              ? config.drawerGrooveDepth
+              : prev.drawerGrooveDepth || autoGrv,
         };
       });
     }
@@ -674,6 +698,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     showCompositionModal,
     config.depth,
     config.width,
+    config.thickness,
     config.backType,
     config.backThickness,
     config.facadesCount,
@@ -683,6 +708,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     config.drawersCount,
     config.drawerSlideThickness,
     config.drawerSlideLength,
+    config.drawerBottomType,
+    config.drawerGrooveDepth,
+    config.drawerMaterial,
+    config.sidesMaterial,
+    config.material,
+    config.partMaterials,
     guidedFields.depth,
     guidedFields.backType,
   ]);
@@ -813,6 +844,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       drawersCount,
       drawerSlideThickness: compositionState.drawerSlideThickness,
       drawerSlideLength: compositionState.drawerSlideLength,
+      drawerBottomType: compositionState.drawerBottomType,
+      drawerGrooveDepth: compositionState.drawerGrooveDepth,
       doors: compositionState.hasFacades
         ? compositionState.facadesCount >= 2
           ? 'two_doors'
@@ -932,8 +965,19 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       } else if (partKey === 'drawers') {
         if (!partId || partId === 'drawers') {
           next.drawerMaterial = newMat;
+          if (detectedThickness) {
+            next.drawerGrooveDepth = Math.round((detectedThickness / 3) * 10) / 10;
+          }
         } else if (partId.startsWith('drawer_sides')) {
           nextPartMaterials['drawer_sides'] = newMat;
+          if (detectedThickness) {
+            next.drawerGrooveDepth = Math.round((detectedThickness / 3) * 10) / 10;
+          }
+        } else if (partId.startsWith('drawer_front_back')) {
+          nextPartMaterials['drawer_front_back'] = newMat;
+          if (detectedThickness && !nextPartMaterials['drawer_sides']) {
+            next.drawerGrooveDepth = Math.round((detectedThickness / 3) * 10) / 10;
+          }
         }
       }
       return next;
@@ -957,6 +1001,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       next.drawerMaterial = newMat;
       if (detectedThickness) {
         next.thickness = detectedThickness;
+        next.drawerGrooveDepth = Math.round((detectedThickness / 3) * 10) / 10;
       }
       const updatedPartMaterials: Record<string, string> = {};
       if (calculated.pieces.length > 0) {
@@ -3740,6 +3785,140 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                         <span className="text-[10px] text-slate-400 font-mono">mm</span>
                                       </div>
                                     </div>
+                                  </div>
+
+                                  {/* 3. Pose du fond du tiroir (en applique ou encastré) + profondeur de la rainure (= 1/3 de l'épaisseur de la matière) */}
+                                  <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <Layers className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                        <span className="text-[11px] font-semibold text-amber-300">
+                                          Fond du tiroir <span className="text-red-400">*</span> :
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setCompositionState((prev) => ({
+                                              ...prev,
+                                              drawerBottomType: 'applique',
+                                              hasDrawers: true,
+                                            }))
+                                          }
+                                          className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${
+                                            compositionState.drawerBottomType === 'applique'
+                                              ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                              : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                                          }`}
+                                        >
+                                          En applique
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setCompositionState((prev) => ({
+                                              ...prev,
+                                              drawerBottomType: 'groove',
+                                              hasDrawers: true,
+                                            }))
+                                          }
+                                          className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${
+                                            compositionState.drawerBottomType === 'groove'
+                                              ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                              : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                                          }`}
+                                        >
+                                          Encastré (rainure)
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {compositionState.drawerBottomType === 'groove' && (
+                                      <div className="bg-slate-900/70 border border-slate-800 rounded-lg p-2 space-y-1.5 animate-in fade-in duration-150">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <span className="text-[10px] font-semibold text-amber-200">
+                                            Profondeur de la rainure (= 1/3 de l’épaisseur de la matière) :
+                                          </span>
+                                          <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                                            Jeu : -1 mm de chaque côté (G/D et Av/Ar)
+                                          </span>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          {[
+                                            { th: 12, groove: 4 },
+                                            { th: 15, groove: 5 },
+                                            { th: 16, groove: 5.3 },
+                                            { th: 18, groove: 6 },
+                                            { th: 19, groove: 6.3 },
+                                            { th: 22, groove: 7.3 },
+                                          ].map(({ th, groove }) => {
+                                            const isSelected =
+                                              Math.abs(compositionState.drawerGrooveDepth - groove) <
+                                              0.05;
+                                            return (
+                                              <button
+                                                key={`item-${idx}-grv-${th}`}
+                                                type="button"
+                                                onClick={() =>
+                                                  setCompositionState((prev) => ({
+                                                    ...prev,
+                                                    drawerGrooveDepth: groove,
+                                                    hasDrawers: true,
+                                                  }))
+                                                }
+                                                title={`Rainure de ${String(groove).replace('.', ',')} mm (= 1/3 d'une paroi de ${th} mm)`}
+                                                className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition-all ${
+                                                  isSelected
+                                                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                                    : 'bg-slate-950 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                                                }`}
+                                              >
+                                                {String(groove).replace('.', ',')} mm{' '}
+                                                <span className="opacity-75 font-normal">
+                                                  (1/3 de {th}mm)
+                                                </span>
+                                              </button>
+                                            );
+                                          })}
+                                          <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 focus-within:border-amber-500 rounded-md px-1.5 py-0.5">
+                                            <input
+                                              type="number"
+                                              step="0.1"
+                                              min="1"
+                                              max="20"
+                                              placeholder="1/3 ép."
+                                              value={compositionState.drawerGrooveDepth || ''}
+                                              onChange={(e) => {
+                                                const val = parseFloat(
+                                                  e.target.value.replace(',', '.')
+                                                );
+                                                if (!isNaN(val) && val > 0) {
+                                                  setCompositionState((prev) => ({
+                                                    ...prev,
+                                                    drawerGrooveDepth: Math.round(val * 10) / 10,
+                                                    hasDrawers: true,
+                                                  }));
+                                                }
+                                              }}
+                                              className="w-12 bg-transparent text-[11px] font-mono font-bold text-white focus:outline-none placeholder:text-slate-500"
+                                            />
+                                            <span className="text-[10px] text-slate-400 font-mono">
+                                              mm
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <p className="text-[10px] text-slate-400">
+                                          La profondeur de rainure s’ajuste aussi automatiquement à 1/3 de l’épaisseur lorsque vous choisissez la matière des côtés du tiroir.
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    {compositionState.drawerBottomType === 'applique' && (
+                                      <p className="text-[10px] font-mono text-emerald-400">
+                                        Pose en applique : dimensions extérieures du tiroir diminuées de 1 mm de chaque côté (droit/gauche et avant/arrière).
+                                      </p>
+                                    )}
                                   </div>
                                 </div>
                               )}

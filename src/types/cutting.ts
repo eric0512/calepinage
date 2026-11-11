@@ -42,6 +42,7 @@ export type BackType = 'none' | 'applique' | 'groove';
 export type DoorsType = 'none' | 'one_door' | 'two_doors';
 export type FacadePlacement = 'applique' | 'interieur';
 export type FacadeItemType = 'porte' | 'tiroir';
+export type DrawerBottomType = 'applique' | 'groove';
 
 export interface FacadeItem {
   type: FacadeItemType; // Porte ou façade de tiroir
@@ -89,6 +90,8 @@ export interface CabinetConfig {
   drawersCount?: number; // Nombre de tiroirs (0 si aucun)
   drawerSlideThickness?: number; // Épaisseur des coulisses (mm par côté, ex: 13)
   drawerSlideLength?: number; // Longueur des coulisses (mm)
+  drawerBottomType?: DrawerBottomType; // Pose du fond du tiroir : 'applique' ou 'groove' (encastré)
+  drawerGrooveDepth?: number; // Profondeur de la rainure du fond de tiroir (mm, égale à 1/3 de l'épaisseur de la matière)
 }
 
 export interface CutItem {

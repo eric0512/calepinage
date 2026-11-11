@@ -3,11 +3,12 @@ import {
   AssemblyType,
   BackType,
   DoorsType,
+  DrawerBottomType,
   CabinetConfig,
   FacadeItem,
 } from '@/types/cutting';
 
-export type { AssemblyType, BackType, DoorsType, CabinetConfig, FacadeItem };
+export type { AssemblyType, BackType, DoorsType, DrawerBottomType, CabinetConfig, FacadeItem };
 
 export type CabinetPartKey =
   | 'sides'
@@ -784,15 +785,67 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       });
     });
 
+    // Résolution de la matière et de l'épaisseur des parois du tiroir pour le calcul du fond (rainure = 1/3 épaisseur)
+    const anySidesPartId = Array.from(boxGroups.keys())
+      .map((h) => `drawer_sides_${h}`)
+      .find((id) => config.partMaterials?.[id]);
+    const refSidesMat =
+      (anySidesPartId ? config.partMaterials?.[anySidesPartId] : '') ||
+      getPartMat('drawer_sides', getPartMat('drawers', resolvedDrawerMaterial));
+    const refSidesTh = extractThicknessFromMaterialName(refSidesMat) || thickness;
+
+    const anyFBPartId = Array.from(boxGroups.keys())
+      .map((h) => `drawer_front_back_${h}`)
+      .find((id) => config.partMaterials?.[id]);
+    const refFBMat =
+      (anyFBPartId ? config.partMaterials?.[anyFBPartId] : '') ||
+      getPartMat('drawer_front_back', getPartMat('drawers', resolvedDrawerMaterial));
+    const refFBTh = extractThicknessFromMaterialName(refFBMat) || refSidesTh;
+
+    const refDrawerInnerW = Math.max(
+      50,
+      Math.round((drawerOuterW - 2 * refSidesTh) * 10) / 10
+    );
+
+    const drawerBottomType: DrawerBottomType = config.drawerBottomType || 'groove';
+    // Profondeur de la rainure = 1/3 de l'épaisseur de la matière dans laquelle elle est faite
+    const autoGrooveDepth = Math.round((refSidesTh / 3) * 10) / 10;
+    const grooveDepth =
+      config.drawerGrooveDepth && config.drawerGrooveDepth > 0
+        ? config.drawerGrooveDepth
+        : autoGrooveDepth;
+
+    let bottomW: number;
+    let bottomD: number;
+    let bottomRole: string;
+    let bottomFormula: string;
+
+    if (drawerBottomType === 'applique') {
+      // Fond de tiroir posé en applique : dimensions extérieures du tiroir diminuées de 1 mm de chaque côté (droit/gauche, avant/arrière -> -2 mm sur chaque axe)
+      bottomW = Math.max(50, Math.round((drawerOuterW - 2) * 10) / 10);
+      bottomD = Math.max(50, Math.round((slideLen - 2) * 10) / 10);
+      bottomRole = `Fond de tiroir en applique (${dCount} tiroir${dCount > 1 ? 's' : ''}, -1 mm/côté)`;
+      bottomFormula = `Applique (-1 mm/côté) : (${drawerOuterW} - 2 = ${bottomW} mm) × (${slideLen} - 2 = ${bottomD} mm) [1 × ${dCount} × ${cabinetCount} = ${bottomQty} pcs]`;
+    } else {
+      // Fond de tiroir encastré en rainure : cote intérieure + 2 × profondeur de rainure (1/3 ép.) - 1 mm de chaque côté (-2 mm sur chaque axe)
+      const groove2 = Math.round(2 * grooveDepth * 10) / 10;
+      const fb2 = Math.round(2 * refFBTh * 10) / 10;
+      const innerDepth = Math.round((slideLen - fb2) * 10) / 10;
+      bottomW = Math.max(50, Math.round((refDrawerInnerW + groove2 - 2) * 10) / 10);
+      bottomD = Math.max(50, Math.round((innerDepth + groove2 - 2) * 10) / 10);
+      bottomRole = `Fond de tiroir encastré (${dCount} tiroir${dCount > 1 ? 's' : ''}, rainure ${grooveDepth} mm = 1/3 ép. ${refSidesTh} mm, -1 mm/côté)`;
+      bottomFormula = `Encastré rainure ${grooveDepth} mm (-1 mm/côté) : (${refDrawerInnerW} + 2×${grooveDepth} - 2 = ${bottomW} mm) × (${slideLen} - ${fb2} + 2×${grooveDepth} - 2 = ${bottomD} mm) [1 × ${dCount} × ${cabinetCount} = ${bottomQty} pcs]`;
+    }
+
     // Fond de tiroir
     pieces.push({
       partKey: 'drawers',
       partId: 'drawer_bottom',
-      role: `Fond de tiroir (${dCount} tiroir${dCount > 1 ? 's' : ''})`,
+      role: bottomRole,
       description: `${config.name} - Fond tiroir`,
-      formula: `${slideLen} mm × ${drawerOuterW} mm [1 × ${dCount} × ${cabinetCount} = ${bottomQty} pcs]`,
-      length: Math.max(slideLen, drawerOuterW),
-      width: Math.min(slideLen, drawerOuterW),
+      formula: bottomFormula,
+      length: Math.max(bottomW, bottomD),
+      width: Math.min(bottomW, bottomD),
       quantity: bottomQty,
       material: getPartMat('drawer_bottom', getPartMat('drawers', resolvedDrawerMaterial)),
       color: PIECE_COLORS.drawers,
@@ -951,9 +1004,23 @@ export function repairSavedCabinetDrawers(items: CutItem[]): {
         newW = Math.min(trueInnerW, boxH);
       }
     } else if (nameLower.includes('fond tiroir')) {
-      if (oldSlideLen > maxAllowedSlideLen) {
-        newL = Math.max(resolvedSlideLen, drawerOuterW);
-        newW = Math.min(resolvedSlideLen, drawerOuterW);
+      const bType: DrawerBottomType = cfg.drawerBottomType || 'groove';
+      const autoGrv = Math.round((drawerWallTh / 3) * 10) / 10;
+      const grv = cfg.drawerGrooveDepth && cfg.drawerGrooveDepth > 0 ? cfg.drawerGrooveDepth : autoGrv;
+      const calcBottomW =
+        bType === 'applique'
+          ? Math.max(50, Math.round((drawerOuterW - 2) * 10) / 10)
+          : Math.max(50, Math.round((trueInnerW + 2 * grv - 2) * 10) / 10);
+      const calcBottomD =
+        bType === 'applique'
+          ? Math.max(50, Math.round((resolvedSlideLen - 2) * 10) / 10)
+          : Math.max(50, Math.round((resolvedSlideLen - 2 * drawerWallTh + 2 * grv - 2) * 10) / 10);
+      if (
+        oldSlideLen > maxAllowedSlideLen ||
+        Math.abs(Math.max(item.length, item.width) - Math.max(drawerOuterW, resolvedSlideLen)) <= 1
+      ) {
+        newL = Math.max(calcBottomW, calcBottomD);
+        newW = Math.min(calcBottomW, calcBottomD);
       }
     }
 
