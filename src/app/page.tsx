@@ -716,30 +716,93 @@ export default function Home() {
 
   // SI LA VUE ACTIVE EST L'ATELIER (ÉDITEUR)
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Barre de navigation avec nom du projet et bouton Accueil */}
-      <Navbar
-        projectName={projectName}
-        onOpenHub={() => setCurrentView('hub')}
-        onSaveProject={handleManualSave}
-        onDeleteCurrentProject={
-          currentProjectId
-            ? () => {
-                if (
-                  window.confirm(
-                    `Supprimer définitivement le projet "${projectName}" et toutes ses données sur Supabase Cloud ?`
-                  )
-                ) {
-                  handleDeleteProject(currentProjectId);
+    <div className="h-screen h-dvh overflow-hidden print:h-auto print:overflow-visible bg-slate-950 text-slate-100 flex flex-col font-sans">
+      {/* Zone supérieure fixe : Barre de navigation + Bandeau Projet en cours + Onglets */}
+      <div className="shrink-0 sticky top-0 z-30 bg-slate-950 border-b border-slate-800/80 shadow-lg print:hidden">
+        {/* Barre de navigation avec nom du projet et bouton Accueil */}
+        <Navbar
+          projectName={projectName}
+          onOpenHub={() => setCurrentView('hub')}
+          onSaveProject={handleManualSave}
+          onDeleteCurrentProject={
+            currentProjectId
+              ? () => {
+                  if (
+                    window.confirm(
+                      `Supprimer définitivement le projet "${projectName}" et toutes ses données sur Supabase Cloud ?`
+                    )
+                  ) {
+                    handleDeleteProject(currentProjectId);
+                  }
                 }
-              }
-            : undefined
-        }
-        onLoadPreset={handleLoadPreset}
-        onReset={handleReset}
-        onPrint={handlePrint}
-        isSaved={isSaved}
-      />
+              : undefined
+          }
+          onLoadPreset={handleLoadPreset}
+          onReset={handleReset}
+          onPrint={handlePrint}
+          isSaved={isSaved}
+        />
+
+        <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 space-y-3">
+          {/* Bandeau du Titre du Projet avec bouton Assistant IA à droite */}
+          <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl px-4 py-3.5 sm:px-5 sm:py-4 shadow-sm flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <FolderOpen className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <span className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Projet en cours
+                </span>
+                <h1 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
+                  {projectName}
+                </h1>
+              </div>
+            </div>
+
+            {/* Bouton Assistant IA à droite du titre du projet (identique à la photo jointe) */}
+            <div className="flex items-center shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowCabinetModal(true)}
+                className="btn-assistant-ia-photo inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-sm active:scale-95"
+                title="Assistant IA : calculer automatiquement les cotes d'un caisson selon les dimensions extérieures et l'assemblage"
+              >
+                <Sparkles className="w-4 h-4 shrink-0" />
+                <span>Assistant IA</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Boutons d'onglets pour navigation sur mobile (placés tout en haut sur mobile) */}
+          <div className="flex lg:hidden bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => setMobileTab('input')}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                mobileTab === 'input'
+                  ? 'bg-amber-600 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ListPlus className="w-4 h-4" />
+              <span>1. Stock &amp; Débit</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab('results')}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
+                mobileTab === 'results'
+                  ? 'bg-amber-600 text-white'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>2. Plans de Coupe</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Modal de configuration Supabase Cloud */}
       <SupabaseConfigModal
@@ -759,64 +822,10 @@ export default function Home() {
         />
       )}
 
-      {/* Contenu Principal de l'Atelier */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-5 print:hidden">
-        {/* Bandeau du Titre du Projet avec bouton Assistant IA à droite */}
-        <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl px-4 py-3.5 sm:px-5 sm:py-4 shadow-sm flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-              <FolderOpen className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <span className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Projet en cours
-              </span>
-              <h1 className="text-lg sm:text-2xl font-black text-white tracking-tight truncate">
-                {projectName}
-              </h1>
-            </div>
-          </div>
-
-          {/* Bouton Assistant IA à droite du titre du projet (identique à la photo jointe) */}
-          <div className="flex items-center shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowCabinetModal(true)}
-              className="btn-assistant-ia-photo inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-sm active:scale-95"
-              title="Assistant IA : calculer automatiquement les cotes d'un caisson selon les dimensions extérieures et l'assemblage"
-            >
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span>Assistant IA</span>
-            </button>
-          </div>
-        </div>
-        {/* Boutons d'onglets pour navigation sur mobile (placés tout en haut sur mobile) */}
-        <div className="flex lg:hidden bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
-          <button
-            type="button"
-            onClick={() => setMobileTab('input')}
-            className={`flex-1 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
-              mobileTab === 'input'
-                ? 'bg-amber-600 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <ListPlus className="w-4 h-4" />
-            <span>1. Stock &amp; Débit</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobileTab('results')}
-            className={`flex-1 py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
-              mobileTab === 'results'
-                ? 'bg-amber-600 text-white'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>2. Plans de Coupe</span>
-          </button>
-        </div>
+      {/* Zone de défilement : tout ce qui est plus bas défile */}
+      <div className="flex-1 overflow-y-auto print:overflow-visible flex flex-col">
+        {/* Contenu Principal de l'Atelier */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-5 print:hidden">
 
         {/* 1. Configuration & Trait de scie (Kerf) : masqué sur mobile lorsque l'onglet 2 est actif */}
         <div className={mobileTab === 'results' ? 'hidden lg:block' : 'block'}>
@@ -919,7 +928,16 @@ export default function Home() {
             )}
           </div>
         </div>
-      </main>
+        </main>
+
+        {/* Footer */}
+        <footer className="mt-auto border-t border-slate-800 py-4 text-center text-xs text-slate-500 print:hidden">
+          <p>
+            Calepinage — Application d&apos;optimisation de découpe pour la
+            menuiserie et l&apos;agencement.
+          </p>
+        </footer>
+      </div>
 
       {/* Modale de suspension d'optimisation : Matière hors stock */}
       <MissingStockModal
@@ -929,14 +947,6 @@ export default function Home() {
         onConfirmAndOptimize={handleConfirmMissingStockAndOptimize}
         onConfirmOnly={handleConfirmMissingStockOnly}
       />
-
-      {/* Footer */}
-      <footer className="mt-auto border-t border-slate-800 py-4 text-center text-xs text-slate-500 print:hidden">
-        <p>
-          Calepinage — Application d&apos;optimisation de découpe pour la
-          menuiserie et l&apos;agencement.
-        </p>
-      </footer>
     </div>
   );
 }
