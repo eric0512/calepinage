@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useId, useCallback } from 'react';
+import React, { useState, useId, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { PanelResult, PlacedPiece, OffcutArea } from '@/types/cutting';
 import {
   ZoomIn,
@@ -13,6 +14,9 @@ import {
   Info,
   FileDown,
   Tag,
+  Maximize2,
+  X,
+  Smartphone,
 } from 'lucide-react';
 import { exportCuttingPlansToPdf, exportLabelsToPdf } from '@/lib/pdf-export';
 import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-labels';
@@ -41,11 +45,123 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportingLabelsPdf, setIsExportingLabelsPdf] = useState<boolean>(false);
+  const [fullscreenPanelIdx, setFullscreenPanelIdx] = useState<number | null>(null);
+  const [fullscreenZoom, setFullscreenZoom] = useState<number>(1);
+  const [viewportState, setViewportState] = useState<{
+    w: number;
+    h: number;
+    angle: number;
+    isLandscapeOnPhone: boolean;
+  }>({ w: 0, h: 0, angle: 0, isLandscapeOnPhone: false });
   const [internalOrientations, setInternalOrientations] = useState<
     Record<string, 'vertical' | 'horizontal'>
   >({});
 
   const effectiveOrientations = panelOrientations ?? internalOrientations;
+
+  // Ouvrir un panneau en plein écran verrouillé en mode Portrait
+  const handleOpenFullscreen = useCallback(async (idx: number) => {
+    setFullscreenPanelIdx(idx);
+    setFullscreenZoom(1);
+    try {
+      const docEl = document.documentElement as HTMLElement & {
+        webkitRequestFullscreen?: () => Promise<void>;
+      };
+      const isMobileOrTouch =
+        typeof window !== 'undefined' &&
+        (window.matchMedia('(pointer: coarse)').matches ||
+          Math.min(window.innerWidth, window.innerHeight) <= 920);
+
+      if (isMobileOrTouch && !document.fullscreenElement) {
+        if (docEl.requestFullscreen) {
+          await docEl.requestFullscreen().catch(() => {});
+        } else if (docEl.webkitRequestFullscreen) {
+          await docEl.webkitRequestFullscreen().catch(() => {});
+        }
+      }
+
+      const screenOrientation = (
+        window.screen as Screen & {
+          orientation?: { lock?: (mode: string) => Promise<void> };
+        }
+      )?.orientation;
+      if (screenOrientation?.lock) {
+        await screenOrientation.lock('portrait').catch(() => {});
+      }
+    } catch {
+      // Ignorer si non supporté par le navigateur mobile
+    }
+  }, []);
+
+  // Fermer le mode plein écran
+  const handleCloseFullscreen = useCallback(async () => {
+    setFullscreenPanelIdx(null);
+    setFullscreenZoom(1);
+    try {
+      const screenOrientation = (
+        window.screen as Screen & {
+          orientation?: { unlock?: () => void };
+        }
+      )?.orientation;
+      if (screenOrientation?.unlock) {
+        screenOrientation.unlock();
+      }
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen().catch(() => {});
+      }
+    } catch {
+      // Ignorer
+    }
+  }, []);
+
+  // Surveiller la rotation du téléphone pour maintenir l'affichage en mode portrait même si le téléphone bascule
+  useEffect(() => {
+    if (fullscreenPanelIdx === null) return;
+
+    const updateViewport = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const minDim = Math.min(w, h);
+      const isPhoneOrTouch =
+        window.matchMedia('(pointer: coarse)').matches || minDim <= 920;
+      const isLandscape = w > h && isPhoneOrTouch;
+
+      let rawAngle = 0;
+      if (typeof window.screen?.orientation?.angle === 'number') {
+        rawAngle = window.screen.orientation.angle;
+      } else if (
+        typeof (window as unknown as { orientation?: number }).orientation === 'number'
+      ) {
+        rawAngle = (window as unknown as { orientation: number }).orientation;
+      }
+
+      setViewportState({
+        w,
+        h,
+        angle: rawAngle,
+        isLandscapeOnPhone: isLandscape,
+      });
+    };
+
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    window.addEventListener('orientationchange', updateViewport);
+    window.screen?.orientation?.addEventListener?.('change', updateViewport);
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseFullscreen();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
+      window.screen?.orientation?.removeEventListener?.('change', updateViewport);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [fullscreenPanelIdx, handleCloseFullscreen]);
 
   const handleToggleOrientation = useCallback(
     (panelIndex: number) => {
@@ -290,23 +406,212 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
       {/* Affichage des panneaux (soit le panneau actif, soit tous) */}
       <div className="space-y-6">
         {(viewMode === 'single' ? [currentPanel] : panels).map(
-          (panel, panelIdx) => (
-            <SinglePanelSVG
-              key={panel.panelId + panelIdx}
-              panel={panel}
-              kerf={kerf}
-              zoomLevel={zoomLevel}
-              hoveredPiece={hoveredPiece}
-              setHoveredPiece={setHoveredPiece}
-              hoveredOffcut={hoveredOffcut}
-              setHoveredOffcut={setHoveredOffcut}
-              patternId={`${patternId}-${panelIdx}`}
-              orientation={effectiveOrientations[String(panel.panelIndex)] || 'vertical'}
-              onToggleOrientation={() => handleToggleOrientation(panel.panelIndex)}
-            />
-          )
+          (panel, panelIdx) => {
+            const actualPanelIdx =
+              viewMode === 'single' ? selectedPanelIdx : panelIdx;
+            return (
+              <SinglePanelSVG
+                key={panel.panelId + panelIdx}
+                panel={panel}
+                kerf={kerf}
+                zoomLevel={zoomLevel}
+                hoveredPiece={hoveredPiece}
+                setHoveredPiece={setHoveredPiece}
+                hoveredOffcut={hoveredOffcut}
+                setHoveredOffcut={setHoveredOffcut}
+                patternId={`${patternId}-${panelIdx}`}
+                orientation={effectiveOrientations[String(panel.panelIndex)] || 'vertical'}
+                onToggleOrientation={() => handleToggleOrientation(panel.panelIndex)}
+                onOpenFullscreen={() => handleOpenFullscreen(actualPanelIdx)}
+              />
+            );
+          }
         )}
       </div>
+
+      {/* Mode Plein Écran Verrouillé en Portrait (même si le téléphone bascule) */}
+      {fullscreenPanelIdx !== null &&
+        typeof document !== 'undefined' &&
+        (() => {
+          const fsPanel = panels[fullscreenPanelIdx] || panels[0];
+          const counterRotate =
+            viewportState.angle === 270 || viewportState.angle === -90
+              ? 'rotate(90deg)'
+              : 'rotate(-90deg)';
+
+          const containerStyle: React.CSSProperties =
+            viewportState.isLandscapeOnPhone
+              ? {
+                  position: 'fixed',
+                  top: '50%',
+                  left: '50%',
+                  width: `${viewportState.h}px`,
+                  height: `${viewportState.w}px`,
+                  transform: `translate(-50%, -50%) ${counterRotate}`,
+                  transformOrigin: 'center center',
+                  zIndex: 9999,
+                }
+              : {
+                  position: 'fixed',
+                  inset: 0,
+                  width: '100dvw',
+                  height: '100dvh',
+                  zIndex: 9999,
+                };
+
+          return createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              style={containerStyle}
+              className="fixed bg-slate-950 text-white flex flex-col overflow-hidden select-none"
+            >
+              {/* Barre supérieure compacte du mode plein écran portrait */}
+              <div className="shrink-0 bg-slate-900 border-b border-slate-800 px-3 py-2.5 flex items-center justify-between gap-2 shadow-md">
+                <div className="flex items-center gap-2 min-w-0">
+                  {panels.length > 1 && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        disabled={fullscreenPanelIdx === 0}
+                        onClick={() =>
+                          setFullscreenPanelIdx((i) =>
+                            i !== null ? Math.max(0, i - 1) : 0
+                          )
+                        }
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-200 transition-colors"
+                        title="Panneau précédent"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={fullscreenPanelIdx === panels.length - 1}
+                        onClick={() =>
+                          setFullscreenPanelIdx((i) =>
+                            i !== null
+                              ? Math.min(panels.length - 1, i + 1)
+                              : 0
+                          )
+                        }
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-slate-200 transition-colors"
+                        title="Panneau suivant"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-black text-amber-400 text-xs sm:text-sm whitespace-nowrap">
+                        Panneau N° {fsPanel.panelIndex}
+                        {panels.length > 1 ? `/${panels.length}` : ''}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] font-bold text-amber-300">
+                        <Smartphone className="w-3 h-3" />
+                        <span>Portrait fixe</span>
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-300 truncate font-mono">
+                      {fsPanel.material} •{' '}
+                      {Math.max(fsPanel.panelLength, fsPanel.panelWidth)} ×{' '}
+                      {Math.min(fsPanel.panelLength, fsPanel.panelWidth)} mm •{' '}
+                      {fsPanel.efficiencyPercentage}%
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contrôles Zoom & Fermeture */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center bg-slate-800 rounded-lg p-0.5 border border-slate-700 text-xs">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFullscreenZoom((z) => Math.max(0.8, +(z - 0.25).toFixed(2)))
+                      }
+                      className="p-1.5 text-slate-300 hover:text-white"
+                      title="Zoom arrière"
+                    >
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFullscreenZoom(1)}
+                      className="px-1.5 text-[11px] font-mono text-amber-400 font-bold"
+                      title="Réinitialiser le zoom"
+                    >
+                      {Math.round(fullscreenZoom * 100)}%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFullscreenZoom((z) => Math.min(3.0, +(z + 0.25).toFixed(2)))
+                      }
+                      className="p-1.5 text-slate-300 hover:text-white"
+                      title="Zoom avant"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseFullscreen}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md active:scale-95 transition-all"
+                    title="Fermer le plein écran"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>Fermer</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Zone centrale : Panneau forcé en orientation Portrait (Verticale) occupant tout l'écran */}
+              <div className="flex-1 min-h-0 w-full overflow-auto bg-slate-950 flex items-center justify-center p-1 sm:p-3">
+                <SinglePanelSVG
+                  panel={fsPanel}
+                  kerf={kerf}
+                  zoomLevel={fullscreenZoom}
+                  hoveredPiece={hoveredPiece}
+                  setHoveredPiece={setHoveredPiece}
+                  hoveredOffcut={hoveredOffcut}
+                  setHoveredOffcut={setHoveredOffcut}
+                  patternId={`${patternId}-fullscreen-${fsPanel.panelIndex}`}
+                  orientation="vertical"
+                  isFullscreen={true}
+                />
+              </div>
+
+              {/* Barre d'information en bas (affiche les détails d'une pièce touchée ou le rappel du mode portrait) */}
+              <div className="shrink-0 bg-slate-900 border-t border-slate-800 px-3 py-2 text-xs flex items-center justify-between gap-2">
+                {hoveredPiece ? (
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="truncate font-semibold text-white">
+                      <span className="text-amber-400 font-bold">
+                        {hoveredPiece.name}
+                      </span>
+                    </div>
+                    <div className="font-mono font-bold text-emerald-400 shrink-0">
+                      {Math.round(hoveredPiece.length)} ×{' '}
+                      {Math.round(hoveredPiece.width)} mm
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-400 flex items-center justify-between w-full">
+                    <span>
+                      Touchez une pièce pour voir ses cotes • Mode Portrait verrouillé
+                    </span>
+                    <span className="font-mono text-slate-300">
+                      {fsPanel.placedPieces.length} pièce(s)
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>,
+            document.body
+          );
+        })()}
 
       {/* Légende du plan */}
       <div className="bg-slate-900/60 border border-slate-700/60 rounded-xl p-3 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-4">
@@ -335,7 +640,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
 
         <div className="text-[11px] text-slate-400 flex items-center gap-1">
           <Info className="w-3 h-3 text-slate-500" />
-          <span>Survolez une pièce pour afficher ses cotes détaillées</span>
+          <span>Cliquez sur un panneau pour l&apos;ouvrir en plein écran (Portrait)</span>
         </div>
       </div>
     </div>
@@ -370,6 +675,8 @@ interface SinglePanelSVGProps {
   patternId: string;
   orientation?: 'vertical' | 'horizontal';
   onToggleOrientation?: () => void;
+  onOpenFullscreen?: () => void;
+  isFullscreen?: boolean;
 }
 
 const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
@@ -383,9 +690,11 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
   patternId,
   orientation = 'vertical',
   onToggleOrientation,
+  onOpenFullscreen,
+  isFullscreen = false,
 }) => {
-  // Orientation individuelle du panneau : Verticale (défaut) ou Horizontale
-  const isPanelVertical = orientation === 'vertical';
+  // En mode plein écran, l'orientation reste toujours en mode Portrait (vertical)
+  const isPanelVertical = isFullscreen ? true : orientation === 'vertical';
   const panelWidthDisplay = isPanelVertical
     ? Math.min(panel.panelLength, panel.panelWidth)
     : Math.max(panel.panelLength, panel.panelWidth);
@@ -408,101 +717,152 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
   const isMixedPanel = panelCabinets.length > 1;
 
   return (
-    <div className="bg-slate-900 border border-slate-700/80 rounded-xl p-4 shadow-inner">
-      {/* En-tête obligatoire du panneau : dimensions d'origine, matière, efficacité */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800 text-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-bold text-amber-400 text-sm">
-            Panneau N° {panel.panelIndex}
-          </span>
-          {panel.workshopSourceId ? (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
-              <span>🏭 Chute Stock Atelier</span>
+    <div
+      className={
+        isFullscreen
+          ? 'w-full h-full flex items-center justify-center'
+          : 'bg-slate-900 border border-slate-700/80 rounded-xl p-4 shadow-inner'
+      }
+    >
+      {/* En-tête obligatoire du panneau : dimensions d'origine, matière, efficacité (masqué si déjà dans la barre plein écran) */}
+      {!isFullscreen && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 pb-2 border-b border-slate-800 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-bold text-amber-400 text-sm">
+              Panneau N° {panel.panelIndex}
             </span>
-          ) : (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-medium flex items-center gap-1">
-              <span>📦 Stock Saisi</span>
+            {panel.workshopSourceId ? (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold flex items-center gap-1">
+                <span>🏭 Chute Stock Atelier</span>
+              </span>
+            ) : (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30 font-medium flex items-center gap-1">
+                <span>📦 Stock Saisi</span>
+              </span>
+            )}
+            <span className="text-slate-400">•</span>
+            <span className="font-semibold text-white px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
+              {panel.material}
             </span>
-          )}
-          <span className="text-slate-400">•</span>
-          <span className="font-semibold text-white px-2 py-0.5 rounded bg-slate-800 border border-slate-700">
-            {panel.material}
-          </span>
-          <span className="text-slate-400">•</span>
-          <span className="font-mono text-slate-300 font-semibold">
-            {panel.panelLength} × {panel.panelWidth} mm ({isPanelVertical ? 'Vertical' : 'Horizontal'} {panelHeightDisplay} × {panelWidthDisplay} mm)
-          </span>
-          {isMixedPanel ? (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
-              <span>🎯 Meubles partagés : {panelCabinets.join(' + ')}</span>
+            <span className="text-slate-400">•</span>
+            <span className="font-mono text-slate-300 font-semibold">
+              {panel.panelLength} × {panel.panelWidth} mm ({isPanelVertical ? 'Vertical' : 'Horizontal'} {panelHeightDisplay} × {panelWidthDisplay} mm)
             </span>
-          ) : panelCabinets.length === 1 ? (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center gap-1">
-              <span>Meuble : {panelCabinets[0]}</span>
-            </span>
-          ) : null}
-        </div>
+            {isMixedPanel ? (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+                <span>🎯 Meubles partagés : {panelCabinets.join(' + ')}</span>
+              </span>
+            ) : panelCabinets.length === 1 ? (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center gap-1">
+                <span>Meuble : {panelCabinets[0]}</span>
+              </span>
+            ) : null}
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Bouton pour changer l'orientation individuelle de ce panneau */}
-          <button
-            type="button"
-            onClick={onToggleOrientation}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shadow-sm active:scale-95 border ${
-              isPanelVertical
-                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-amber-500/60'
-                : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/50'
-            }`}
-            title={`Basculer l'orientation du panneau N° ${panel.panelIndex} en ${
-              isPanelVertical ? 'Horizontal (Paysage)' : 'Vertical (Portrait)'
-            }`}
-          >
-            <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isPanelVertical ? 'Orientation : Verticale' : 'Orientation : Horizontale'}</span>
-          </button>
-
-          <div className="flex items-center gap-3 font-mono text-[11px]">
-            <span className="text-slate-400">
-              Pièces :{' '}
-              <strong className="text-white">{panel.placedPieces.length}</strong>
-            </span>
-            <span className="text-slate-400">
-              Rendement :{' '}
-              <strong
-                className={
-                  panel.efficiencyPercentage >= 80
-                    ? 'text-emerald-400'
-                    : 'text-amber-400'
-                }
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Bouton Plein Écran Portrait */}
+            {onOpenFullscreen && (
+              <button
+                type="button"
+                onClick={onOpenFullscreen}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 transition-all shadow-sm active:scale-95"
+                title="Ouvrir ce panneau en plein écran verrouillé en mode Portrait"
               >
-                {panel.efficiencyPercentage}%
-              </strong>
-            </span>
-            <span className="text-slate-400">
-              Chutes exploitables :{' '}
-              <strong className="text-teal-300">
-                {panel.offcuts.filter((o) => o.reusable).length}
-              </strong>
-            </span>
+                <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+                <span>Plein écran</span>
+              </button>
+            )}
+
+            {/* Bouton pour changer l'orientation individuelle de ce panneau */}
+            <button
+              type="button"
+              onClick={onToggleOrientation}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shadow-sm active:scale-95 border ${
+                isPanelVertical
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-amber-500/60'
+                  : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/50'
+              }`}
+              title={`Basculer l'orientation du panneau N° ${panel.panelIndex} en ${
+                isPanelVertical ? 'Horizontal (Paysage)' : 'Vertical (Portrait)'
+              }`}
+            >
+              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>{isPanelVertical ? 'Orientation : Verticale' : 'Orientation : Horizontale'}</span>
+            </button>
+
+            <div className="flex items-center gap-3 font-mono text-[11px]">
+              <span className="text-slate-400">
+                Pièces :{' '}
+                <strong className="text-white">{panel.placedPieces.length}</strong>
+              </span>
+              <span className="text-slate-400">
+                Rendement :{' '}
+                <strong
+                  className={
+                    panel.efficiencyPercentage >= 80
+                      ? 'text-emerald-400'
+                      : 'text-amber-400'
+                  }
+                >
+                  {panel.efficiencyPercentage}%
+                </strong>
+              </span>
+              <span className="text-slate-400">
+                Chutes exploitables :{' '}
+                <strong className="text-teal-300">
+                  {panel.offcuts.filter((o) => o.reusable).length}
+                </strong>
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Conteneur défilant pour le SVG */}
-      <div className="w-full overflow-auto bg-slate-950 rounded-lg p-2 border border-slate-800/80 flex justify-center">
+      {/* Conteneur défilant pour le SVG (cliquable hors plein écran pour ouvrir en plein écran Portrait) */}
+      <div
+        onClick={!isFullscreen ? onOpenFullscreen : undefined}
+        title={
+          !isFullscreen
+            ? 'Cliquez ou touchez le panneau pour l\'afficher en plein écran (Portrait fixe)'
+            : undefined
+        }
+        className={
+          isFullscreen
+            ? 'w-full h-full flex items-center justify-center overflow-auto'
+            : 'w-full overflow-auto bg-slate-950 rounded-lg p-2 border border-slate-800/80 hover:border-amber-500/50 transition-colors flex justify-center cursor-pointer'
+        }
+      >
         <div
-          style={{
-            transform: `scale(${zoomLevel})`,
-            transformOrigin: 'top center',
-            transition: 'transform 0.15s ease-out',
-            width: '100%',
-            maxWidth: '1200px',
-          }}
+          style={
+            isFullscreen
+              ? {
+                  transform: `scale(${zoomLevel})`,
+                  transformOrigin: 'center center',
+                  transition: 'transform 0.15s ease-out',
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }
+              : {
+                  transform: `scale(${zoomLevel})`,
+                  transformOrigin: 'top center',
+                  transition: 'transform 0.15s ease-out',
+                  width: '100%',
+                  maxWidth: '1200px',
+                }
+          }
         >
           <svg
             viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-            className="w-full h-auto select-none"
-            style={{ minHeight: '380px' }}
+            preserveAspectRatio="xMidYMid meet"
+            className={
+              isFullscreen
+                ? 'w-full h-full max-w-full max-h-full select-none'
+                : 'w-full h-auto select-none'
+            }
+            style={isFullscreen ? undefined : { minHeight: '380px' }}
           >
             <defs>
               {/* Motif hachuré pour chutes réutilisables */}
@@ -669,6 +1029,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 return (
                   <g
                     key={piece.id}
+                    onClick={() => setHoveredPiece(piece)}
                     onMouseEnter={() => setHoveredPiece(piece)}
                     onMouseLeave={() => setHoveredPiece(null)}
                     className="cursor-pointer group"
