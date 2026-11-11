@@ -310,7 +310,10 @@ export default function Home() {
   }, [stockPanels, cutItems, settings, projectName, currentView, currentProjectId, persistProject]);
 
   // Création d'un NOUVEAU PROJET VIERGE (aucun champ rempli)
-  const handleCreateNewProject = (name: string) => {
+  const handleCreateNewProject = (
+    name: string,
+    mode: 'manual' | 'ai' = 'manual'
+  ) => {
     const newId = `project-${Date.now()}`;
     setCurrentProjectId(newId);
     setProjectName(name);
@@ -322,9 +325,10 @@ export default function Home() {
     setOptimizationResult(null);
     setIsSaved(false);
 
-    // Ouvrir directement l'atelier
+    // Ouvrir l'atelier (et l'Assistant IA directement si mode === 'ai')
     setCurrentView('editor');
     setMobileTab('input');
+    setShowCabinetModal(mode === 'ai');
   };
 
   // Ouverture d'un PROJET EXISTANT

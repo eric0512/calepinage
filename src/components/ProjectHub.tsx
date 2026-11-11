@@ -13,13 +13,15 @@ import {
   ArrowRight,
   Plus,
   Smartphone,
+  Sparkles,
+  Wrench,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface ProjectHubProps {
   savedProjects: SavedProject[];
   onOpenProject: (project: SavedProject) => void;
-  onCreateNewProject: (projectName: string) => void;
+  onCreateNewProject: (projectName: string, mode?: 'manual' | 'ai') => void;
   onDeleteProject: (projectId: string) => void;
   isCloudConnected?: boolean;
 }
@@ -33,11 +35,19 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   const [activeTab, setActiveTab] = useState<'hub' | 'existing'>('hub');
   const [newProjectName, setNewProjectName] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
+  const [newProjectMode, setNewProjectMode] = useState<'manual' | 'ai'>('manual');
+
+  const handleOpenNewModal = (mode: 'manual' | 'ai') => {
+    setNewProjectMode(mode);
+    setNewProjectName('');
+    setShowNewModal(true);
+  };
 
   const handleStartNew = (e: React.FormEvent) => {
     e.preventDefault();
     const name = newProjectName.trim() || 'Nouveau Projet';
-    onCreateNewProject(name);
+    setShowNewModal(false);
+    onCreateNewProject(name, newProjectMode);
   };
 
   return (
@@ -82,43 +92,53 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
         {activeTab === 'hub' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
             {/* 1. Carte NOUVEAU PROJET */}
-            <div
-              onClick={() => setShowNewModal(true)}
-              className="group cursor-pointer bg-slate-900/90 hover:bg-slate-850 border-2 border-slate-800 hover:border-amber-500/60 rounded-3xl p-6 sm:p-8 transition-all duration-200 shadow-xl hover:shadow-amber-500/10 flex flex-col justify-between"
-            >
-              <div>
-                <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-6 group-hover:scale-105 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all">
+            <div className="bg-slate-900/90 border-2 border-slate-800 hover:border-amber-500/60 rounded-3xl p-6 sm:p-8 transition-all duration-200 shadow-xl hover:shadow-amber-500/10 flex flex-col justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 shrink-0 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center transition-all">
                   <FolderPlus className="w-7 h-7" />
                 </div>
-                <h2 className="text-xl font-bold text-white mb-2">
+                <h2 className="text-xl font-bold text-white">
                   Nouveau Projet
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                  Démarrer un nouveau calepinage vierge. Tous les champs de
-                  stock et de débit seront vides, prêts pour votre saisie.
-                </p>
               </div>
 
-              <div className="mt-8 flex items-center justify-between text-amber-400 font-semibold text-xs sm:text-sm pt-4 border-t border-slate-800">
-                <span>Créer un projet vierge</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleOpenNewModal('manual')}
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 hover:border-amber-500/50 font-bold text-xs sm:text-sm transition-all shadow-sm active:scale-95"
+                >
+                  <Wrench className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Créer manuellement</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenNewModal('ai')}
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-xs sm:text-sm transition-all shadow-md shadow-amber-900/30 active:scale-95"
+                >
+                  <Sparkles className="w-4 h-4 text-slate-950 shrink-0" />
+                  <span>Créer avec l&apos;IA</span>
+                </button>
               </div>
             </div>
 
             {/* 2. Carte PROJET EXISTANT */}
             <div
               onClick={() => setActiveTab('existing')}
-              className="group cursor-pointer bg-slate-900/90 hover:bg-slate-850 border-2 border-slate-800 hover:border-blue-500/60 rounded-3xl p-6 sm:p-8 transition-all duration-200 shadow-xl hover:shadow-blue-500/10 flex flex-col justify-between"
+              className="group cursor-pointer bg-slate-900/90 hover:bg-slate-850 border-2 border-slate-800 hover:border-blue-500/60 rounded-3xl p-6 sm:p-8 transition-all duration-200 shadow-xl hover:shadow-blue-500/10 flex flex-col justify-between gap-4"
             >
               <div>
-                <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mb-6 group-hover:scale-105 group-hover:bg-blue-500 group-hover:text-slate-950 transition-all">
-                  <FolderOpen className="w-7 h-7" />
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-xl font-bold text-white">
-                    Projets Existants
-                  </h2>
-                  <span className="text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 shrink-0 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center group-hover:scale-105 group-hover:bg-blue-500 group-hover:text-slate-950 transition-all">
+                      <FolderOpen className="w-7 h-7" />
+                    </div>
+                    <h2 className="text-xl font-bold text-white">
+                      Projets Existants
+                    </h2>
+                  </div>
+                  <span className="text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
                     {savedProjects.length} disponible(s)
                   </span>
                 </div>
@@ -126,11 +146,6 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                   Reprendre un débit sauvegardé précédemment ou choisir parmi
                   les modèles d&apos;atelier (caissons cuisine, dressing...).
                 </p>
-              </div>
-
-              <div className="mt-8 flex items-center justify-between text-blue-400 font-semibold text-xs sm:text-sm pt-4 border-t border-slate-800">
-                <span>Parcourir mes projets</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
           </div>
@@ -153,7 +168,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
 
               <button
                 type="button"
-                onClick={() => setShowNewModal(true)}
+                onClick={() => handleOpenNewModal('manual')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs transition-colors shadow-sm"
               >
                 <Plus className="w-4 h-4" />
@@ -166,7 +181,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                 <FolderOpen className="w-12 h-12 mx-auto text-slate-600 mb-3" />
                 <p>Aucun projet enregistré pour le moment.</p>
                 <button
-                  onClick={() => setShowNewModal(true)}
+                  onClick={() => handleOpenNewModal('manual')}
                   className="mt-3 text-amber-400 hover:underline font-semibold"
                 >
                   Créer un premier projet vierge
@@ -273,14 +288,22 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
             <div role="dialog" aria-modal="true" className="modal-box bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
-                  <FolderPlus className="w-5 h-5" />
+                  {newProjectMode === 'ai' ? (
+                    <Sparkles className="w-5 h-5" />
+                  ) : (
+                    <FolderPlus className="w-5 h-5" />
+                  )}
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">
-                    Nouveau Projet Vierge
+                    {newProjectMode === 'ai'
+                      ? 'Nouveau Projet avec l’IA'
+                      : 'Nouveau Projet Manuel'}
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Démarrez avec aucun panneau ni pièce pré-remplis
+                    {newProjectMode === 'ai'
+                      ? 'Nommez votre projet puis ouvrez directement l’Assistant IA'
+                      : 'Nommez votre projet pour démarrer la saisie manuelle'}
                   </p>
                 </div>
               </div>
@@ -310,9 +333,16 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shadow-md"
+                    className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors shadow-md flex items-center gap-1.5"
                   >
-                    Démarrer le projet vierge
+                    {newProjectMode === 'ai' ? (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Continuer vers l&apos;IA</span>
+                      </>
+                    ) : (
+                      <span>Créer le projet</span>
+                    )}
                   </button>
                 </div>
               </form>
