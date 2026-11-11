@@ -46,6 +46,7 @@ export type FacadeItemType = 'porte' | 'tiroir';
 export interface FacadeItem {
   type: FacadeItemType; // Porte ou façade de tiroir
   height: number | null; // Hauteur saisie (mm) ou null = calcul automatique
+  drawerHeight?: number | null; // Hauteur choisie du tiroir (bac) en mm (doit être <= height de la façade)
 }
 
 export interface CabinetConfig {

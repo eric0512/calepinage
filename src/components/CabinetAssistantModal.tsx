@@ -19,6 +19,7 @@ import {
   FileText,
   Check,
   Pencil,
+  Ruler,
 } from 'lucide-react';
 import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
@@ -42,6 +43,7 @@ import type { FacadeItemType } from '@/types/cutting';
 interface FacadeDraftItem {
   type: FacadeItemType;
   height: string;
+  drawerHeight?: string;
 }
 
 /** Ajuste la liste des composants de façade au nombre demandé en conservant la saisie existante */
@@ -52,6 +54,7 @@ function resizeFacadeDraft(items: FacadeDraftItem[], count: number): FacadeDraft
   const added: FacadeDraftItem[] = Array.from({ length: n - items.length }, () => ({
     type: 'porte' as FacadeItemType,
     height: '',
+    drawerHeight: '',
   }));
   return [...items, ...added];
 }
@@ -447,6 +450,10 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   it.height !== null && it.height !== undefined
                     ? String(it.height)
                     : '',
+                drawerHeight:
+                  it.drawerHeight !== null && it.drawerHeight !== undefined && it.drawerHeight > 0
+                    ? String(it.drawerHeight)
+                    : '',
               }))
             : resizeFacadeDraft([], compCount),
         hasDrawers: !!c.hasDrawers,
@@ -605,6 +612,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             ? config.facadeItems.map((it) => ({
                 type: it.type,
                 height: it.height && it.height > 0 ? String(it.height) : '',
+                drawerHeight:
+                  it.drawerHeight && it.drawerHeight > 0 ? String(it.drawerHeight) : '',
               }))
             : null;
         return {
@@ -655,7 +664,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       computeFacadeLayout(
         compositionState.facadeItems.map((it) => {
           const h = parseFloat(it.height);
-          return { type: it.type, height: !isNaN(h) && h > 0 ? h : null };
+          const dh = parseFloat(it.drawerHeight || '');
+          return {
+            type: it.type,
+            height: !isNaN(h) && h > 0 ? h : null,
+            drawerHeight: !isNaN(dh) && dh > 0 ? dh : null,
+          };
         }),
         facadeAvailableHeight,
         compositionState.facadeGap
@@ -723,10 +737,20 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     if (compositionState.hasFacades && facadeLayout.error) return;
     const useDetailed = compositionState.hasFacades;
     const facadeItems = useDetailed
-      ? compositionState.facadeItems.map((it, i) => ({
-          type: it.type,
-          height: i === facadeLayout.autoIndex ? null : facadeLayout.heights[i] || null,
-        }))
+      ? compositionState.facadeItems.map((it, i) => {
+          const dh = parseFloat(it.drawerHeight || '');
+          const resolvedH = facadeLayout.heights[i] || null;
+          return {
+            type: it.type,
+            height: i === facadeLayout.autoIndex ? null : resolvedH,
+            drawerHeight:
+              it.type === 'tiroir' && !isNaN(dh) && dh > 0
+                ? resolvedH && resolvedH > 0
+                  ? Math.min(dh, resolvedH)
+                  : dh
+                : null,
+          };
+        })
       : undefined;
     const drawersFromFacade = useDetailed ? facadeDrawerCount : 0;
     const hasDrawers = compositionState.hasDrawers || drawersFromFacade > 0;
@@ -3459,7 +3483,14 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         {compositionState.facadeItems.map((item, idx) => {
                           const isAuto = idx === facadeLayout.autoIndex;
                           const resolved = facadeLayout.heights[idx];
+                          const facadeH = parseFloat(item.height) || resolved || 0;
+                          const drawerHVal = parseFloat(item.drawerHeight || '') || 0;
                           const missingDrawerH = item.type === 'tiroir' && !(parseFloat(item.height) > 0);
+                          const missingDrawerBoxH = item.type === 'tiroir' && !(drawerHVal > 0);
+                          const exceedsFacadeH =
+                            item.type === 'tiroir' && facadeH > 0 && drawerHVal > facadeH;
+                          const standardDrawerHeights = [60, 80, 100, 120, 140, 160, 180, 200, 220, 250];
+
                           return (
                             <div
                               key={idx}
@@ -3485,7 +3516,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                   step="0.5"
                                   value={item.height}
                                   onChange={(e) => updateFacadeItem(idx, { height: e.target.value })}
-                                  placeholder={item.type === 'tiroir' ? 'Hauteur *' : 'Auto'}
+                                  placeholder={item.type === 'tiroir' ? 'Hauteur façade *' : 'Auto'}
                                   title={
                                     item.type === 'tiroir'
                                       ? 'Hauteur de la façade du tiroir (obligatoire)'
@@ -3513,57 +3544,156 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                 </span>
                               </div>
 
-                              {/* Proposition de sélection de l'épaisseur des coulisses dès que Façade tiroir est sélectionné */}
+                              {/* Options spécifiques dès que Façade tiroir est sélectionné : Hauteur du tiroir & Épaisseur des coulisses */}
                               {item.type === 'tiroir' && (
-                                <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 bg-slate-950/60 p-2 rounded-lg animate-in fade-in duration-150">
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <Sliders className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                                    <span className="text-[11px] font-semibold text-amber-300">
-                                      Épaisseur coulisses :
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {allSlideThicknesses.map((th) => {
-                                      const isSelected = compositionState.drawerSlideThickness === th;
-                                      return (
-                                        <button
-                                          key={`item-${idx}-th-${th}`}
-                                          type="button"
-                                          onClick={() => handleSelectSlideThickness(th)}
-                                          className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
-                                            isSelected
-                                              ? 'bg-amber-500 text-slate-950 shadow-sm'
-                                              : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
-                                          }`}
-                                        >
-                                          {formatSlideThickness(th)}
-                                        </button>
-                                      );
-                                    })}
-                                    {/* Saisie manuelle d'une épaisseur */}
-                                    <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 focus-within:border-amber-500 rounded-md px-1.5 py-0.5">
-                                      <input
-                                        type="number"
-                                        step="0.1"
-                                        min="1"
-                                        max="50"
-                                        placeholder="Autre"
-                                        value={
-                                          ![12.5, 12.7, 13, 19].includes(
-                                            compositionState.drawerSlideThickness
-                                          )
-                                            ? compositionState.drawerSlideThickness
-                                            : ''
-                                        }
-                                        onChange={(e) => {
-                                          const val = parseFloat(e.target.value.replace(',', '.'));
-                                          if (!isNaN(val) && val > 0) {
-                                            handleAddManualSlideThickness(val);
+                                <div className="pt-2 border-t border-slate-800 space-y-2 bg-slate-950/60 p-2.5 rounded-lg animate-in fade-in duration-150">
+                                  {/* 1. Choix de la hauteur du tiroir (bac) <= hauteur de la façade */}
+                                  <div className="space-y-1.5">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <Ruler className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                        <span className="text-[11px] font-semibold text-amber-300">
+                                          Hauteur du tiroir <span className="text-red-400">*</span> :
+                                        </span>
+                                      </div>
+                                      <span className="text-[10px] font-mono text-slate-400">
+                                        {facadeH > 0
+                                          ? `Max autorisé : ${facadeH} mm (hauteur façade)`
+                                          : 'Saisissez d’abord la hauteur de la façade'}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {standardDrawerHeights.map((dh) => {
+                                        const isTooHigh = facadeH > 0 && dh > facadeH;
+                                        const isSelected = drawerHVal === dh;
+                                        return (
+                                          <button
+                                            key={`item-${idx}-dh-${dh}`}
+                                            type="button"
+                                            disabled={isTooHigh}
+                                            onClick={() => {
+                                              if (isTooHigh) return;
+                                              updateFacadeItem(idx, { drawerHeight: String(dh) });
+                                            }}
+                                            title={
+                                              isTooHigh
+                                                ? `Interdit : ${dh} mm est supérieur à la hauteur de la façade (${facadeH} mm)`
+                                                : `Choisir une hauteur de tiroir de ${dh} mm`
+                                            }
+                                            className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
+                                              isTooHigh
+                                                ? 'bg-slate-900/40 text-slate-600 border border-slate-800/60 cursor-not-allowed line-through opacity-40'
+                                                : isSelected
+                                                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                                            }`}
+                                          >
+                                            {dh} mm
+                                          </button>
+                                        );
+                                      })}
+
+                                      {/* Saisie manuelle de la hauteur du tiroir (strictement <= hauteur façade) */}
+                                      <div
+                                        className={`flex items-center gap-1 bg-slate-900 border rounded-md px-2 py-0.5 ${
+                                          exceedsFacadeH || missingDrawerBoxH
+                                            ? 'border-red-500/70 focus-within:border-red-400'
+                                            : 'border-slate-700 focus-within:border-amber-500'
+                                        }`}
+                                      >
+                                        <input
+                                          type="number"
+                                          step="1"
+                                          min="1"
+                                          max={facadeH > 0 ? facadeH : undefined}
+                                          placeholder="Hauteur *"
+                                          value={item.drawerHeight || ''}
+                                          onChange={(e) => {
+                                            const raw = e.target.value;
+                                            if (raw === '') {
+                                              updateFacadeItem(idx, { drawerHeight: '' });
+                                              return;
+                                            }
+                                            const val = parseFloat(raw);
+                                            if (!isNaN(val) && facadeH > 0 && val > facadeH) {
+                                              // Interdire toute valeur supérieure à la hauteur de la façade
+                                              updateFacadeItem(idx, {
+                                                drawerHeight: String(facadeH),
+                                              });
+                                              return;
+                                            }
+                                            updateFacadeItem(idx, { drawerHeight: raw });
+                                          }}
+                                          title={
+                                            facadeH > 0
+                                              ? `Hauteur du tiroir en mm (maximum ${facadeH} mm)`
+                                              : 'Hauteur du tiroir en mm'
                                           }
-                                        }}
-                                        className="w-12 bg-transparent text-[11px] font-mono font-bold text-white focus:outline-none placeholder:text-slate-500"
-                                      />
-                                      <span className="text-[10px] text-slate-400 font-mono">mm</span>
+                                          className="w-16 bg-transparent text-[11px] font-mono font-bold text-white focus:outline-none placeholder:text-slate-500"
+                                        />
+                                        <span className="text-[10px] text-slate-400 font-mono">mm</span>
+                                      </div>
+                                    </div>
+
+                                    {exceedsFacadeH && (
+                                      <p className="text-[10px] text-red-400 font-semibold">
+                                        Valeur interdite : la hauteur du tiroir ({drawerHVal} mm) ne peut pas dépasser la hauteur de la façade ({facadeH} mm).
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* 2. Proposition de sélection de l'épaisseur des coulisses */}
+                                  <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <Sliders className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                      <span className="text-[11px] font-semibold text-amber-300">
+                                        Épaisseur coulisses :
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {allSlideThicknesses.map((th) => {
+                                        const isSelected = compositionState.drawerSlideThickness === th;
+                                        return (
+                                          <button
+                                            key={`item-${idx}-th-${th}`}
+                                            type="button"
+                                            onClick={() => handleSelectSlideThickness(th)}
+                                            className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold transition-all ${
+                                              isSelected
+                                                ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                                            }`}
+                                          >
+                                            {formatSlideThickness(th)}
+                                          </button>
+                                        );
+                                      })}
+                                      {/* Saisie manuelle d'une épaisseur */}
+                                      <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 focus-within:border-amber-500 rounded-md px-1.5 py-0.5">
+                                        <input
+                                          type="number"
+                                          step="0.1"
+                                          min="1"
+                                          max="50"
+                                          placeholder="Autre"
+                                          value={
+                                            ![12.5, 12.7, 13, 19].includes(
+                                              compositionState.drawerSlideThickness
+                                            )
+                                              ? compositionState.drawerSlideThickness
+                                              : ''
+                                          }
+                                          onChange={(e) => {
+                                            const val = parseFloat(e.target.value.replace(',', '.'));
+                                            if (!isNaN(val) && val > 0) {
+                                              handleAddManualSlideThickness(val);
+                                            }
+                                          }}
+                                          className="w-12 bg-transparent text-[11px] font-mono font-bold text-white focus:outline-none placeholder:text-slate-500"
+                                        />
+                                        <span className="text-[10px] text-slate-400 font-mono">mm</span>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>

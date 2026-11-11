@@ -142,7 +142,36 @@ export function computeFacadeLayout(
   if (missingDrawer >= 0) {
     return {
       ...base,
-      error: `La hauteur du tiroir (élément ${missingDrawer + 1}) est obligatoire.`,
+      error: `La hauteur de la façade du tiroir (élément ${missingDrawer + 1}) est obligatoire.`,
+    };
+  }
+
+  const missingDrawerBox = items.findIndex(
+    (it) =>
+      it.type === 'tiroir' &&
+      it.drawerHeight !== undefined &&
+      !(it.drawerHeight && it.drawerHeight > 0)
+  );
+  if (missingDrawerBox >= 0) {
+    return {
+      ...base,
+      error: `La hauteur du tiroir (élément ${missingDrawerBox + 1}) est obligatoire.`,
+    };
+  }
+
+  const invalidDrawerBox = items.findIndex(
+    (it) =>
+      it.type === 'tiroir' &&
+      it.height &&
+      it.height > 0 &&
+      it.drawerHeight &&
+      it.drawerHeight > it.height
+  );
+  if (invalidDrawerBox >= 0) {
+    const it = items[invalidDrawerBox];
+    return {
+      ...base,
+      error: `La hauteur du tiroir (élément ${invalidDrawerBox + 1} : ${it.drawerHeight} mm) ne peut pas être supérieure à la hauteur de la façade (${it.height} mm).`,
     };
   }
 
@@ -488,8 +517,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     ? 1
     : 0;
 
-  // Hauteurs des façades de tiroirs (issues de la composition détaillée) pour dimensionner les bacs
-  let drawerFrontHeights: number[] = [];
+  // Spécifications des tiroirs issues de la composition détaillée de la façade (hauteur façade + hauteur tiroir choisie)
+  let drawerSpecsFromFacade: { frontHeight: number; drawerHeight: number | null }[] = [];
 
   if (activeFacadesCount > 0 && config.facadeItems && config.facadeItems.length > 0) {
     // Composition détaillée : composants empilés du haut vers le bas, sur toute la largeur
@@ -505,9 +534,22 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const placementLabel = isInside ? 'intérieure' : 'en applique';
     const baseH = isInside ? interiorHeight : height;
 
-    drawerFrontHeights = items
-      .map((it, i) => (it.type === 'tiroir' ? layout.heights[i] : -1))
-      .filter((h) => h > 0);
+    drawerSpecsFromFacade = items
+      .map((it, i) => {
+        if (it.type !== 'tiroir') return null;
+        const frontH = layout.heights[i];
+        const chosenDrawerH =
+          it.drawerHeight && it.drawerHeight > 0
+            ? frontH > 0
+              ? Math.min(it.drawerHeight, frontH)
+              : it.drawerHeight
+            : null;
+        return { frontHeight: frontH, drawerHeight: chosenDrawerH };
+      })
+      .filter(
+        (spec): spec is { frontHeight: number; drawerHeight: number | null } =>
+          spec !== null && spec.frontHeight > 0
+      );
 
     // Regroupement des composants identiques (même type et même hauteur)
     const groups = new Map<string, { type: FacadeItem['type']; h: number; count: number; auto: boolean }>();
@@ -641,21 +683,42 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     const bottomQty = 1 * dCount * cabinetCount;
 
-    // Hauteur de chaque bac : déduite de la hauteur de sa façade (façade - 40 mm) si la composition
-    // détaillée est renseignée, sinon répartition standard
-    const useFrontHeights = drawerFrontHeights.length === dCount;
-    const boxGroups = new Map<number, number>();
+    // Hauteur de chaque bac : hauteur de tiroir choisie dans la composition (bornée à la hauteur de la façade),
+    // ou déduite de la hauteur de sa façade (façade - 40 mm), sinon répartition standard
+    const useFrontHeights = drawerSpecsFromFacade.length === dCount;
+    const boxGroups = new Map<number, { count: number; isCustomHeight: boolean }>();
     for (let i = 0; i < dCount; i++) {
-      const boxH = useFrontHeights
-        ? Math.max(60, Math.min(Math.max(60, interiorHeight - 30), Math.floor(drawerFrontHeights[i] - 40)))
-        : drawerBoxH;
-      boxGroups.set(boxH, (boxGroups.get(boxH) || 0) + 1);
+      let boxH = drawerBoxH;
+      let isCustom = false;
+      if (useFrontHeights) {
+        const spec = drawerSpecsFromFacade[i];
+        if (spec.drawerHeight && spec.drawerHeight > 0) {
+          boxH = Math.max(30, Math.round(Math.min(spec.drawerHeight, spec.frontHeight)));
+          isCustom = true;
+        } else {
+          boxH = Math.max(
+            60,
+            Math.min(Math.max(60, interiorHeight - 30), Math.floor(spec.frontHeight - 40))
+          );
+        }
+      }
+      const existing = boxGroups.get(boxH);
+      if (existing) {
+        existing.count += 1;
+        existing.isCustomHeight = existing.isCustomHeight || isCustom;
+      } else {
+        boxGroups.set(boxH, { count: 1, isCustomHeight: isCustom });
+      }
     }
 
-    boxGroups.forEach((n, boxH) => {
+    boxGroups.forEach(({ count: n, isCustomHeight }, boxH) => {
       const sidesQty = 2 * n * cabinetCount;
       const frontBackQty = 2 * n * cabinetCount;
-      const hNote = useFrontHeights ? ' (hauteur façade - 40 mm)' : '';
+      const hNote = isCustomHeight
+        ? ' (hauteur tiroir choisie)'
+        : useFrontHeights
+        ? ' (hauteur façade - 40 mm)'
+        : '';
       const sidesPartId = `drawer_sides_${boxH}`;
       const frontBackPartId = `drawer_front_back_${boxH}`;
 
