@@ -53,6 +53,26 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   });
   const [isTouchGesturing, setIsTouchGesturing] = useState<boolean>(false);
   const [isFlipped180, setIsFlipped180] = useState<boolean>(false);
+
+  // Références et état pour le zoom à la molette et le glisser-déplacer (pan) à la souris
+  const fullscreenContainerRef = useRef<HTMLDivElement | null>(null);
+  const mouseDragRef = useRef<{
+    isDown: boolean;
+    startX: number;
+    startY: number;
+    startPanX: number;
+    startPanY: number;
+    hasMoved: boolean;
+  }>({
+    isDown: false,
+    startX: 0,
+    startY: 0,
+    startPanX: 0,
+    startPanY: 0,
+    hasMoved: false,
+  });
+  const [isDraggingMouse, setIsDraggingMouse] = useState<boolean>(false);
+
   const touchGestureRef = useRef<{
     mode: 'none' | 'pinch' | 'pan';
     startDist: number;
@@ -260,6 +280,32 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         handleCloseFullscreen();
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        setFullscreenZoom((z) => Math.min(8.0, +(z + 0.25).toFixed(2)));
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        setFullscreenZoom((z) => {
+          const next = Math.max(0.4, +(z - 0.25).toFixed(2));
+          if (next <= 0.45) setFullscreenPan({ x: 0, y: 0 });
+          return next;
+        });
+      } else if (e.key === '0') {
+        e.preventDefault();
+        setFullscreenZoom(1);
+        setFullscreenPan({ x: 0, y: 0 });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFullscreenPan((p) => ({ ...p, y: p.y + 60 }));
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFullscreenPan((p) => ({ ...p, y: p.y - 60 }));
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setFullscreenPan((p) => ({ ...p, x: p.x + 60 }));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setFullscreenPan((p) => ({ ...p, x: p.x - 60 }));
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -271,6 +317,49 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [fullscreenPanelIdx, handleCloseFullscreen]);
+
+  // Zoom fluide à la molette de souris centré sur le curseur
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const delta = e.deltaY;
+    const zoomFactor = delta < 0 ? 1.15 : 0.87;
+
+    setFullscreenZoom((prevZoom) => {
+      const nextZoom = Math.min(8.0, Math.max(0.4, +(prevZoom * zoomFactor).toFixed(2)));
+      if (nextZoom === prevZoom) return prevZoom;
+
+      const container = fullscreenContainerRef.current;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - (rect.left + rect.width / 2);
+        const mouseY = e.clientY - (rect.top + rect.height / 2);
+
+        // Maintenir le point sous le curseur stable pendant le zoom
+        const scaleRatio = nextZoom / prevZoom;
+        setFullscreenPan((prevPan) => ({
+          x: Math.round(mouseX - (mouseX - prevPan.x) * scaleRatio),
+          y: Math.round(mouseY - (mouseY - prevPan.y) * scaleRatio),
+        }));
+      }
+
+      return nextZoom;
+    });
+  }, []);
+
+  const setFullscreenContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (fullscreenContainerRef.current) {
+        fullscreenContainerRef.current.removeEventListener('wheel', handleWheel);
+      }
+      fullscreenContainerRef.current = node;
+      if (node) {
+        node.addEventListener('wheel', handleWheel, { passive: false });
+      }
+    },
+    [handleWheel]
+  );
 
   const patternId = useId();
 
@@ -704,6 +793,68 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             }
           };
 
+          // Gestion du déplacement (pan) à la souris
+          const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+            if (e.pointerType === 'touch') return;
+            if (e.button !== 0 && e.button !== 1) return;
+
+            const target = e.target as HTMLElement;
+            if (target.closest('button') || target.closest('[role="button"]')) return;
+
+            try {
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            } catch {}
+
+            mouseDragRef.current = {
+              isDown: true,
+              startX: e.clientX,
+              startY: e.clientY,
+              startPanX: fullscreenPan.x,
+              startPanY: fullscreenPan.y,
+              hasMoved: false,
+            };
+            setIsDraggingMouse(true);
+            setIsTouchGesturing(true);
+          };
+
+          const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+            if (!mouseDragRef.current.isDown) return;
+
+            const dx = e.clientX - mouseDragRef.current.startX;
+            const dy = e.clientY - mouseDragRef.current.startY;
+
+            if (!mouseDragRef.current.hasMoved && Math.hypot(dx, dy) > 3) {
+              mouseDragRef.current.hasMoved = true;
+            }
+
+            if (mouseDragRef.current.hasMoved) {
+              const { dx: localDx, dy: localDy } = toLocalDelta(dx, dy);
+              setFullscreenPan({
+                x: Math.round(mouseDragRef.current.startPanX + localDx),
+                y: Math.round(mouseDragRef.current.startPanY + localDy),
+              });
+            }
+          };
+
+          const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+            if (e.pointerType === 'touch') return;
+            try {
+              if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
+                (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+              }
+            } catch {}
+
+            const wasDragging = mouseDragRef.current.hasMoved;
+            mouseDragRef.current.isDown = false;
+            setIsDraggingMouse(false);
+
+            if (wasDragging) {
+              setTimeout(() => setIsTouchGesturing(false), 60);
+            } else {
+              setIsTouchGesturing(false);
+            }
+          };
+
           return createPortal(
             <div
               role="dialog"
@@ -807,13 +958,13 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                       type="button"
                       onClick={() => {
                         setFullscreenZoom((z) => {
-                          const next = Math.max(1, +(z - 0.35).toFixed(2));
-                          if (next <= 1) setFullscreenPan({ x: 0, y: 0 });
+                          const next = Math.max(0.4, +(z - 0.25).toFixed(2));
+                          if (next <= 0.45) setFullscreenPan({ x: 0, y: 0 });
                           return next;
                         });
                       }}
                       className="p-1.5 text-slate-300 hover:text-white"
-                      title="Zoom arrière"
+                      title="Zoom arrière (Molette vers l'arrière ou Touche -)"
                     >
                       <ZoomOut className="w-3.5 h-3.5" />
                     </button>
@@ -823,18 +974,18 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                         setFullscreenZoom(1);
                         setFullscreenPan({ x: 0, y: 0 });
                       }}
-                      className="px-1.5 text-[11px] font-mono text-amber-400 font-bold"
-                      title="Réinitialiser le zoom"
+                      className="px-1.5 text-[11px] font-mono text-amber-400 font-bold hover:text-amber-300"
+                      title="Réinitialiser le zoom à 100% et centrer (Touche 0)"
                     >
                       {Math.round(fullscreenZoom * 100)}%
                     </button>
                     <button
                       type="button"
                       onClick={() =>
-                        setFullscreenZoom((z) => Math.min(6.0, +(z + 0.35).toFixed(2)))
+                        setFullscreenZoom((z) => Math.min(8.0, +(z + 0.25).toFixed(2)))
                       }
                       className="p-1.5 text-slate-300 hover:text-white"
-                      title="Zoom avant"
+                      title="Zoom avant (Molette vers l'avant ou Touche +)"
                     >
                       <ZoomIn className="w-3.5 h-3.5" />
                     </button>
@@ -852,14 +1003,32 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                 </div>
               </div>
 
-              {/* Zone centrale : Panneau forcé en orientation Portrait avec zoom à 2 doigts (pinch-to-zoom) */}
+              {/* Zone centrale : Panneau forcé en orientation Portrait avec zoom molette & glisser-déplacer souris + pinch tactile */}
               <div
+                ref={setFullscreenContainerRef}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 onTouchCancel={handleTouchEnd}
-                style={{ touchAction: 'none' }}
-                className="flex-1 min-h-0 w-full overflow-hidden bg-slate-950 flex items-center justify-center p-1 sm:p-3"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                onDoubleClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (target.closest('button')) return;
+                  if (fullscreenZoom !== 1 || fullscreenPan.x !== 0 || fullscreenPan.y !== 0) {
+                    setFullscreenZoom(1);
+                    setFullscreenPan({ x: 0, y: 0 });
+                  } else {
+                    setFullscreenZoom(1.8);
+                  }
+                }}
+                style={{
+                  touchAction: 'none',
+                  cursor: isDraggingMouse ? 'grabbing' : 'grab',
+                }}
+                className="flex-1 min-h-0 w-full overflow-hidden bg-slate-950 flex items-center justify-center p-1 sm:p-3 select-none"
               >
                 <SinglePanelSVG
                   panel={fsPanel}
@@ -896,8 +1065,13 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                   </div>
                 ) : (
                   <div className="text-[11px] text-slate-400 flex items-center justify-between w-full">
-                    <span>
-                      Écartez 2 doigts pour zoomer • Touchez une pièce pour ses cotes
+                    <span className="flex items-center gap-2">
+                      <span className="hidden sm:inline">
+                        🖱️ Molette pour zoomer • Glisser pour déplacer le panneau • Clic sur une pièce pour ses cotes
+                      </span>
+                      <span className="sm:hidden">
+                        Écartez 2 doigts pour zoomer • Glissez pour déplacer
+                      </span>
                     </span>
                     <span className="font-mono text-slate-300">
                       {fsPanel.placedPieces.length} pièce(s)
@@ -937,7 +1111,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
 
         <div className="text-[11px] text-slate-400 flex items-center gap-1">
           <Info className="w-3 h-3 text-slate-500" />
-          <span>Cliquez sur un panneau pour l&apos;ouvrir en plein écran (Portrait)</span>
+          <span>Cliquez sur un panneau pour l&apos;ouvrir en plein écran (zoom molette et déplacement libre)</span>
         </div>
       </div>
     </div>
@@ -1173,7 +1347,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
         onClick={!isFullscreen ? onOpenFullscreen : undefined}
         title={
           !isFullscreen
-            ? 'Cliquez ou touchez le panneau pour l\'afficher en plein écran (Portrait fixe)'
+            ? 'Cliquez pour ouvrir en plein écran (zoom à la molette et déplacement libre à la souris)'
             : undefined
         }
         className={
