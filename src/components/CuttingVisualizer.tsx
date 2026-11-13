@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useId, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useId, useCallback, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { PanelResult, PlacedPiece, OffcutArea } from '@/types/cutting';
 import {
@@ -298,6 +298,32 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
     }
   };
 
+  // Répartition des panneaux par matière et dimensions
+  const panelSummaryByMaterial = useMemo(() => {
+    const map = new Map<
+      string,
+      { count: number; material: string; length: number; width: number }
+    >();
+    panels.forEach((p) => {
+      const len = Math.max(p.panelLength, p.panelWidth);
+      const wid = Math.min(p.panelLength, p.panelWidth);
+      const mat = p.material?.trim() || 'Matière';
+      const key = `${mat.toLowerCase()}__${len}__${wid}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, {
+          count: 1,
+          material: mat,
+          length: len,
+          width: wid,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [panels]);
+
   if (panels.length === 0) {
     return (
       <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-8 text-center text-slate-400">
@@ -324,24 +350,18 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             <h3 className="text-sm font-bold text-white tracking-wide">
               Plans de Coupe Graphiques Interactifs
             </h3>
-            <span className="text-xs font-mono font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              {panels.length} panneau(x) optimisé(s)
-            </span>
+            {panelSummaryByMaterial.map((group, idx) => (
+              <span
+                key={idx}
+                className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20"
+              >
+                {group.count} panneau{group.count > 1 ? 'x' : ''} {group.material} {group.length}/{group.width}
+              </span>
+            ))}
           </div>
 
-          {/* Boutons Export PDF (Plans de coupe & Étiquettes 70x36mm) sous le texte X panneau(x) optimisé */}
+          {/* Boutons Étiquettes & Export PDF (placé à droite des étiquettes avec titre "Export PDF") */}
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportPDF}
-              disabled={isExportingPdf}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs shadow-md shadow-rose-900/30 transition-all active:scale-95 disabled:opacity-50"
-              title="Exporter tous les plans de coupe dans un fichier PDF (1 panneau par feuille A4)"
-            >
-              <FileDown className="w-4 h-4 text-white" />
-              <span>{isExportingPdf ? 'Génération du PDF...' : 'Exporter PDF (1 panneau / feuille A4)'}</span>
-            </button>
-
             <button
               type="button"
               onClick={handleExportLabelsPDF}
@@ -351,6 +371,17 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             >
               <Tag className="w-4 h-4 text-slate-950" />
               <span>{isExportingLabelsPdf ? 'Création du PDF...' : 'Étiquettes PDF (A4 - 70×36 mm)'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              disabled={isExportingPdf}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs shadow-md shadow-rose-900/30 transition-all active:scale-95 disabled:opacity-50"
+              title="Exporter tous les plans de coupe dans un fichier PDF (1 panneau par feuille A4)"
+            >
+              <FileDown className="w-4 h-4 text-white" />
+              <span>{isExportingPdf ? 'Génération du PDF...' : 'Export PDF'}</span>
             </button>
           </div>
 
