@@ -284,23 +284,43 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   // Profondeur utile pour les pièces de structure (si fond en applique, le fond vient en plus ou en retrait)
   const structuralDepth = depth;
 
+  // Hauteur du corps de meuble (si des pieds sont configurés, leur hauteur est déduite de la hauteur totale pour tous les éléments verticaux)
+  const feetHeight =
+    config.hasFeet && config.feetHeight && config.feetHeight > 0
+      ? config.feetHeight
+      : 0;
+  const boxHeight = feetHeight > 0 ? Math.max(50, height - feetHeight) : height;
+  const feetBadge = feetHeight > 0 ? ` [Pieds: ${feetHeight} mm]` : '';
+
   // 1. Côtés (Montants gauche et droit)
-  let sideHeight = height;
-  let sideFormula = `${height} mm (Pleine hauteur extérieure)`;
+  let sideHeight = boxHeight;
+  let sideFormula =
+    feetHeight > 0
+      ? `${height} - ${feetHeight} (Pieds) = ${boxHeight} mm (Hauteur caisson débité)`
+      : `${height} mm (Pleine hauteur extérieure)`;
 
   if (assemblyType === 'top_bottom_full') {
-    sideHeight = height - 2 * thickness;
-    sideFormula = `${height} - (2 × ${thickness}) = ${sideHeight} mm (Côtés intérieurs)`;
+    sideHeight = boxHeight - 2 * thickness;
+    sideFormula =
+      feetHeight > 0
+        ? `${height} - ${feetHeight} (Pieds) - (2 × ${thickness}) = ${sideHeight} mm (Côtés intérieurs)`
+        : `${height} - (2 × ${thickness}) = ${sideHeight} mm (Côtés intérieurs)`;
   } else if (assemblyType === 'bottom_inside_top_over') {
-    sideHeight = height - thickness;
-    sideFormula = `${height} - ${thickness} = ${sideHeight} mm (Sous plateau supérieur, bas encastré)`;
+    sideHeight = boxHeight - thickness;
+    sideFormula =
+      feetHeight > 0
+        ? `${height} - ${feetHeight} (Pieds) - ${thickness} = ${sideHeight} mm (Sous plateau supérieur, bas encastré)`
+        : `${height} - ${thickness} = ${sideHeight} mm (Sous plateau supérieur, bas encastré)`;
   }
 
   const sidesQty = 2 * cabinetCount;
   pieces.push({
     partKey: 'sides',
     partId: 'sides',
-    role: cabinetCount > 1 ? `Côtés (${sidesQty} pcs pour ${cabinetCount} caissons)` : 'Côtés (Gauche & Droit)',
+    role:
+      cabinetCount > 1
+        ? `Côtés (${sidesQty} pcs pour ${cabinetCount} caissons)${feetBadge}`
+        : `Côtés (Gauche & Droit)${feetBadge}`,
     description: `${config.name} - Côtés`,
     formula: cabinetCount > 1 ? `${sideFormula} [2 × ${cabinetCount} = ${sidesQty} pcs]` : sideFormula,
     length: Math.max(sideHeight, structuralDepth),
@@ -400,13 +420,16 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     extractThicknessFromMaterialName(chosenBackMat) ||
     (backThickness && backThickness > 0 ? backThickness : 8);
   const interiorWidth = width - 2 * thickness;
-  const interiorHeight = height - 2 * thickness;
+  const interiorHeight = boxHeight - 2 * thickness;
   const interiorDepth = backType === 'groove' ? depth - effectiveBackThickness : depth;
 
   // 3. Séparations verticales (Montants intermédiaires, de 1 à 4)
   if (partitionsCount > 0) {
     const partitionHeight = interiorHeight;
-    const partitionFormula = `Hauteur intérieure : ${height} - (2 × ${thickness}) = ${partitionHeight} mm`;
+    const partitionFormula =
+      feetHeight > 0
+        ? `Hauteur intérieure : ${height} - ${feetHeight} (Pieds) - (2 × ${thickness}) = ${partitionHeight} mm`
+        : `Hauteur intérieure : ${height} - (2 × ${thickness}) = ${partitionHeight} mm`;
     const partitionQty = partitionsCount * cabinetCount;
 
     pieces.push({
@@ -414,10 +437,10 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       partId: 'partitions',
       role:
         partitionsCount > 1
-          ? `Séparations verticales (${partitionQty} pcs pour ${cabinetCount} caisson${cabinetCount > 1 ? 's' : ''})`
+          ? `Séparations verticales (${partitionQty} pcs pour ${cabinetCount} caisson${cabinetCount > 1 ? 's' : ''})${feetBadge}`
           : cabinetCount > 1
-          ? `Séparation verticale (${partitionQty} pcs pour ${cabinetCount} caissons)`
-          : 'Séparation verticale centrale',
+          ? `Séparation verticale (${partitionQty} pcs pour ${cabinetCount} caissons)${feetBadge}`
+          : `Séparation verticale centrale${feetBadge}`,
       description:
         partitionsCount > 1
           ? `${config.name} - Séparations (${partitionsCount})`
@@ -484,16 +507,21 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   const backQty = 1 * cabinetCount;
   if (backType === 'applique') {
     // Fond cloué ou vissé en applique à l'arrière
+    const backH = boxHeight;
+    const backFormulaDesc =
+      feetHeight > 0
+        ? `Pleine cote arrière : ${boxHeight} (${height}-${feetHeight} pieds) × ${width} mm (Ép. ${effectiveBackThickness} mm)`
+        : `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${effectiveBackThickness} mm)`;
     pieces.push({
       partKey: 'back',
       partId: 'back',
-      role: `Fond (applique arrière)${chosenBackMat ? ` [${chosenBackMat}]` : ''}`,
+      role: `Fond (applique arrière)${feetBadge}${chosenBackMat ? ` [${chosenBackMat}]` : ''}`,
       description: `${config.name} - Fond applique`,
       formula: cabinetCount > 1
-        ? `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${effectiveBackThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
-        : `Pleine cote extérieure arrière : ${height} × ${width} mm (Ép. ${effectiveBackThickness} mm${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
-      length: Math.max(height, width),
-      width: Math.min(height, width),
+        ? `${backFormulaDesc} [1 × ${cabinetCount} = ${backQty} pcs]`
+        : `${backFormulaDesc}${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''}`,
+      length: Math.max(backH, width),
+      width: Math.min(backH, width),
       quantity: backQty,
       material: chosenBackMat,
       color: PIECE_COLORS.back,
@@ -507,11 +535,11 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     pieces.push({
       partKey: 'back',
       partId: 'back',
-      role: `Fond (rainure encastrée)${chosenBackMat ? ` [${chosenBackMat}]` : ''}`,
+      role: `Fond (rainure encastrée)${feetBadge}${chosenBackMat ? ` [${chosenBackMat}]` : ''}`,
       description: `${config.name} - Fond encastré`,
       formula: cabinetCount > 1
-        ? `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm) [1 × ${cabinetCount} = ${backQty} pcs]`
-        : `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
+        ? `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}) [1 × ${cabinetCount} = ${backQty} pcs]`
+        : `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
       length: Math.max(backH, backW),
       width: Math.min(backH, backW),
       quantity: backQty,
@@ -538,14 +566,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const isInside = config.facadePlacement === 'interieur';
     const gap = config.facadeGap !== undefined && config.facadeGap >= 0 ? config.facadeGap : 2;
     const items = config.facadeItems;
-    const availH = getFacadeAvailableHeight(height, thickness, config.facadePlacement);
+    const availH = getFacadeAvailableHeight(boxHeight, thickness, config.facadePlacement);
     const facadeW = Math.max(
       FACADE_MIN_HEIGHT,
       (isInside ? interiorWidth : width) - 2 * FACADE_EDGE_CLEARANCE
     );
     const layout = computeFacadeLayout(items, availH, gap);
     const placementLabel = isInside ? 'intérieure' : 'en applique';
-    const baseH = isInside ? interiorHeight : height;
+    const baseH = isInside ? interiorHeight : boxHeight;
 
     drawerSpecsFromFacade = items
       .map((it, i) => {
@@ -599,7 +627,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       pieces.push({
         partKey: 'doors',
         partId,
-        role: `${label} ${placementLabel} (H ${g.h} mm${g.count > 1 ? `, ${g.count} par caisson` : ''})`,
+        role: `${label} ${placementLabel} (H ${g.h} mm${g.count > 1 ? `, ${g.count} par caisson` : ''})${feetBadge}`,
         description: `${config.name} - ${label}`,
         formula: `${autoFormula} × L ${facadeW} mm [${g.count} × ${cabinetCount} = ${totalQty} pcs]`,
         length: Math.max(g.h, facadeW),
@@ -626,7 +654,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       pieces.push({
         partKey: 'doors',
         partId: 'doors',
-        role: `Façade rentrante intérieure (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})`,
+        role: `Façade rentrante intérieure (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})${feetBadge}`,
         description: `${config.name} - Façade intérieure`,
         formula:
           activeFacadesCount > 1
@@ -640,7 +668,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       });
     } else {
       // Façades en applique (recouvrement du caisson avec jeu périphérique de 2 mm)
-      const facadeH = Math.max(50, height - 4);
+      const facadeH = Math.max(50, boxHeight - 4);
       const totalAvailableW = Math.max(50, width - 4);
       const facadeW =
         activeFacadesCount === 1
@@ -651,11 +679,13 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       pieces.push({
         partKey: 'doors',
         partId: 'doors',
-        role: `Façade en applique (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})`,
+        role: `Façade en applique (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})${feetBadge}`,
         description: `${config.name} - Façade`,
         formula:
           activeFacadesCount > 1
             ? `(${width} - 4 - ${activeFacadesCount - 1}×${gap}) / ${activeFacadesCount} = ${facadeW} mm × ${facadeH} mm [${activeFacadesCount} × ${cabinetCount} = ${totalQty} pcs]`
+            : feetHeight > 0
+            ? `(${width} - 4mm) × (${boxHeight}mm [${height}-${feetHeight} pieds] - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`
             : `(${width} - 4mm) × (${height} - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
         length: Math.max(facadeH, facadeW),
         width: Math.min(facadeH, facadeW),
@@ -1497,6 +1527,19 @@ export function parseCabinetPromptWithNLP(
         }
       }
     }
+  }
+
+  // 2b. Détection des pieds (ex: "avec pieds de 100mm", "pieds de 150", "sur pieds de 80 mm")
+  const feetMatch = text.match(/(?:avec|sur)?\s*pieds?\s*(?:de)?\s*(\d{2,3})\s*(?:mm)?/i);
+  if (feetMatch) {
+    const fh = parseInt(feetMatch[1], 10);
+    if (fh >= 10 && fh <= 500) {
+      config.hasFeet = true;
+      config.feetHeight = fh;
+    }
+  } else if (text.includes('avec pieds') || text.includes('sur pieds')) {
+    config.hasFeet = true;
+    config.feetHeight = 100;
   }
 
   // 3. Type d'assemblage & Débords

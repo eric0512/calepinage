@@ -961,6 +961,15 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
 
                       <span className="text-[10px] text-slate-400 font-sans">mm</span>
 
+                      {cab.config?.hasFeet && cab.config?.feetHeight && cab.config.feetHeight > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-sans font-semibold"
+                          title={`Caisson sur pieds de ${cab.config.feetHeight} mm. Hauteur du corps débité : ${cab.config.height - cab.config.feetHeight} mm`}
+                        >
+                          🦶 Pieds : {cab.config.feetHeight} mm (H. caisson : {cab.config.height - cab.config.feetHeight} mm)
+                        </span>
+                      )}
+
                       {/* Logo placé directement à droite des dimensions pour déverrouiller / valider leur modification */}
                       {!isEditingCab ? (
                         <button
@@ -1061,6 +1070,17 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                           </span>
                                         </span>
                                       )}
+                                      {cab.config?.hasFeet &&
+                                        cab.config?.feetHeight &&
+                                        cab.config.feetHeight > 0 &&
+                                        ['Côtés', 'Fond', 'Séparations', 'Portes', 'Façades'].includes(group.category) && (
+                                          <span
+                                            className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                            title={`Hauteur déduite de la hauteur des pieds (${cab.config.feetHeight} mm)`}
+                                          >
+                                            Pieds : {cab.config.feetHeight} mm
+                                          </span>
+                                        )}
                                     </span>
                                   </span>
                                 </th>
@@ -1139,6 +1159,17 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                         }`}
                                       />
                                       <span className="text-[10px] text-slate-500 hidden sm:inline">mm</span>
+                                      {cab.config?.hasFeet &&
+                                        cab.config?.feetHeight &&
+                                        cab.config.feetHeight > 0 &&
+                                        ['Côtés', 'Fond', 'Séparations', 'Portes', 'Façades'].includes(group.category) && (
+                                          <span
+                                            className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-sans font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap"
+                                            title={`Hauteur déduite des pieds de ${cab.config.feetHeight} mm`}
+                                          >
+                                            Pieds : {cab.config.feetHeight} mm
+                                          </span>
+                                        )}
                                     </div>
                                   </td>
                                   <td className="py-1.5 sm:py-2 px-1 text-center">

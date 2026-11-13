@@ -55,6 +55,8 @@ Tu dois analyser la description en langage naturel d'un meuble ou caisson et en 
   "height": number (hauteur totale extérieure en mm, défaut: 720. Ex: 700 de haut = 700),
   "width": number (largeur totale extérieure du corps en mm, défaut: 600. Ex: 1000 de large = 1000),
   "depth": number (profondeur totale extérieure du corps en mm, défaut: 560. Ex: 450 de profondeur = 450),
+  "hasFeet": boolean (true si des pieds sont demandés sur le caisson, défaut: false),
+  "feetHeight": number (hauteur des pieds en mm, ex: 100),
   "thickness": number (épaisseur des panneaux de structure en mm, défaut: 18),
   "assemblyType": "sides_full" (si haut et bas sont à l'intérieur entre les côtés) | "top_bottom_full" (si les côtés sont pris entre le dessus et le dessous) | "bottom_inside_top_over" (si le plateau du bas est encastré entre les côtés et le plateau du haut est posé sur les côtés, avec ou sans débord),
   "topOverhangSides": number (débord latéral du plateau du haut en mm de chaque côté, ex: 20 pour 2 cm de débord sur les côtés),

@@ -180,6 +180,8 @@ interface GuidedTemplateFields {
   elementName: string; // Toujours 'Caisson'
   cabinetCount: string; // Nombre de caissons identiques (ex: '1')
   customName: string; // Nom de chaque élément dans la liste de débit (ex: "Caisson Cuisine")
+  hasFeet: boolean; // Présence de pieds sur le caisson
+  feetHeight: string; // Hauteur du pied en mm (ex: "100")
   height: string;
   width: string;
   depth: string;
@@ -195,6 +197,8 @@ const EMPTY_GUIDED_FIELDS: GuidedTemplateFields = {
   elementName: 'Caisson',
   cabinetCount: '1',
   customName: '',
+  hasFeet: false,
+  feetHeight: '',
   height: '',
   width: '',
   depth: '',
@@ -440,6 +444,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         cabinetCount:
           c.cabinetCount && c.cabinetCount > 0 ? String(c.cabinetCount) : '1',
         customName: c.name || cabName,
+        hasFeet: Boolean(c.hasFeet),
+        feetHeight: c.feetHeight ? String(c.feetHeight) : '',
         height: c.height ? String(c.height) : '',
         width: c.width ? String(c.width) : '',
         depth: c.depth ? String(c.depth) : '',
@@ -539,6 +545,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     if (!gf.height.trim() || isNaN(h) || h < 50) return false;
     if (!gf.width.trim() || isNaN(w) || w < 50) return false;
     if (!gf.depth.trim() || isNaN(d) || d < 50) return false;
+    if (gf.hasFeet) {
+      const fh = parseInt(gf.feetHeight, 10);
+      if (!gf.feetHeight.trim() || isNaN(fh) || fh <= 0) return false;
+      if (!isNaN(h) && fh >= h) return false;
+    }
     if (gf.partitionsCount === '') return false;
     if (gf.shelvesCount.trim() === '' || isNaN(sh) || sh < 0) return false;
     if (!gf.assemblyType) return false;
@@ -555,7 +566,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   // Mise à jour d'un champ du gabarit guidé ("Remplir les cases") avec ouverture automatique de la composition dès que tous les champs sont complets
   const handleGuidedFieldChange = (
     field: keyof GuidedTemplateFields,
-    value: string,
+    value: string | boolean,
     isSelectField = false
   ) => {
     if (autoOpenTimerRef.current) {
@@ -565,8 +576,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
     const nextGf: GuidedTemplateFields = {
       ...guidedFields,
-      [field]: value,
     };
+
+    if (field === 'hasFeet') {
+      const boolVal = Boolean(value === true || value === 'true');
+      nextGf.hasFeet = boolVal;
+      if (!boolVal) {
+        nextGf.feetHeight = '';
+      }
+    } else {
+      (nextGf[field] as unknown as string) = String(value);
+    }
 
     // Si on change "Nom de l'élément" :
     if (field === 'elementName') {
@@ -578,7 +598,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           : '';
         nextGf.customName = value ? `${value}${suffix}` : '';
       } else if (!prevCustom && value) {
-        nextGf.customName = value;
+        nextGf.customName = String(value);
       }
     }
 
@@ -616,6 +636,14 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         nextGf.topOverhangFront !== '' && !isNaN(ovF) ? ovF : undefined;
       next.backType = (nextGf.backType || '') as BackType;
       next.cabinetCount = !isNaN(cc) && cc > 0 ? cc : 1;
+      if (nextGf.hasFeet) {
+        next.hasFeet = true;
+        const fh = parseInt(nextGf.feetHeight, 10);
+        next.feetHeight = !isNaN(fh) && fh > 0 ? fh : undefined;
+      } else {
+        next.hasFeet = false;
+        next.feetHeight = undefined;
+      }
       return next;
     });
 
@@ -888,6 +916,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     if (!guidedFields.height.trim() || isNaN(h) || h < 50) missing.push('Hauteur (mm)');
     if (!guidedFields.width.trim() || isNaN(w) || w < 50) missing.push('Largeur (mm)');
     if (!guidedFields.depth.trim() || isNaN(d) || d < 50) missing.push('Profondeur (mm)');
+    if (guidedFields.hasFeet) {
+      const fh = parseInt(guidedFields.feetHeight, 10);
+      if (!guidedFields.feetHeight.trim() || isNaN(fh) || fh <= 0) {
+        missing.push('Hauteur du pied (mm)');
+      } else if (!isNaN(h) && fh >= h) {
+        setGuidedValidationError(
+          `La hauteur des pieds (${fh} mm) doit être strictement inférieure à la hauteur totale du caisson (${h} mm).`
+        );
+        return;
+      }
+    }
     if (guidedFields.partitionsCount === '') missing.push('Séparations');
     if (guidedFields.shelvesCount.trim() === '' || isNaN(sh) || sh < 0)
       missing.push('Étagères par côté');
@@ -1059,6 +1098,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           ? String(preset.config.cabinetCount)
           : '1',
       customName: preset.config.name || 'Caisson',
+      hasFeet: Boolean(preset.config.hasFeet),
+      feetHeight: preset.config.feetHeight ? String(preset.config.feetHeight) : '',
       height: preset.config.height ? String(preset.config.height) : '',
       width: preset.config.width ? String(preset.config.width) : '',
       depth: preset.config.depth ? String(preset.config.depth) : '',
@@ -1624,25 +1665,44 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     {/* Tous les champs suivants sont masqués à l'ouverture tant qu'aucun élément n'est sélectionné */}
                     {guidedFields.elementName ? (
                       <div className="space-y-3 animate-in fade-in duration-200">
-                        {/* Champ "Nom de l'élément dans la liste de débit" */}
-                        <div>
-                          <label className="text-[11px] text-slate-300 block mb-1">
-                            Nom de l&apos;élément dans la liste de débit <span className="text-amber-400">*</span> :
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder={`Ex: ${guidedFields.elementName} Cuisine`}
-                            value={guidedFields.customName}
-                            onChange={(e) =>
-                              handleGuidedFieldChange('customName', e.target.value)
-                            }
-                            className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 placeholder-slate-500 ${
-                              guidedValidationError && !guidedFields.customName.trim()
-                                ? 'border-red-500 ring-1 ring-red-500'
-                                : 'border-slate-700'
-                            }`}
-                          />
+                        {/* Ligne : Nom dans la liste de débit & Pieds sur ce caisson */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
+                          <div className="sm:col-span-2">
+                            <label className="text-[11px] text-slate-300 block mb-1">
+                              Nom dans la liste de débit <span className="text-amber-400">*</span> :
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder={`Ex: ${guidedFields.elementName} Cuisine`}
+                              value={guidedFields.customName}
+                              onChange={(e) =>
+                                handleGuidedFieldChange('customName', e.target.value)
+                              }
+                              className={`w-full bg-slate-800 border rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 placeholder-slate-500 ${
+                                guidedValidationError && !guidedFields.customName.trim()
+                                  ? 'border-red-500 ring-1 ring-red-500'
+                                  : 'border-slate-700'
+                              }`}
+                            />
+                          </div>
+
+                          <div className="sm:col-span-1">
+                            <label className="text-[11px] text-slate-300 block mb-1 truncate" title="Pieds sur ce caisson ?">
+                              Pieds sur ce caisson ? <span className="text-amber-400">*</span> :
+                            </label>
+                            <select
+                              value={guidedFields.hasFeet ? 'true' : 'false'}
+                              onChange={(e) => {
+                                const hasFeet = e.target.value === 'true';
+                                handleGuidedFieldChange('hasFeet', hasFeet, true);
+                              }}
+                              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500"
+                            >
+                              <option value="false">Non (sans pieds)</option>
+                              <option value="true">Oui (avec pieds)</option>
+                            </select>
+                          </div>
                         </div>
 
                         {/* LIGNE 1 : Hauteur, Largeur et Profondeur toujours sur la même ligne */}
@@ -1705,6 +1765,63 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                             />
                           </div>
                         </div>
+
+                        {/* Champ conditionnel : Hauteur du pied entre la LIGNE 1 (H/L/P) et la LIGNE 2 (Séparations/Étagères) */}
+                        {guidedFields.hasFeet && (
+                          <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg animate-in fade-in duration-200">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                              <div className="flex items-center gap-3">
+                                <div>
+                                  <label className="text-[11px] font-semibold text-amber-300 block mb-1 truncate">
+                                    Hauteur du pied (mm) <span className="text-amber-400">*</span> :
+                                  </label>
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="number"
+                                      required
+                                      min="10"
+                                      max="500"
+                                      placeholder="Ex: 100"
+                                      value={guidedFields.feetHeight}
+                                      onChange={(e) =>
+                                        handleGuidedFieldChange('feetHeight', e.target.value)
+                                      }
+                                      className={`w-28 bg-slate-800 border rounded px-2.5 py-1 text-white font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
+                                        guidedValidationError &&
+                                        (!guidedFields.feetHeight.trim() ||
+                                          parseInt(guidedFields.feetHeight, 10) <= 0)
+                                          ? 'border-red-500'
+                                          : 'border-slate-700'
+                                      }`}
+                                    />
+                                    <span className="text-xs text-slate-400 font-mono">mm</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Indicateur dynamique de calcul de la hauteur du corps débité */}
+                              {parseInt(guidedFields.height, 10) > 0 &&
+                                parseInt(guidedFields.feetHeight, 10) > 0 && (
+                                  <div className="text-xs text-slate-300 bg-slate-900/80 px-3 py-1.5 rounded-md border border-slate-700/80 shrink-0">
+                                    <div className="text-[10px] text-slate-400 uppercase font-semibold">
+                                      Hauteur caisson débité
+                                    </div>
+                                    <div className="font-mono text-amber-300 font-bold text-xs sm:text-sm">
+                                      {Math.max(
+                                        0,
+                                        parseInt(guidedFields.height, 10) -
+                                          parseInt(guidedFields.feetHeight, 10)
+                                      )}{' '}
+                                      mm{' '}
+                                      <span className="text-[10px] text-slate-400 font-normal">
+                                        ({guidedFields.height} - {guidedFields.feetHeight} pieds)
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Autres paramètres du gabarit */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -2811,6 +2928,17 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       />
                     )}
 
+                    {/* Pieds sous le caisson */}
+                    {config.hasFeet && (
+                      <g>
+                        <rect x="35" y="185" width="16" height="11" fill="#f59e0b" stroke="#d97706" strokeWidth="1" rx="1.5" />
+                        <rect x="189" y="185" width="16" height="11" fill="#f59e0b" stroke="#d97706" strokeWidth="1" rx="1.5" />
+                        <text x="120" y="194" fill="#f59e0b" textAnchor="middle" fontSize="7" fontWeight="bold">
+                          Pieds: {config.feetHeight || '--'} mm
+                        </text>
+                      </g>
+                    )}
+
                     {/* Cotes de repère */}
                     <text x="120" y="9" fill="#94a3b8" textAnchor="middle">
                       {config.width > 0
@@ -2826,7 +2954,11 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       textAnchor="middle"
                       transform="rotate(-90 10 105)"
                     >
-                      {config.height > 0 ? `H = ${config.height} mm` : 'H = -- mm'}
+                      {config.height > 0
+                        ? config.hasFeet && config.feetHeight
+                          ? `H = ${config.height} mm (Corps : ${config.height - config.feetHeight} mm)`
+                          : `H = ${config.height} mm`
+                        : 'H = -- mm'}
                     </text>
                   </g>
                 </svg>
