@@ -1041,6 +1041,13 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
       /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) &&
     Math.min(window.screen.width, window.screen.height) <= 920;
   const vertTextAngle = isFullscreen && isPhoneDevice ? 90 : -90;
+  const vertScreenAngle = vertTextAngle;
+
+  // Calcul d'angle local SVG pour que tout texte apparaisse toujours lisible à l'endroit sur écran
+  // quelle que soit la rotation globale appliquée au panneau (normRot = 0°, 90°, 180° ou 270°) :
+  // (normRot + localAngle) % 360 = targetScreenAngle => localAngle = (targetScreenAngle - normRot) % 360
+  const getLocalAngle = (targetScreenAngle: number) =>
+    ((targetScreenAngle - normRot) % 360 + 360) % 360;
 
   return (
     <div
@@ -1296,42 +1303,55 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                       }
                     />
 
-                    {/* Étiquette sur la chute si dimensions suffisantes (orientée dans le sens de la plus grande longueur) */}
-                    {Math.max(ow, oh) >= 100 && Math.min(ow, oh) >= 70 && (
-                      <text
-                        x={ox + ow / 2}
-                        y={oy + oh / 2}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        transform={
-                          oh > ow
-                            ? `rotate(${vertTextAngle}, ${ox + ow / 2}, ${oy + oh / 2})`
-                            : undefined
-                        }
-                        fill={offcut.reusable ? '#34d399' : '#94a3b8'}
-                        fontSize={Math.min(
-                          32,
-                          Math.max(
-                            16,
-                            Math.max(ow, oh) / 10,
-                            Math.min(ow, oh) / 12
-                          )
-                        )}
-                        fontWeight="bold"
-                        fontFamily="monospace"
-                      >
-                        {offcut.reusable ? 'STOCK ATELIER' : 'PERTE'}
-                        <tspan
-                          x={ox + ow / 2}
-                          dy="24"
-                          fontSize="0.85em"
-                          fontWeight="normal"
+                    {/* Étiquette sur la chute si dimensions suffisantes (orientée dans le sens de la plus grande longueur sur écran et lisible à l'endroit) */}
+                    {Math.max(ow, oh) >= 100 && Math.min(ow, oh) >= 70 && (() => {
+                      const sow = isRotated90or270 ? oh : ow;
+                      const soh = isRotated90or270 ? ow : oh;
+                      const isOffcutVerticalOnScreen = soh > sow;
+                      const targetOffcutAngle = isOffcutVerticalOnScreen ? vertScreenAngle : 0;
+                      const localOffcutAngle = getLocalAngle(targetOffcutAngle);
+                      const cx = ox + ow / 2;
+                      const cy = oy + oh / 2;
+                      const offcutFSize = Math.min(
+                        32,
+                        Math.max(
+                          16,
+                          Math.max(ow, oh) / 10,
+                          Math.min(ow, oh) / 12
+                        )
+                      );
+
+                      return (
+                        <text
+                          x={cx}
+                          y={cy}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          transform={
+                            localOffcutAngle !== 0
+                              ? `rotate(${localOffcutAngle}, ${cx}, ${cy})`
+                              : undefined
+                          }
+                          fill={offcut.reusable ? '#34d399' : '#94a3b8'}
+                          fontSize={offcutFSize}
+                          fontWeight="bold"
+                          fontFamily="monospace"
                         >
-                          {Math.round(offcut.length)} × {Math.round(offcut.width)}{' '}
-                          mm
-                        </tspan>
-                      </text>
-                    )}
+                          <tspan x={cx} dy="-0.5em">
+                            {offcut.reusable ? 'STOCK ATELIER' : 'PERTE'}
+                          </tspan>
+                          <tspan
+                            x={cx}
+                            dy="1.25em"
+                            fontSize="0.85em"
+                            fontWeight="normal"
+                          >
+                            {Math.round(offcut.length)} × {Math.round(offcut.width)}{' '}
+                            mm
+                          </tspan>
+                        </text>
+                      );
+                    })()}
                   </g>
                 );
               })}
@@ -1404,66 +1424,93 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
 
                     {/* Cotations sur les arêtes haute et gauche, et nom au centre en noir pur pour contraste optimal */}
                     <g className="pointer-events-none select-none">
-                      {/* 1. Cote sur l'arête haute (largeur) */}
-                      {pw >= 28 && (
-                        <text
-                          x={px + pw / 2}
-                          y={py + fontSizeDim * 1.15}
-                          textAnchor="middle"
-                          fill="#0f172a"
-                          fontSize={fontSizeDim}
-                          fontWeight="bold"
-                          fontFamily="monospace"
-                        >
-                          {pw >= 55 ? `${topDim} mm` : `${topDim}`}
-                        </text>
-                      )}
+                      {/* 1. Cote sur l'arête haute (largeur locale, toujours orientée lisiblement sur écran) */}
+                      {pw >= 28 && (() => {
+                        const isTopEdgeVerticalOnScreen = isRotated90or270;
+                        const targetTopEdgeAngle = isTopEdgeVerticalOnScreen ? vertScreenAngle : 0;
+                        const localTopEdgeAngle = getLocalAngle(targetTopEdgeAngle);
+                        const cxTop = px + pw / 2;
+                        const cyTop = py + fontSizeDim * 0.9;
 
-                      {/* 2. Cote sur l'arête gauche (hauteur, verticale dans le sens de la longueur) */}
-                      {ph >= 28 && (
-                        <text
-                          x={px + fontSizeDim * 1.15}
-                          y={py + ph / 2}
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          transform={`rotate(${vertTextAngle}, ${px + fontSizeDim * 1.15}, ${py + ph / 2})`}
-                          fill="#0f172a"
-                          fontSize={fontSizeDim}
-                          fontWeight="bold"
-                          fontFamily="monospace"
-                        >
-                          {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
-                        </text>
-                      )}
+                        return (
+                          <text
+                            x={cxTop}
+                            y={cyTop}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            transform={
+                              localTopEdgeAngle !== 0
+                                ? `rotate(${localTopEdgeAngle}, ${cxTop}, ${cyTop})`
+                                : undefined
+                            }
+                            fill="#0f172a"
+                            fontSize={fontSizeDim}
+                            fontWeight="bold"
+                            fontFamily="monospace"
+                          >
+                            {pw >= 55 ? `${topDim} mm` : `${topDim}`}
+                          </text>
+                        );
+                      })()}
 
-                      {/* 3. Nom de la pièce et destination au centre (toujours dans le sens de la plus grande longueur de chaque coupe) */}
+                      {/* 2. Cote sur l'arête gauche (hauteur locale, toujours orientée lisiblement sur écran) */}
+                      {ph >= 28 && (() => {
+                        const isLeftEdgeVerticalOnScreen = !isRotated90or270;
+                        const targetLeftEdgeAngle = isLeftEdgeVerticalOnScreen ? vertScreenAngle : 0;
+                        const localLeftEdgeAngle = getLocalAngle(targetLeftEdgeAngle);
+                        const cxLeft = px + fontSizeDim * 0.9;
+                        const cyLeft = py + ph / 2;
+
+                        return (
+                          <text
+                            x={cxLeft}
+                            y={cyLeft}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            transform={
+                              localLeftEdgeAngle !== 0
+                                ? `rotate(${localLeftEdgeAngle}, ${cxLeft}, ${cyLeft})`
+                                : undefined
+                            }
+                            fill="#0f172a"
+                            fontSize={fontSizeDim}
+                            fontWeight="bold"
+                            fontFamily="monospace"
+                          >
+                            {ph >= 55 ? `${leftDim} mm` : `${leftDim}`}
+                          </text>
+                        );
+                      })()}
+
+                      {/* 3. Nom de la pièce et destination au centre (toujours dans le sens de la plus grande longueur sur écran et lisible à l'endroit) */}
                       {pw >= 28 && ph >= 28 && (() => {
-                        // Toujours orienter le texte dans le sens de la plus grande longueur de la coupe
-                        const isVertical = ph > pw;
+                        const sw = isRotated90or270 ? ph : pw;
+                        const sh = isRotated90or270 ? pw : ph;
+                        const isPieceVerticalOnScreen = sh > sw;
+                        const targetPieceAngle = isPieceVerticalOnScreen ? vertScreenAngle : 0;
+                        const localPieceAngle = getLocalAngle(targetPieceAngle);
 
-                        const effTitleFSize = isVertical
-                          ? Math.min(34, Math.max(16, Math.min(ph / 10, pw / 4.8)))
-                          : Math.min(36, Math.max(16, Math.min(pw / 9, ph / 4.8)));
+                        const maxScreenDim = Math.max(sw, sh);
+                        const minScreenDim = Math.min(sw, sh);
 
-                        const cx =
-                          isVertical && pw >= 65
-                            ? px + (pw + fontSizeDim * 1.3) / 2
-                            : px + pw / 2;
-                        const cy =
-                          pw >= 28 && ph >= 65
-                            ? py + (ph + fontSizeDim * 1.3) / 2
-                            : py + ph / 2;
-                        // Longueur disponible dans le sens de la plus grande dimension de la coupe
+                        const effTitleFSize = isPieceVerticalOnScreen
+                          ? Math.min(34, Math.max(16, Math.min(maxScreenDim / 10, minScreenDim / 4.8)))
+                          : Math.min(36, Math.max(16, Math.min(maxScreenDim / 9, minScreenDim / 4.8)));
+
+                        const cx = pw >= 60 ? px + (pw + fontSizeDim * 0.9) / 2 : px + pw / 2;
+                        const cy = ph >= 60 ? py + (ph + fontSizeDim * 0.9) / 2 : py + ph / 2;
+
+                        // Longueur disponible dans le sens du texte sur écran
                         const availLength = Math.max(
                           24,
-                          isVertical ? ph - 36 : pw - 40
+                          maxScreenDim - 40
                         );
                         // Réduction automatique de la police pour afficher le nom complet
-                            const fitLen = (isMixedPanel || isFullscreen) && pieceCabinet
-                              ? Math.max(pieceCabinet.length + 2, piecePart.length)
-                              : piece.name.length;
-                            const fitFSize = Math.max(6, Math.min(effTitleFSize, availLength / (Math.max(1, fitLen) * 0.6)));
-                            const maxChars = Math.max(5, Math.floor(availLength / (fitFSize * 0.6)));
+                        const fitLen = (isMixedPanel || isFullscreen) && pieceCabinet
+                          ? Math.max(pieceCabinet.length + 2, piecePart.length)
+                          : piece.name.length;
+                        const fitFSize = Math.max(6, Math.min(effTitleFSize, availLength / (Math.max(1, fitLen) * 0.6)));
+                        const maxChars = Math.max(5, Math.floor(availLength / (fitFSize * 0.6)));
 
                         const displayPieceName =
                           piece.name.length > maxChars
@@ -1482,8 +1529,8 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
 
                         const showTwoLines =
                           (isMixedPanel || isFullscreen) &&
-                          pieceCabinet &&
-                          (isVertical ? pw >= 45 : ph >= 48);
+                          Boolean(pieceCabinet) &&
+                          minScreenDim >= 45;
 
                         return (
                           <text
@@ -1491,7 +1538,7 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                             y={cy}
                             textAnchor="middle"
                             dominantBaseline="middle"
-                            transform={isVertical ? `rotate(${vertTextAngle}, ${cx}, ${cy})` : undefined}
+                            transform={localPieceAngle !== 0 ? `rotate(${localPieceAngle}, ${cx}, ${cy})` : undefined}
                             fill="#0f172a"
                             fontSize={fitFSize}
                             fontWeight="bold"
@@ -1546,17 +1593,33 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 stroke="#94a3b8"
                 strokeWidth="2"
               />
-              <text
-                x={panelWidthDisplay / 2}
-                y="-28"
-                textAnchor="middle"
-                fill="#f1f5f9"
-                fontSize="22"
-                fontWeight="bold"
-                fontFamily="monospace"
-              >
-                {panelWidthDisplay} mm
-              </text>
+              {(() => {
+                const isTopArrowVerticalOnScreen = isRotated90or270;
+                const targetTopArrowAngle = isTopArrowVerticalOnScreen ? vertScreenAngle : 0;
+                const localTopArrowAngle = getLocalAngle(targetTopArrowAngle);
+                const cxTopArrow = panelWidthDisplay / 2;
+                const cyTopArrow = -34;
+
+                return (
+                  <text
+                    x={cxTopArrow}
+                    y={cyTopArrow}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill="#f1f5f9"
+                    fontSize="22"
+                    fontWeight="bold"
+                    fontFamily="monospace"
+                    transform={
+                      localTopArrowAngle !== 0
+                        ? `rotate(${localTopArrowAngle}, ${cxTopArrow}, ${cyTopArrow})`
+                        : undefined
+                    }
+                  >
+                    {panelWidthDisplay} mm
+                  </text>
+                );
+              })()}
 
               {/* Flèche Longueur Verticale (Gauche) */}
               <line
@@ -1576,19 +1639,33 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 stroke="#94a3b8"
                 strokeWidth="2"
               />
-              <text
-                x="-28"
-                y={panelHeightDisplay / 2}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill="#f1f5f9"
-                fontSize="22"
-                fontWeight="bold"
-                fontFamily="monospace"
-                transform={`rotate(${vertTextAngle}, -28, ${panelHeightDisplay / 2})`}
-              >
-                {panelHeightDisplay} mm
-              </text>
+              {(() => {
+                const isLeftArrowVerticalOnScreen = !isRotated90or270;
+                const targetLeftArrowAngle = isLeftArrowVerticalOnScreen ? vertScreenAngle : 0;
+                const localLeftArrowAngle = getLocalAngle(targetLeftArrowAngle);
+                const cxLeftArrow = -34;
+                const cyLeftArrow = panelHeightDisplay / 2;
+
+                return (
+                  <text
+                    x={cxLeftArrow}
+                    y={cyLeftArrow}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill="#f1f5f9"
+                    fontSize="22"
+                    fontWeight="bold"
+                    fontFamily="monospace"
+                    transform={
+                      localLeftArrowAngle !== 0
+                        ? `rotate(${localLeftArrowAngle}, ${cxLeftArrow}, ${cyLeftArrow})`
+                        : undefined
+                    }
+                  >
+                    {panelHeightDisplay} mm
+                  </text>
+                );
+              })()}
             </g>
           </svg>
         </div>
