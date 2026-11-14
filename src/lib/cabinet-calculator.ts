@@ -458,7 +458,19 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   }
 
   // 4. Étagères intérieures (tenant compte du fond encastré ou non + marge fixe de -5 mm)
-  if (shelvesCount > 0) {
+  const facadeShelvesCount = config.facadeItems
+    ? config.facadeItems.reduce(
+        (sum, it) =>
+          sum +
+          (it.type === 'porte' && typeof it.shelvesCount === 'number' && it.shelvesCount > 0
+            ? it.shelvesCount
+            : 0),
+        0
+      )
+    : 0;
+  const effectiveShelvesCount = facadeShelvesCount > 0 ? facadeShelvesCount : shelvesCount;
+
+  if (effectiveShelvesCount > 0) {
     let shelfWidth = interiorWidth;
     let shelfFormula = `Largeur intérieure : ${width} - (2 × ${thickness}) = ${shelfWidth} mm`;
 
@@ -481,7 +493,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       : `${structuralDepth} - ${shelfMargin} (marge) = ${shelfDepth} mm`;
 
     const compartmentsCount = partitionsCount > 0 ? partitionsCount + 1 : 1;
-    const shelvesPerCabinet = shelvesCount * compartmentsCount;
+    const shelvesPerCabinet = effectiveShelvesCount * compartmentsCount;
     const totalShelvesQty = shelvesPerCabinet * cabinetCount;
 
     pieces.push({
@@ -489,8 +501,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       partId: 'shelves',
       role:
         partitionsCount > 0
-          ? `Étagères (${shelvesCount} par compartiment × ${compartmentsCount} = ${shelvesPerCabinet} pcs, ${isBackGrooved ? `fond encastré -${effectiveBackThickness} mm, ` : ''}marge -${shelfMargin} mm)`
-          : `Étagère(s) (${shelvesCount} pcs) [${isBackGrooved ? `Fond encastré -${effectiveBackThickness} mm, ` : ''}Marge -${shelfMargin} mm]`,
+          ? `Étagères (${effectiveShelvesCount} par compartiment × ${compartmentsCount} = ${shelvesPerCabinet} pcs, ${isBackGrooved ? `fond encastré -${effectiveBackThickness} mm, ` : ''}marge -${shelfMargin} mm)`
+          : `Étagère(s) (${effectiveShelvesCount} pcs) [${isBackGrooved ? `Fond encastré -${effectiveBackThickness} mm, ` : ''}Marge -${shelfMargin} mm]`,
       description: `${config.name} - Étagère`,
       formula: cabinetCount > 1
         ? `${shelfFormula} × Profondeur (${depthFormulaDesc}) [${shelvesPerCabinet} × ${cabinetCount} = ${totalShelvesQty} pcs]`

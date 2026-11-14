@@ -20,7 +20,10 @@ import {
   Check,
   Pencil,
   Ruler,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
+import { Cabinet3DViewer } from '@/components/Cabinet3DViewer';
 import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
   CabinetConfig,
@@ -44,6 +47,7 @@ interface FacadeDraftItem {
   type: FacadeItemType;
   height: string;
   drawerHeight?: string;
+  shelvesCount?: string;
 }
 
 /** Ajuste la liste des composants de façade au nombre demandé en conservant la saisie existante */
@@ -55,6 +59,7 @@ function resizeFacadeDraft(items: FacadeDraftItem[], count: number): FacadeDraft
     type: 'porte' as FacadeItemType,
     height: '',
     drawerHeight: '',
+    shelvesCount: '',
   }));
   return [...items, ...added];
 }
@@ -275,6 +280,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     drawerGrooveDepth: 6,
   });
   const [bulkMaterial, setBulkMaterial] = useState('');
+  const [previewMode, setPreviewMode] = useState<'3d' | '2d'>('3d');
+  const [show3DFullscreenModal, setShow3DFullscreenModal] = useState(false);
   const autoOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -492,6 +499,10 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   it.drawerHeight !== null && it.drawerHeight !== undefined && it.drawerHeight > 0
                     ? String(it.drawerHeight)
                     : '',
+                shelvesCount:
+                  it.shelvesCount !== null && it.shelvesCount !== undefined && it.shelvesCount > 0
+                    ? String(it.shelvesCount)
+                    : '',
               }))
             : resizeFacadeDraft([], compCount),
         hasDrawers: !!c.hasDrawers,
@@ -686,6 +697,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 height: it.height && it.height > 0 ? String(it.height) : '',
                 drawerHeight:
                   it.drawerHeight && it.drawerHeight > 0 ? String(it.drawerHeight) : '',
+                shelvesCount:
+                  it.shelvesCount && it.shelvesCount > 0 ? String(it.shelvesCount) : '',
               }))
             : null;
         const candidateSlideLen = config.drawerSlideLength || prev.drawerSlideLength || 0;
@@ -835,6 +848,19 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     });
   };
 
+  // Déplacement vertical d'un élément de façade (Monter vers le haut / Descendre vers le bas)
+  const moveFacadeItem = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= compositionState.facadeItems.length) return;
+    setCompositionState((prev) => {
+      const newItems = [...prev.facadeItems];
+      const temp = newItems[index];
+      newItems[index] = newItems[targetIndex];
+      newItems[targetIndex] = temp;
+      return { ...prev, facadeItems: newItems };
+    });
+  };
+
   const handleValidateComposition = () => {
     if (compositionState.hasFacades && facadeLayout.error) return;
     const useDetailed = compositionState.hasFacades;
@@ -842,6 +868,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       ? compositionState.facadeItems.map((it, i) => {
           const dh = parseFloat(it.drawerHeight || '');
           const resolvedH = facadeLayout.heights[i] || null;
+          const sc = it.type === 'porte' && it.shelvesCount ? parseInt(it.shelvesCount, 10) : undefined;
           return {
             type: it.type,
             height: i === facadeLayout.autoIndex ? null : resolvedH,
@@ -851,6 +878,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   ? Math.min(dh, resolvedH)
                   : dh
                 : null,
+            shelvesCount: typeof sc === 'number' && !isNaN(sc) && sc > 0 ? sc : undefined,
           };
         })
       : undefined;
@@ -2771,221 +2799,257 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
               </div>
             </div>
 
-            {/* Colonne Droite : Visualisation 2D & Tableau des débits calculés (5 colonnes) */}
+            {/* Colonne Droite : Visualisation 3D / 2D & Tableau des débits calculés (5 colonnes) */}
             <div className="lg:col-span-5 space-y-4">
-              {/* Schéma de principe 2D interactif */}
-              <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex flex-col items-center">
-                <div className="w-full flex items-center justify-between text-xs text-slate-400 mb-2">
-                  <span className="font-bold text-white">Schéma d&apos;assemblage</span>
-                  <span className="font-mono text-[11px] text-amber-400">
+              {/* Carte de visualisation interactive : Sélecteur 3D Assemblé / 2D Wireframe */}
+              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex flex-col space-y-2">
+                <div className="w-full flex items-center justify-between text-xs mb-1">
+                  <div className="flex items-center bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode('3d')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        previewMode === '3d'
+                          ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Box className="w-3.5 h-3.5" />
+                      <span>Vue 3D Assemblée</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode('2d')}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        previewMode === '2d'
+                          ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Schéma 2D</span>
+                    </button>
+                  </div>
+
+                  <span className="font-mono text-[11px] text-amber-400 font-bold">
                     {hasValidDimensions
                       ? `${config.height} × ${config.width} × ${config.depth} mm`
                       : 'Dimensions à renseigner'}
                   </span>
                 </div>
 
-                {/* SVG WIREFRAME DU CAISSON */}
-                <svg
-                  viewBox="0 0 240 200"
-                  className="w-full max-w-[240px] h-44 border border-slate-800/80 rounded-xl bg-slate-900/60 p-2 shadow-inner"
-                >
-                  {/* Légende couleurs & Wireframe */}
-                  <g className="text-[8px] font-mono select-none">
-                    {config.assemblyType === 'top_bottom_full' ? (
-                      /* Dessus/Dessous continus */
-                      <>
-                        {/* Dessus continu */}
-                        <rect x="25" y="15" width="190" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
-                        {/* Dessous continu */}
-                        <rect x="25" y="173" width="190" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
-                        {/* Côté Gauche intérieur */}
-                        <rect x="25" y="27" width="12" height="146" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
-                        {/* Côté Droit intérieur */}
-                        <rect x="203" y="27" width="12" height="146" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
-                      </>
-                    ) : config.assemblyType === 'bottom_inside_top_over' ? (
-                      /* Mixte : Bas encastré & Dessus posé avec éventuel débord */
-                      <>
-                        {/* Plateau du haut posé sur les côtés (avec débord visualisé) */}
-                        <rect
-                          x={(config.topOverhangSides || 0) > 0 ? 15 : 25}
-                          y="15"
-                          width={(config.topOverhangSides || 0) > 0 ? 210 : 190}
-                          height="12"
-                          fill="#dcfce7"
-                          stroke="#10b981"
-                          strokeWidth="1.2"
-                          rx="2"
-                        />
-                        {/* Côté Gauche (sous le dessus) */}
-                        <rect x="25" y="27" width="12" height="158" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
-                        {/* Côté Droit (sous le dessus) */}
-                        <rect x="203" y="27" width="12" height="158" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
-                        {/* Dessous encastré entre côtés */}
-                        <rect x="37" y="173" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
-                      </>
-                    ) : (
-                      /* Côtés continus pleine hauteur (par défaut pour le schéma) */
-                      <>
-                        {/* Côté Gauche */}
-                        <rect x="25" y="15" width="12" height="170" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
-                        {/* Côté Droit */}
-                        <rect x="203" y="15" width="12" height="170" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
-                        {/* Dessus intérieur */}
-                        <rect x="37" y="15" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
-                        {/* Dessous intérieur */}
-                        <rect x="37" y="173" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
-                      </>
-                    )}
+                {previewMode === '3d' ? (
+                  <Cabinet3DViewer
+                    config={config}
+                    className="w-full"
+                    onOpenFullscreen={() => setShow3DFullscreenModal(true)}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center">
+                    {/* SVG WIREFRAME DU CAISSON */}
+                    <svg
+                      viewBox="0 0 240 200"
+                      className="w-full max-w-[240px] h-44 border border-slate-800/80 rounded-xl bg-slate-900/60 p-2 shadow-inner"
+                    >
+                      {/* Légende couleurs & Wireframe */}
+                      <g className="text-[8px] font-mono select-none">
+                        {config.assemblyType === 'top_bottom_full' ? (
+                          /* Dessus/Dessous continus */
+                          <>
+                            {/* Dessus continu */}
+                            <rect x="25" y="15" width="190" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
+                            {/* Dessous continu */}
+                            <rect x="25" y="173" width="190" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
+                            {/* Côté Gauche intérieur */}
+                            <rect x="25" y="27" width="12" height="146" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
+                            {/* Côté Droit intérieur */}
+                            <rect x="203" y="27" width="12" height="146" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
+                          </>
+                        ) : config.assemblyType === 'bottom_inside_top_over' ? (
+                          /* Mixte : Bas encastré & Dessus posé avec éventuel débord */
+                          <>
+                            {/* Plateau du haut posé sur les côtés (avec débord visualisé) */}
+                            <rect
+                              x={(config.topOverhangSides || 0) > 0 ? 15 : 25}
+                              y="15"
+                              width={(config.topOverhangSides || 0) > 0 ? 210 : 190}
+                              height="12"
+                              fill="#dcfce7"
+                              stroke="#10b981"
+                              strokeWidth="1.2"
+                              rx="2"
+                            />
+                            {/* Côté Gauche (sous le dessus) */}
+                            <rect x="25" y="27" width="12" height="158" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
+                            {/* Côté Droit (sous le dessus) */}
+                            <rect x="203" y="27" width="12" height="158" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
+                            {/* Dessous encastré entre côtés */}
+                            <rect x="37" y="173" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
+                          </>
+                        ) : (
+                          /* Côtés continus pleine hauteur (par défaut pour le schéma) */
+                          <>
+                            {/* Côté Gauche */}
+                            <rect x="25" y="15" width="12" height="170" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
+                            {/* Côté Droit */}
+                            <rect x="203" y="15" width="12" height="170" fill="#dbeafe" stroke="#3b82f6" strokeWidth="1" rx="2" />
+                            {/* Dessus intérieur */}
+                            <rect x="37" y="15" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
+                            {/* Dessous intérieur */}
+                            <rect x="37" y="173" width="166" height="12" fill="#dcfce7" stroke="#10b981" strokeWidth="1" rx="2" />
+                          </>
+                        )}
 
-                    {/* Séparations verticales intermédiaires (de 1 à 4) */}
-                    {config.partitionsCount > 0 &&
-                      Array.from({ length: Math.max(0, config.partitionsCount) }).map((_, pIdx) => {
-                        const P = Math.max(0, config.partitionsCount);
-                        const partThickness = P >= 3 ? 6 : 8;
-                        const totalInteriorW = 166;
-                        const compW = (totalInteriorW - P * partThickness) / (P + 1);
-                        const partX = 37 + (pIdx + 1) * compW + pIdx * partThickness;
+                        {/* Séparations verticales intermédiaires (de 1 à 4) */}
+                        {config.partitionsCount > 0 &&
+                          Array.from({ length: Math.max(0, config.partitionsCount) }).map((_, pIdx) => {
+                            const P = Math.max(0, config.partitionsCount);
+                            const partThickness = P >= 3 ? 6 : 8;
+                            const totalInteriorW = 166;
+                            const compW = (totalInteriorW - P * partThickness) / (P + 1);
+                            const partX = 37 + (pIdx + 1) * compW + pIdx * partThickness;
 
-                        return (
+                            return (
+                              <rect
+                                key={`part-${pIdx}`}
+                                x={partX}
+                                y="27"
+                                width={partThickness}
+                                height="146"
+                                fill="#f3e8ff"
+                                stroke="#8b5cf6"
+                                strokeWidth="1"
+                                rx="1.5"
+                              />
+                            );
+                          })}
+
+                        {/* Étagères intérieures réparties dans chaque compartiment */}
+                        {config.shelvesCount > 0 &&
+                          Array.from({ length: Math.min(3, Math.max(0, config.shelvesCount)) }).map((_, i) => {
+                            const sCount = Math.min(3, Math.max(0, config.shelvesCount));
+                            const step = 146 / (sCount + 1);
+                            const y = 27 + step * (i + 1);
+                            const P = Math.max(0, config.partitionsCount);
+
+                            if (P > 0) {
+                              const numComp = P + 1;
+                              const partThickness = P >= 3 ? 6 : 8;
+                              const totalInteriorW = 166;
+                              const compW = (totalInteriorW - P * partThickness) / numComp;
+
+                              return (
+                                <g key={`shelves-row-${i}`}>
+                                  {Array.from({ length: numComp }).map((__, cIdx) => {
+                                    const compX = 37 + cIdx * (compW + partThickness);
+                                    return (
+                                      <rect
+                                        key={`shelf-${i}-${cIdx}`}
+                                        x={compX}
+                                        y={y}
+                                        width={compW}
+                                        height="6"
+                                        fill="#fef3c7"
+                                        stroke="#f59e0b"
+                                        strokeWidth="0.8"
+                                        rx="1"
+                                      />
+                                    );
+                                  })}
+                                </g>
+                              );
+                            }
+
+                            return (
+                              <rect
+                                key={`shelf-full-${i}`}
+                                x="37"
+                                y={y}
+                                width="166"
+                                height="7"
+                                fill="#fef3c7"
+                                stroke="#f59e0b"
+                                strokeWidth="0.8"
+                                rx="1.5"
+                              />
+                            );
+                          })}
+
+                        {/* Fond arrière représenté par trame */}
+                        {(config.backType === 'applique' || config.backType === 'groove') && (
                           <rect
-                            key={`part-${pIdx}`}
-                            x={partX}
-                            y="27"
-                            width={partThickness}
-                            height="146"
-                            fill="#f3e8ff"
-                            stroke="#8b5cf6"
-                            strokeWidth="1"
-                            rx="1.5"
-                          />
-                        );
-                      })}
-
-                    {/* Étagères intérieures réparties dans chaque compartiment */}
-                    {config.shelvesCount > 0 &&
-                      Array.from({ length: Math.min(3, Math.max(0, config.shelvesCount)) }).map((_, i) => {
-                        const sCount = Math.min(3, Math.max(0, config.shelvesCount));
-                        const step = 146 / (sCount + 1);
-                        const y = 27 + step * (i + 1);
-                        const P = Math.max(0, config.partitionsCount);
-
-                        if (P > 0) {
-                          const numComp = P + 1;
-                          const partThickness = P >= 3 ? 6 : 8;
-                          const totalInteriorW = 166;
-                          const compW = (totalInteriorW - P * partThickness) / numComp;
-
-                          return (
-                            <g key={`shelves-row-${i}`}>
-                              {Array.from({ length: numComp }).map((__, cIdx) => {
-                                const compX = 37 + cIdx * (compW + partThickness);
-                                return (
-                                  <rect
-                                    key={`shelf-${i}-${cIdx}`}
-                                    x={compX}
-                                    y={y}
-                                    width={compW}
-                                    height="6"
-                                    fill="#fef3c7"
-                                    stroke="#f59e0b"
-                                    strokeWidth="0.8"
-                                    rx="1"
-                                  />
-                                );
-                              })}
-                            </g>
-                          );
-                        }
-
-                        return (
-                          <rect
-                            key={`shelf-full-${i}`}
                             x="37"
-                            y={y}
+                            y="27"
                             width="166"
-                            height="7"
-                            fill="#fef3c7"
-                            stroke="#f59e0b"
-                            strokeWidth="0.8"
-                            rx="1.5"
+                            height="146"
+                            fill="none"
+                            stroke="#fce7f3"
+                            strokeWidth="1.2"
+                            strokeDasharray="4 3"
+                            opacity="0.8"
                           />
-                        );
-                      })}
+                        )}
 
-                    {/* Fond arrière représenté par trame */}
-                    {(config.backType === 'applique' || config.backType === 'groove') && (
-                      <rect
-                        x="37"
-                        y="27"
-                        width="166"
-                        height="146"
-                        fill="none"
-                        stroke="#fce7f3"
-                        strokeWidth="1.2"
-                        strokeDasharray="4 3"
-                        opacity="0.8"
-                      />
-                    )}
+                        {/* Pieds sous le caisson */}
+                        {config.hasFeet && (
+                          <g>
+                            <rect x="35" y="185" width="16" height="11" fill="#f59e0b" stroke="#d97706" strokeWidth="1" rx="1.5" />
+                            <rect x="189" y="185" width="16" height="11" fill="#f59e0b" stroke="#d97706" strokeWidth="1" rx="1.5" />
+                            <text x="120" y="194" fill="#f59e0b" textAnchor="middle" fontSize="7" fontWeight="bold">
+                              Pieds: {config.feetHeight || '--'} mm
+                            </text>
+                          </g>
+                        )}
 
-                    {/* Pieds sous le caisson */}
-                    {config.hasFeet && (
-                      <g>
-                        <rect x="35" y="185" width="16" height="11" fill="#f59e0b" stroke="#d97706" strokeWidth="1" rx="1.5" />
-                        <rect x="189" y="185" width="16" height="11" fill="#f59e0b" stroke="#d97706" strokeWidth="1" rx="1.5" />
-                        <text x="120" y="194" fill="#f59e0b" textAnchor="middle" fontSize="7" fontWeight="bold">
-                          Pieds: {config.feetHeight || '--'} mm
+                        {/* Cotes de repère */}
+                        <text x="120" y="9" fill="#94a3b8" textAnchor="middle">
+                          {config.width > 0
+                            ? config.assemblyType === 'bottom_inside_top_over' && (config.topOverhangSides || 0) > 0
+                              ? `L corps = ${config.width} (Haut = ${config.width + 2 * (config.topOverhangSides || 0)} mm)`
+                              : `L = ${config.width} mm`
+                            : 'L = -- mm'}
+                        </text>
+                        <text
+                          x="10"
+                          y="105"
+                          fill="#94a3b8"
+                          textAnchor="middle"
+                          transform="rotate(-90 10 105)"
+                        >
+                          {config.height > 0
+                            ? config.hasFeet && config.feetHeight
+                              ? `H = ${config.height} mm (Corps : ${config.height - config.feetHeight} mm)`
+                              : `H = ${config.height} mm`
+                            : 'H = -- mm'}
                         </text>
                       </g>
-                    )}
+                    </svg>
 
-                    {/* Cotes de repère */}
-                    <text x="120" y="9" fill="#94a3b8" textAnchor="middle">
-                      {config.width > 0
-                        ? config.assemblyType === 'bottom_inside_top_over' && (config.topOverhangSides || 0) > 0
-                          ? `L corps = ${config.width} (Haut = ${config.width + 2 * (config.topOverhangSides || 0)} mm)`
-                          : `L = ${config.width} mm`
-                        : 'L = -- mm'}
-                    </text>
-                    <text
-                      x="10"
-                      y="105"
-                      fill="#94a3b8"
-                      textAnchor="middle"
-                      transform="rotate(-90 10 105)"
-                    >
-                      {config.height > 0
-                        ? config.hasFeet && config.feetHeight
-                          ? `H = ${config.height} mm (Corps : ${config.height - config.feetHeight} mm)`
-                          : `H = ${config.height} mm`
-                        : 'H = -- mm'}
-                    </text>
-                  </g>
-                </svg>
-
-                {/* Légende rapide */}
-                <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-[10px] text-slate-400">
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded bg-blue-500" />
-                    <span>Côtés</span>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded bg-emerald-500" />
-                    <span>Haut/Bas</span>
-                  </span>
-                  {config.shelvesCount > 0 && (
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded bg-amber-500" />
-                      <span>Étagères</span>
-                    </span>
-                  )}
-                  {(config.backType === 'applique' || config.backType === 'groove') && (
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded bg-pink-500" />
-                      <span>Fond</span>
-                    </span>
-                  )}
-                </div>
+                    {/* Légende rapide */}
+                    <div className="flex flex-wrap items-center justify-center gap-3 mt-2 text-[10px] text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded bg-blue-500" />
+                        <span>Côtés</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 rounded bg-emerald-500" />
+                        <span>Haut/Bas</span>
+                      </span>
+                      {config.shelvesCount > 0 && (
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded bg-amber-500" />
+                          <span>Étagères</span>
+                        </span>
+                      )}
+                      {(config.backType === 'applique' || config.backType === 'groove') && (
+                        <span className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded bg-pink-500" />
+                          <span>Fond</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Tableau Récapitulatif des Débits Calculés */}
@@ -3659,6 +3723,66 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         hauteur soit calculée automatiquement. La hauteur des tiroirs est toujours obligatoire.
                       </p>
 
+                      {/* Aperçu schématique de l'empilement vertical (Haut en Bas) */}
+                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+                          <span className="flex items-center gap-1.5 text-amber-300">
+                            <Layers className="w-3.5 h-3.5" />
+                            Aperçu de l&apos;empilement réel (Haut → Bas)
+                          </span>
+                          <span className="font-mono text-[10px] text-slate-500">
+                            {compositionState.facadesCount} élément{compositionState.facadesCount > 1 ? 's' : ''} empilé{compositionState.facadesCount > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1 p-2 bg-slate-900/60 rounded-lg border border-slate-800/80">
+                          {compositionState.facadeItems.map((item, idx) => {
+                            const resH = facadeLayout.heights[idx] || 0;
+                            const isDoor = item.type === 'porte';
+                            const sCount = item.shelvesCount ? parseInt(item.shelvesCount, 10) : 0;
+                            return (
+                              <div
+                                key={`mini-stack-${idx}`}
+                                className={`px-3 py-1.5 rounded-md border flex items-center justify-between text-xs font-mono font-bold transition-all ${
+                                  isDoor
+                                    ? 'bg-blue-500/15 border-blue-500/30 text-blue-200'
+                                    : 'bg-amber-500/15 border-amber-500/30 text-amber-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-950 text-slate-400 font-sans font-bold">
+                                    {idx === 0
+                                      ? 'Haut'
+                                      : idx === compositionState.facadeItems.length - 1
+                                      ? 'Bas'
+                                      : 'Milieu'}
+                                  </span>
+                                  <span>{isDoor ? '🚪 Porte' : '🗄️ Façade tiroir'}</span>
+                                  {isDoor && sCount > 0 && (
+                                    <span className="text-[10px] font-sans text-amber-300 font-normal">
+                                      ({sCount} étagère{sCount > 1 ? 's' : ''})
+                                    </span>
+                                  )}
+                                  {!isDoor && item.drawerHeight && (
+                                    <span className="text-[10px] font-sans text-amber-300 font-normal">
+                                      (bac {item.drawerHeight} mm)
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-white">
+                                  {resH > 0 ? `${resH} mm` : 'Auto'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {config.hasFeet && config.feetHeight && (
+                            <div className="px-3 py-1 rounded-md bg-slate-950 border border-amber-500/30 text-amber-400 text-[10px] font-mono flex items-center justify-between">
+                              <span>🦶 Pieds sous caisson</span>
+                              <span>{config.feetHeight} mm</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       <div className="space-y-1.5">
                         {compositionState.facadeItems.map((item, idx) => {
                           const isAuto = idx === facadeLayout.autoIndex;
@@ -3676,10 +3800,47 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                               key={idx}
                               className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2"
                             >
-                              <div className="grid grid-cols-[1.5rem_1fr_1fr_5.5rem] items-center gap-2">
-                                <span className="text-[11px] font-mono font-bold text-slate-500 text-center">
-                                  {idx + 1}
-                                </span>
+                              <div className="grid grid-cols-[2.8rem_1fr_1fr_5.5rem] items-center gap-2">
+                                <div className="flex flex-col items-center gap-0.5">
+                                  <button
+                                    type="button"
+                                    disabled={idx === 0}
+                                    onClick={() => moveFacadeItem(idx, -1)}
+                                    className={`p-0.5 rounded transition-colors ${
+                                      idx === 0
+                                        ? 'text-slate-700 cursor-not-allowed opacity-30'
+                                        : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800 active:scale-90'
+                                    }`}
+                                    title="Monter cet élément vers le haut"
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <div className="flex items-center gap-1 leading-none">
+                                    <span className="text-[10px] font-mono font-bold text-amber-400">
+                                      #{idx + 1}
+                                    </span>
+                                  </div>
+                                  <span className="text-[8px] font-semibold text-slate-500 uppercase leading-none">
+                                    {idx === 0
+                                      ? 'Haut'
+                                      : idx === compositionState.facadeItems.length - 1
+                                      ? 'Bas'
+                                      : 'Milieu'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={idx === compositionState.facadeItems.length - 1}
+                                    onClick={() => moveFacadeItem(idx, 1)}
+                                    className={`p-0.5 rounded transition-colors ${
+                                      idx === compositionState.facadeItems.length - 1
+                                        ? 'text-slate-700 cursor-not-allowed opacity-30'
+                                        : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800 active:scale-90'
+                                    }`}
+                                    title="Descendre cet élément vers le bas"
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                                 <select
                                   value={item.type}
                                   onChange={(e) =>
@@ -4012,6 +4173,45 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                   </div>
                                 </div>
                               )}
+
+                              {/* Option pour Porte : Étagères intérieures derrière cette porte */}
+                              {item.type === 'porte' && (
+                                <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 bg-slate-950/60 p-2.5 rounded-lg animate-in fade-in duration-150">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <Layers className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                    <span className="text-[11px] font-semibold text-slate-300">
+                                      Étagères intérieures dans ce compartiment :
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    {[0, 1, 2, 3, 4].map((sCount) => {
+                                      const isSel =
+                                        (item.shelvesCount || '0') === String(sCount);
+                                      return (
+                                        <button
+                                          key={`shelf-opt-${idx}-${sCount}`}
+                                          type="button"
+                                          onClick={() =>
+                                            updateFacadeItem(idx, {
+                                              shelvesCount: String(sCount),
+                                            })
+                                          }
+                                          className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold transition-all ${
+                                            isSel
+                                              ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                              : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-700'
+                                          }`}
+                                        >
+                                          {sCount}
+                                        </button>
+                                      );
+                                    })}
+                                    <span className="text-[10px] text-slate-500 font-mono ml-1">
+                                      étagère{parseInt(item.shelvesCount || '0', 10) > 1 ? 's' : ''}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -4219,6 +4419,53 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           </div>
         </div>
       )}
+      {/* MODALE PLEIN ÉCRAN : DESSIN 3D DU CAISSON ASSEMBLÉ */}
+      {show3DFullscreenModal && (
+        <div className="fixed inset-0 z-[12000] flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-150">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="bg-slate-950 border border-slate-700 w-full max-w-6xl h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-white"
+          >
+            <div className="flex items-center justify-between p-3.5 border-b border-slate-800 bg-slate-900/90">
+              <div className="flex items-center gap-2.5">
+                <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                  <Box className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>{config.name || 'Caisson assemblé'} — Dessin 3D &amp; Aménagement</span>
+                    {config.hasFeet && (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
+                        Pieds {config.feetHeight || '--'} mm
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] font-mono text-slate-400">
+                    {config.height} × {config.width} × {config.depth} mm • Épaisseur {config.thickness} mm
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShow3DFullscreenModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Fermer la vue plein écran"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 p-2 min-h-0">
+              <Cabinet3DViewer
+                config={config}
+                className="w-full h-full"
+                showControls={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODALE D'ACCORD UTILISATEUR : Enregistrement définitif d'une matière personnalisée */}
       {materialToConfirmSave && (
         <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150">

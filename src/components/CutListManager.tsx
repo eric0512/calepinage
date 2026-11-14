@@ -16,8 +16,10 @@ import {
   RefreshCw,
   Lock,
   Sparkles,
+  Box,
 } from 'lucide-react';
 import { CabinetAssistantModal } from '@/components/CabinetAssistantModal';
+import { Cabinet3DViewer } from '@/components/Cabinet3DViewer';
 import {
   inferCabinetConfigFromItems,
   recalculateCabinetItems,
@@ -227,6 +229,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
 
   // Caisson actuellement sélectionné pour modification complète dans l'assistant IA
   const [editingCabinetInAssistant, setEditingCabinetInAssistant] = useState<string | null>(null);
+  // Caisson actuellement visualisé en 3D
+  const [viewing3DCabinet, setViewing3DCabinet] = useState<string | null>(null);
 
   // État d'édition des dimensions d'un caisson (verrouillé par défaut tant qu'on n'appuie pas sur le logo)
   const [editingCabinet, setEditingCabinet] = useState<string | null>(null);
@@ -394,17 +398,17 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
 
     const cabDimsChanged = Boolean(
       initialEditState &&
-        (newH !== initialEditState.height ||
-          newW !== initialEditState.width ||
-          newD !== initialEditState.depth)
+      (newH !== initialEditState.height ||
+        newW !== initialEditState.width ||
+        newD !== initialEditState.depth)
     );
 
     const pieceDimsChanged = Boolean(
       initialEditState &&
-        initialEditState.itemsSnapshot.some((orig) => {
-          const curr = items.find((i) => i.id === orig.id);
-          return curr && (curr.length !== orig.length || curr.width !== orig.width);
-        })
+      initialEditState.itemsSnapshot.some((orig) => {
+        const curr = items.find((i) => i.id === orig.id);
+        return curr && (curr.length !== orig.length || curr.width !== orig.width);
+      })
     );
 
     let updatedAllItems = items;
@@ -467,14 +471,14 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
       finalName === baseName
         ? newPieces
         : newPieces.map((p) => ({
-            ...p,
-            name: p.name.startsWith(`${baseName} - `)
-              ? `${finalName} - ${p.name.slice(baseName.length + 3)}`
-              : p.name,
-            cabinetConfig: p.cabinetConfig
-              ? { ...p.cabinetConfig, name: finalName }
-              : undefined,
-          }));
+          ...p,
+          name: p.name.startsWith(`${baseName} - `)
+            ? `${finalName} - ${p.name.slice(baseName.length + 3)}`
+            : p.name,
+          cabinetConfig: p.cabinetConfig
+            ? { ...p.cabinetConfig, name: finalName }
+            : undefined,
+        }));
     onChange([...items, ...renamed]);
   };
 
@@ -497,14 +501,14 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
       finalName === baseName
         ? newPieces
         : newPieces.map((p) => ({
-            ...p,
-            name: p.name.startsWith(`${baseName} - `)
-              ? `${finalName} - ${p.name.slice(baseName.length + 3)}`
-              : p.name,
-            cabinetConfig: p.cabinetConfig
-              ? { ...p.cabinetConfig, name: finalName }
-              : undefined,
-          }));
+          ...p,
+          name: p.name.startsWith(`${baseName} - `)
+            ? `${finalName} - ${p.name.slice(baseName.length + 3)}`
+            : p.name,
+          cabinetConfig: p.cabinetConfig
+            ? { ...p.cabinetConfig, name: finalName }
+            : undefined,
+        }));
 
     const resultItems: CutItem[] = [];
     let inserted = false;
@@ -662,11 +666,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                     key={cat}
                     type="button"
                     onClick={() => setName(cat)}
-                    className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-                      name === cat
+                    className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${name === cat
                         ? 'bg-emerald-600 text-white font-medium'
                         : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
+                      }`}
                   >
                     {cat}
                   </button>
@@ -769,11 +772,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
           <button
             type="button"
             onClick={() => setCanRotate(!canRotate)}
-            className={`h-[31px] w-[31px] sm:w-9 rounded-lg border transition-colors shrink-0 flex items-center justify-center mb-px ${
-              canRotate
+            className={`h-[31px] w-[31px] sm:w-9 rounded-lg border transition-colors shrink-0 flex items-center justify-center mb-px ${canRotate
                 ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-400'
                 : 'bg-slate-800 border-slate-700 text-slate-500'
-            }`}
+              }`}
             title={
               canRotate
                 ? 'Rotation autorisée (Pas de contrainte de fil)'
@@ -818,11 +820,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                     handleCommitCabinetEdit(cab);
                   }
                 }}
-                className={`rounded-2xl border p-2 sm:p-3 space-y-3 transition-colors ${
-                  isEditingCab
+                className={`rounded-2xl border p-2 sm:p-3 space-y-3 transition-colors ${isEditingCab
                     ? 'border-amber-500/70 bg-slate-900/50 shadow-sm'
                     : 'border-slate-700/70 bg-slate-900/30'
-                }`}
+                  }`}
               >
                 {/* En-tête du meuble : Nom du caisson + Dimensions en dessous avec logo de modification à droite */}
                 <div className="px-1 pb-2 border-b border-slate-700/60 space-y-1.5">
@@ -833,18 +834,31 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                     </h3>
                     <div className="flex items-center gap-2 shrink-0">
                       {cab.cabinet !== UNASSIGNED_CABINET_LABEL && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingCabinetInAssistant(cab.cabinet);
-                            onOpenCabinetModal?.();
-                          }}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-bold transition-all shadow-sm active:scale-95"
-                          title="Modifier ce caisson dans l'Assistant IA (dimensions, séparations, étagères, façades, coulisses...)"
-                        >
-                          <Sparkles className="w-3 h-3 text-amber-400" />
-                          <span>Modifier dans l&apos;IA</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewing3DCabinet(cab.cabinet);
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/40 text-blue-300 text-[11px] font-bold transition-all shadow-sm active:scale-95"
+                            title="Visualiser le dessin 3D du caisson assemblé"
+                          >
+                            <Box className="w-3 h-3 text-blue-400" />
+                            <span>Vue 3D</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCabinetInAssistant(cab.cabinet);
+                              onOpenCabinetModal?.();
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-bold transition-all shadow-sm active:scale-95"
+                            title="Modifier ce caisson dans l'Assistant IA (dimensions, séparations, étagères, façades, coulisses...)"
+                          >
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <span>Modifier dans l&apos;IA</span>
+                          </button>
+                        </>
                       )}
                       <span className="text-[11px] text-slate-400 font-mono">
                         {cab.totalQty} pce{cab.totalQty > 1 ? 's' : ''}
@@ -884,11 +898,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                             ? 'Hauteur extérieure du caisson (mm)'
                             : 'Appuyez sur le logo à droite pour modifier les dimensions'
                         }
-                        className={`w-12 sm:w-14 px-1 py-0.5 rounded text-center text-xs font-bold transition-colors ${
-                          isEditingCab
+                        className={`w-12 sm:w-14 px-1 py-0.5 rounded text-center text-xs font-bold transition-colors ${isEditingCab
                             ? 'bg-slate-950 text-amber-300 border border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-400'
                             : 'bg-slate-800/60 text-slate-300 border border-slate-700/60 cursor-not-allowed select-none'
-                        }`}
+                          }`}
                       />
 
                       <span className="text-slate-500 text-[11px]">×</span>
@@ -918,11 +931,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                             ? 'Largeur extérieure du caisson (mm)'
                             : 'Appuyez sur le logo à droite pour modifier les dimensions'
                         }
-                        className={`w-12 sm:w-14 px-1 py-0.5 rounded text-center text-xs font-bold transition-colors ${
-                          isEditingCab
+                        className={`w-12 sm:w-14 px-1 py-0.5 rounded text-center text-xs font-bold transition-colors ${isEditingCab
                             ? 'bg-slate-950 text-amber-300 border border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-400'
                             : 'bg-slate-800/60 text-slate-300 border border-slate-700/60 cursor-not-allowed select-none'
-                        }`}
+                          }`}
                       />
 
                       <span className="text-slate-500 text-[11px]">×</span>
@@ -952,11 +964,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                             ? 'Profondeur extérieure du caisson (mm)'
                             : 'Appuyez sur le logo à droite pour modifier les dimensions'
                         }
-                        className={`w-12 sm:w-14 px-1 py-0.5 rounded text-center text-xs font-bold transition-colors ${
-                          isEditingCab
+                        className={`w-12 sm:w-14 px-1 py-0.5 rounded text-center text-xs font-bold transition-colors ${isEditingCab
                             ? 'bg-slate-950 text-amber-300 border border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-400'
                             : 'bg-slate-800/60 text-slate-300 border border-slate-700/60 cursor-not-allowed select-none'
-                        }`}
+                          }`}
                       />
 
                       <span className="text-[10px] text-slate-400 font-sans">mm</span>
@@ -1122,11 +1133,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                             ? 'Longueur de la pièce (mm)'
                                             : 'Appuyez sur le logo de modification du caisson pour modifier les dimensions'
                                         }
-                                        className={`rounded px-1 py-0.5 w-12 sm:w-16 font-semibold text-center sm:text-left text-xs ${
-                                          isEditingCab
+                                        className={`rounded px-1 py-0.5 w-12 sm:w-16 font-semibold text-center sm:text-left text-xs ${isEditingCab
                                             ? 'bg-slate-950 border border-amber-500/60 focus:border-emerald-500 text-slate-100'
                                             : 'bg-transparent border border-transparent text-slate-200 cursor-not-allowed select-none'
-                                        }`}
+                                          }`}
                                       />
                                       <span className="text-slate-500 text-[11px]">×</span>
                                       <input
@@ -1152,11 +1162,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                             ? 'Largeur de la pièce (mm)'
                                             : 'Appuyez sur le logo de modification du caisson pour modifier les dimensions'
                                         }
-                                        className={`rounded px-1 py-0.5 w-12 sm:w-16 font-semibold text-center sm:text-left text-xs ${
-                                          isEditingCab
+                                        className={`rounded px-1 py-0.5 w-12 sm:w-16 font-semibold text-center sm:text-left text-xs ${isEditingCab
                                             ? 'bg-slate-950 border border-amber-500/60 focus:border-emerald-500 text-slate-100'
                                             : 'bg-transparent border border-transparent text-slate-200 cursor-not-allowed select-none'
-                                        }`}
+                                          }`}
                                       />
                                       <span className="text-[10px] text-slate-500 hidden sm:inline">mm</span>
                                       {cab.config?.hasFeet &&
@@ -1194,11 +1203,10 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                       onClick={() =>
                                         handleUpdate(item.id, 'canRotate', !item.canRotate)
                                       }
-                                      className={`inline-flex items-center justify-center gap-1 h-7 w-7 sm:h-auto sm:w-auto p-1 sm:px-2 sm:py-0.5 rounded text-[11px] font-medium transition-colors ${
-                                        item.canRotate
+                                      className={`inline-flex items-center justify-center gap-1 h-7 w-7 sm:h-auto sm:w-auto p-1 sm:px-2 sm:py-0.5 rounded text-[11px] font-medium transition-colors ${item.canRotate
                                           ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-500/30'
                                           : 'bg-amber-950/70 text-amber-400 border border-amber-500/30'
-                                      }`}
+                                        }`}
                                       title={
                                         item.canRotate
                                           ? 'Rotation 90° autorisée (Pas de contrainte de fil)'
@@ -1321,6 +1329,57 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
         stockPanels={stockPanels}
         workshopStock={workshopStock}
       />
+      {/* Modal Visualisation 3D du Caisson Assemblé */}
+      {viewing3DCabinet &&
+        mounted &&
+        createPortal(
+          <div className="fixed inset-0 z-[12000] flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-150">
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="bg-slate-950 border border-slate-700 w-full max-w-5xl h-[85vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-white"
+            >
+              <div className="flex items-center justify-between p-3.5 border-b border-slate-800 bg-slate-900/90">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                    <Box className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <span>{viewing3DCabinet} — Dessin 3D du meuble assemblé</span>
+                    </h3>
+                    <p className="text-[11px] font-mono text-slate-400">
+                      Visualisation 3D isométrique et aménagement intérieur
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewing3DCabinet(null)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  title="Fermer la vue 3D"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 p-2 min-h-0">
+                <Cabinet3DViewer
+                  config={inferCabinetConfigFromItems(
+                    viewing3DCabinet,
+                    items.filter(
+                      (it) =>
+                        it.name.includes(`[${viewing3DCabinet}]`) ||
+                        it.cabinetConfig?.name === viewing3DCabinet
+                    )
+                  )}
+                  className="w-full h-full"
+                  showControls={true}
+                />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
