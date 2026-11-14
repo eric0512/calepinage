@@ -3724,17 +3724,26 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       </p>
 
                       {/* Aperçu schématique de l'empilement vertical (Haut en Bas) */}
-                      <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400">
-                          <span className="flex items-center gap-1.5 text-amber-300">
-                            <Layers className="w-3.5 h-3.5" />
+                      <div className="p-3.5 bg-slate-950 rounded-2xl border-2 border-amber-500/40 space-y-2.5 shadow-lg">
+                        <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                          <span className="flex items-center gap-1.5 text-amber-300 font-bold">
+                            <Layers className="w-4 h-4 text-amber-400" />
                             Aperçu de l&apos;empilement réel (Haut → Bas)
                           </span>
-                          <span className="font-mono text-[10px] text-slate-500">
+                          <span className="font-mono text-[11px] text-amber-400 font-bold">
                             {compositionState.facadesCount} élément{compositionState.facadesCount > 1 ? 's' : ''} empilé{compositionState.facadesCount > 1 ? 's' : ''}
                           </span>
                         </div>
-                        <div className="flex flex-col gap-1 p-2 bg-slate-900/60 rounded-lg border border-slate-800/80">
+
+                        {/* Bannière explicative pour l'utilisateur */}
+                        <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-xs text-amber-200 flex items-center gap-2">
+                          <span className="text-base shrink-0">💡</span>
+                          <span className="leading-snug">
+                            <b>Pour changer l&apos;ordre :</b> Cliquez directement sur les boutons jaunes <strong className="text-white bg-amber-500/40 px-1 rounded">« Monter »</strong> ou <strong className="text-white bg-amber-500/40 px-1 rounded">« Descendre »</strong> ci-dessous pour placer la porte en haut ou les tiroirs en dessous.
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 p-2 bg-slate-900/80 rounded-xl border border-slate-800">
                           {compositionState.facadeItems.map((item, idx) => {
                             const resH = facadeLayout.heights[idx] || 0;
                             const isDoor = item.type === 'porte';
@@ -3742,21 +3751,31 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                             return (
                               <div
                                 key={`mini-stack-${idx}`}
-                                className={`px-3 py-1.5 rounded-md border flex items-center justify-between text-xs font-mono font-bold transition-all ${
+                                className={`px-3 py-2 rounded-xl border flex flex-wrap items-center justify-between gap-2 text-xs font-mono font-bold transition-all ${
                                   isDoor
-                                    ? 'bg-blue-500/15 border-blue-500/30 text-blue-200'
-                                    : 'bg-amber-500/15 border-amber-500/30 text-amber-200'
+                                    ? 'bg-blue-500/15 border-blue-500/40 text-blue-200'
+                                    : 'bg-amber-500/15 border-amber-500/40 text-amber-200'
                                 }`}
                               >
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-950 text-slate-400 font-sans font-bold">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span
+                                    className={`text-[10px] px-2 py-0.5 rounded font-sans font-black uppercase ${
+                                      idx === 0
+                                        ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                                        : idx === compositionState.facadeItems.length - 1
+                                        ? 'bg-indigo-500 text-white shadow-sm'
+                                        : 'bg-slate-800 text-amber-300 border border-slate-700'
+                                    }`}
+                                  >
                                     {idx === 0
-                                      ? 'Haut'
+                                      ? '1. HAUT'
                                       : idx === compositionState.facadeItems.length - 1
-                                      ? 'Bas'
-                                      : 'Milieu'}
+                                      ? `${idx + 1}. BAS`
+                                      : `${idx + 1}. MILIEU`}
                                   </span>
-                                  <span>{isDoor ? '🚪 Porte' : '🗄️ Façade tiroir'}</span>
+                                  <span className="truncate text-white font-semibold">
+                                    {isDoor ? '🚪 Porte' : '🗄️ Façade tiroir'}
+                                  </span>
                                   {isDoor && sCount > 0 && (
                                     <span className="text-[10px] font-sans text-amber-300 font-normal">
                                       ({sCount} étagère{sCount > 1 ? 's' : ''})
@@ -3768,14 +3787,50 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-white">
-                                  {resH > 0 ? `${resH} mm` : 'Auto'}
-                                </span>
+
+                                <div className="flex items-center gap-2">
+                                  {/* Boutons d'action directs pour changer l'ordre directement depuis l'aperçu */}
+                                  <div className="flex items-center gap-1 font-sans">
+                                    <button
+                                      type="button"
+                                      disabled={idx === 0}
+                                      onClick={() => moveFacadeItem(idx, -1)}
+                                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 border transition-all ${
+                                        idx === 0
+                                          ? 'bg-slate-900/40 text-slate-600 border-slate-800 cursor-not-allowed opacity-30'
+                                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 active:scale-95 shadow-sm'
+                                      }`}
+                                      title="Monter cet élément d'un niveau (vers le haut)"
+                                    >
+                                      <ArrowUp className="w-3.5 h-3.5" />
+                                      <span>Monter</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={idx === compositionState.facadeItems.length - 1}
+                                      onClick={() => moveFacadeItem(idx, 1)}
+                                      className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 border transition-all ${
+                                        idx === compositionState.facadeItems.length - 1
+                                          ? 'bg-slate-900/40 text-slate-600 border-slate-800 cursor-not-allowed opacity-30'
+                                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 active:scale-95 shadow-sm'
+                                      }`}
+                                      title="Descendre cet élément d'un niveau (vers le bas)"
+                                    >
+                                      <ArrowDown className="w-3.5 h-3.5" />
+                                      <span>Descendre</span>
+                                    </button>
+                                  </div>
+
+                                  <span className="text-white text-xs font-mono font-bold bg-slate-950/80 px-2.5 py-1 rounded-md border border-slate-800">
+                                    {resH > 0 ? `${resH} mm` : 'Auto'}
+                                  </span>
+                                </div>
                               </div>
                             );
                           })}
                           {config.hasFeet && config.feetHeight && (
-                            <div className="px-3 py-1 rounded-md bg-slate-950 border border-amber-500/30 text-amber-400 text-[10px] font-mono flex items-center justify-between">
+                            <div className="px-3 py-1.5 rounded-xl bg-slate-950 border border-amber-500/30 text-amber-400 text-[11px] font-mono flex items-center justify-between">
                               <span>🦶 Pieds sous caisson</span>
                               <span>{config.feetHeight} mm</span>
                             </div>
@@ -3783,7 +3838,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="space-y-1.5">
+                      <div className="space-y-2 pt-1">
                         {compositionState.facadeItems.map((item, idx) => {
                           const isAuto = idx === facadeLayout.autoIndex;
                           const resolved = facadeLayout.heights[idx];
@@ -3798,49 +3853,61 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           return (
                             <div
                               key={idx}
-                              className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2"
+                              className="p-3 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-2.5"
                             >
-                              <div className="grid grid-cols-[2.8rem_1fr_1fr_5.5rem] items-center gap-2">
-                                <div className="flex flex-col items-center gap-0.5">
+                              {/* Barre supérieure de l'élément avec position et boutons de déplacement clairs */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`text-[10px] px-2 py-0.5 rounded font-sans font-black uppercase ${
+                                      idx === 0
+                                        ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                                        : idx === compositionState.facadeItems.length - 1
+                                        ? 'bg-indigo-500 text-white shadow-sm'
+                                        : 'bg-slate-800 text-amber-300 border border-slate-700'
+                                    }`}
+                                  >
+                                    #{idx + 1} • {idx === 0 ? 'Position : HAUT' : idx === compositionState.facadeItems.length - 1 ? 'Position : BAS' : 'Position : MILIEU'}
+                                  </span>
+                                  <span className="text-xs font-bold text-white">
+                                    {item.type === 'porte' ? 'Porte battante' : 'Façade de tiroir'}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 font-sans">
                                   <button
                                     type="button"
                                     disabled={idx === 0}
                                     onClick={() => moveFacadeItem(idx, -1)}
-                                    className={`p-0.5 rounded transition-colors ${
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 border transition-all ${
                                       idx === 0
-                                        ? 'text-slate-700 cursor-not-allowed opacity-30'
-                                        : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800 active:scale-90'
+                                        ? 'bg-slate-900/40 text-slate-600 border-slate-800 cursor-not-allowed opacity-30'
+                                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 active:scale-95 shadow-sm'
                                     }`}
-                                    title="Monter cet élément vers le haut"
+                                    title="Monter cet élément d'un niveau (vers le haut)"
                                   >
                                     <ArrowUp className="w-3.5 h-3.5" />
+                                    <span>Monter</span>
                                   </button>
-                                  <div className="flex items-center gap-1 leading-none">
-                                    <span className="text-[10px] font-mono font-bold text-amber-400">
-                                      #{idx + 1}
-                                    </span>
-                                  </div>
-                                  <span className="text-[8px] font-semibold text-slate-500 uppercase leading-none">
-                                    {idx === 0
-                                      ? 'Haut'
-                                      : idx === compositionState.facadeItems.length - 1
-                                      ? 'Bas'
-                                      : 'Milieu'}
-                                  </span>
+
                                   <button
                                     type="button"
                                     disabled={idx === compositionState.facadeItems.length - 1}
                                     onClick={() => moveFacadeItem(idx, 1)}
-                                    className={`p-0.5 rounded transition-colors ${
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 border transition-all ${
                                       idx === compositionState.facadeItems.length - 1
-                                        ? 'text-slate-700 cursor-not-allowed opacity-30'
-                                        : 'text-slate-400 hover:text-amber-400 hover:bg-slate-800 active:scale-90'
+                                        ? 'bg-slate-900/40 text-slate-600 border-slate-800 cursor-not-allowed opacity-30'
+                                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400 active:scale-95 shadow-sm'
                                     }`}
-                                    title="Descendre cet élément vers le bas"
+                                    title="Descendre cet élément d'un niveau (vers le bas)"
                                   >
                                     <ArrowDown className="w-3.5 h-3.5" />
+                                    <span>Descendre</span>
                                   </button>
                                 </div>
+                              </div>
+
+                              <div className="grid grid-cols-[1fr_1fr_5.5rem] items-center gap-2">
                                 <select
                                   value={item.type}
                                   onChange={(e) =>
