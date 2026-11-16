@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { SavedProject } from '@/types/cutting';
+import React, { useState, useEffect } from 'react';
+import { CutSettings, SavedProject } from '@/types/cutting';
 import {
   FolderPlus,
   FolderOpen,
@@ -13,13 +13,24 @@ import {
   Smartphone,
   Sparkles,
   Wrench,
+  Disc,
+  Layers,
+  AlertTriangle,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+
+const PRESET_KERFS = [2.4, 3.0, 3.2, 4.0];
+const BASE_EDGE_BANDINGS = ['Sans', '1mm', '2mm', '3mm'];
+const EDGE_STORAGE_KEY = 'calepinage_custom_edge_bandings';
 
 interface ProjectHubProps {
   savedProjects: SavedProject[];
   onOpenProject: (project: SavedProject) => void;
-  onCreateNewProject: (projectName: string, mode?: 'manual' | 'ai') => void;
+  onCreateNewProject: (
+    projectName: string,
+    mode?: 'manual' | 'ai',
+    initialSettings?: Partial<CutSettings>
+  ) => void;
   onDeleteProject: (projectId: string) => void;
   isCloudConnected?: boolean;
 }
@@ -35,15 +46,129 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   const [showNewModal, setShowNewModal] = useState(false);
   const [newProjectMode, setNewProjectMode] = useState<'manual' | 'ai'>('manual');
 
+  // Paramètres obligatoires à la création avec l'IA : Trait de scie (épaisseur lame) & Bande de champs
+  const [kerfInput, setKerfInput] = useState<string>('');
+  const [edgeBandingInput, setEdgeBandingInput] = useState<string>('');
+  const [customEdgeBandings, setCustomEdgeBandings] = useState<string[]>([]);
+  const [isManualEdgeInput, setIsManualEdgeInput] = useState<boolean>(false);
+  const [manualEdgeValue, setManualEdgeValue] = useState<string>('');
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(EDGE_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setCustomEdgeBandings(parsed);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const allEdgeBandingOptions = Array.from(
+    new Set([...BASE_EDGE_BANDINGS, ...customEdgeBandings])
+  );
+
   const handleOpenNewModal = (mode: 'manual' | 'ai') => {
     setNewProjectMode(mode);
     setNewProjectName('');
+    // Forcer la saisie à vide pour que l'utilisateur choisisse explicitement l'épaisseur de lame et la bande de champs
+    setKerfInput('');
+    setEdgeBandingInput('');
+    setIsManualEdgeInput(false);
+    setManualEdgeValue('');
+    setModalError(null);
     setShowNewModal(true);
+  };
+
+  const updateModalKerf = (val: number) => {
+    const rounded = Math.round(val * 10) / 10;
+    if (rounded >= 0.1 && rounded <= 15) {
+      setKerfInput(String(rounded));
+      setModalError(null);
+    }
+  };
+
+  const handleSelectModalEdgeBanding = (val: string) => {
+    if (val === '__manual__') {
+      setIsManualEdgeInput(true);
+      setManualEdgeValue('');
+      setEdgeBandingInput('');
+    } else {
+      setIsManualEdgeInput(false);
+      setEdgeBandingInput(val);
+      setModalError(null);
+    }
+  };
+
+  const handleManualEdgeValueChange = (raw: string) => {
+    setManualEdgeValue(raw);
+    const clean = raw.replace(',', '.').trim();
+    const num = parseFloat(clean);
+    if (!isNaN(num) && num >= 0) {
+      const formatted = num === 0 ? 'Sans' : `${clean}mm`;
+      setEdgeBandingInput(formatted);
+      setModalError(null);
+    } else if (raw.trim() === '') {
+      setEdgeBandingInput('');
+    }
+  };
+
+  const handleSaveManualEdgeChoice = () => {
+    const clean = manualEdgeValue.replace(',', '.').trim();
+    const num = parseFloat(clean);
+    if (isNaN(num) || num <= 0) return;
+    const formatted = `${clean}mm`;
+
+    if (
+      window.confirm(
+        `Voulez-vous enregistrer « ${formatted} » dans la liste des bandes de champs pour vos prochains projets ?`
+      )
+    ) {
+      if (!allEdgeBandingOptions.includes(formatted)) {
+        const updated = [...customEdgeBandings, formatted];
+        setCustomEdgeBandings(updated);
+        try {
+          localStorage.setItem(EDGE_STORAGE_KEY, JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+      }
+      setIsManualEdgeInput(false);
+      setEdgeBandingInput(formatted);
+      setModalError(null);
+    }
   };
 
   const handleStartNew = (e: React.FormEvent) => {
     e.preventDefault();
     const name = newProjectName.trim() || 'Nouveau Projet';
+
+    if (newProjectMode === 'ai') {
+      const parsedKerf = parseFloat(kerfInput.replace(',', '.'));
+      if (!kerfInput.trim() || isNaN(parsedKerf) || parsedKerf <= 0) {
+        setModalError(
+          'Veuillez saisir ou sélectionner l’épaisseur de la lame (Trait de scie en mm).'
+        );
+        return;
+      }
+      if (!edgeBandingInput || !edgeBandingInput.trim()) {
+        setModalError(
+          'Veuillez sélectionner s’il y a de la bande de champs ou pas (Sans, 1mm, 2mm, 3mm...).'
+        );
+        return;
+      }
+      setShowNewModal(false);
+      onCreateNewProject(name, 'ai', {
+        kerf: Math.round(parsedKerf * 10) / 10,
+        edgeBanding: edgeBandingInput.trim(),
+      });
+      return;
+    }
+
     setShowNewModal(false);
     onCreateNewProject(name, newProjectMode);
   };
@@ -249,9 +374,9 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
         {/* Modal Création Nouveau Projet */}
         {showNewModal && (
           <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div role="dialog" aria-modal="true" className="modal-box bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl">
+            <div role="dialog" aria-modal="true" className="modal-box bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-lg w-full shadow-2xl">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
                   {newProjectMode === 'ai' ? (
                     <Sparkles className="w-5 h-5" />
                   ) : (
@@ -266,7 +391,7 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                   </h3>
                   <p className="text-xs text-slate-400">
                     {newProjectMode === 'ai'
-                      ? 'Nommez votre projet puis ouvrez directement l’Assistant IA'
+                      ? 'Renseignez les paramètres de coupe puis ouvrez l’Assistant IA'
                       : 'Nommez votre projet pour démarrer la saisie manuelle'}
                   </p>
                 </div>
@@ -286,6 +411,177 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
                     className="w-full bg-slate-950 text-white text-sm px-3.5 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
+
+                {newProjectMode === 'ai' && (
+                  <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3.5">
+                    <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                      <Disc className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span className="text-xs font-bold text-white">
+                        Paramètres de Coupe &amp; Lame de Scie (Obligatoires)
+                      </span>
+                    </div>
+
+                    {/* 1. Épaisseur de la lame (Trait de scie) */}
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-medium text-slate-300">
+                        Épaisseur de la lame (Trait de scie) <span className="text-amber-400 font-bold">*</span> :
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-1 bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-700">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateModalKerf((parseFloat(kerfInput) || 3.0) - 0.1)
+                            }
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors"
+                            title="-0.1 mm"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            max="15"
+                            placeholder="Ex: 3.0"
+                            value={kerfInput}
+                            onChange={(e) => {
+                              setKerfInput(e.target.value);
+                              setModalError(null);
+                            }}
+                            className="w-16 text-center bg-slate-950 text-amber-400 font-mono font-bold text-xs px-1.5 py-1 rounded-lg border border-amber-500/40 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                          <span className="text-xs font-mono text-slate-400">mm</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateModalKerf((parseFloat(kerfInput) || 3.0) + 0.1)
+                            }
+                            className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors"
+                            title="+0.1 mm"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {PRESET_KERFS.map((k) => {
+                            const isSelected = parseFloat(kerfInput) === k;
+                            return (
+                              <button
+                                key={k}
+                                type="button"
+                                onClick={() => updateModalKerf(k)}
+                                className={`text-[11px] px-2.5 py-1 rounded-lg font-mono transition-colors ${
+                                  isSelected
+                                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                }`}
+                              >
+                                {k.toFixed(1)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. Bande de champs */}
+                    <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+                      <label className="block text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Bande de champs</span>
+                        <span className="text-amber-400 font-bold">*</span>
+                        <span>:</span>
+                      </label>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={
+                            isManualEdgeInput
+                              ? '__manual__'
+                              : allEdgeBandingOptions.includes(edgeBandingInput)
+                                ? edgeBandingInput
+                                : edgeBandingInput
+                                  ? '__manual__'
+                                  : ''
+                          }
+                          onChange={(e) => handleSelectModalEdgeBanding(e.target.value)}
+                          className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border focus:outline-none transition-colors ${
+                            !edgeBandingInput
+                              ? 'bg-slate-900 text-amber-300 border-amber-500/80'
+                              : 'bg-slate-900 text-white border-slate-700 focus:border-amber-500'
+                          }`}
+                        >
+                          <option value="" disabled>
+                            -- Choisir l&apos;épaisseur * --
+                          </option>
+                          {allEdgeBandingOptions.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                          <option value="__manual__">
+                            Autre épaisseur (saisie manuelle)...
+                          </option>
+                        </select>
+
+                        {isManualEdgeInput && (
+                          <div className="flex items-center gap-1 bg-slate-900 border border-amber-500/70 rounded-lg px-2 py-1">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder="Ex: 0.8"
+                              value={manualEdgeValue}
+                              onChange={(e) => handleManualEdgeValueChange(e.target.value)}
+                              className="w-14 bg-transparent text-xs font-mono font-bold text-amber-300 focus:outline-none placeholder:text-slate-600"
+                              autoFocus
+                            />
+                            <span className="text-[11px] font-mono text-slate-400">mm</span>
+                            {manualEdgeValue.trim() !== '' && (
+                              <button
+                                type="button"
+                                onClick={handleSaveManualEdgeChoice}
+                                className="ml-1 px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition-colors flex items-center gap-0.5"
+                              >
+                                <Plus className="w-2.5 h-2.5" />
+                                <span>Mémoriser</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1">
+                          {BASE_EDGE_BANDINGS.map((preset) => (
+                            <button
+                              key={`modal-band-${preset}`}
+                              type="button"
+                              onClick={() => {
+                                setIsManualEdgeInput(false);
+                                setEdgeBandingInput(preset);
+                                setModalError(null);
+                              }}
+                              className={`text-[11px] px-2.5 py-1 rounded-lg font-mono transition-colors ${
+                                edgeBandingInput === preset
+                                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                              }`}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {modalError && (
+                  <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs font-medium flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span>{modalError}</span>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-end gap-2.5 pt-2">
                   <button

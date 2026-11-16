@@ -309,17 +309,21 @@ export default function Home() {
     }
   }, [stockPanels, cutItems, settings, projectName, currentView, currentProjectId, persistProject]);
 
-  // Création d'un NOUVEAU PROJET VIERGE (aucun champ rempli)
+  // Création d'un NOUVEAU PROJET VIERGE (avec paramètres de coupe initiaux si saisis pour l'IA)
   const handleCreateNewProject = (
     name: string,
-    mode: 'manual' | 'ai' = 'manual'
+    mode: 'manual' | 'ai' = 'manual',
+    initialSettings?: Partial<CutSettings>
   ) => {
     const newId = `project-${Date.now()}`;
     setCurrentProjectId(newId);
     setProjectName(name);
 
-    // Initialisation totalement vide selon la demande
-    setSettings(DEFAULT_SETTINGS);
+    // Initialisation avec les paramètres saisis (épaisseur lame & bande de champs)
+    setSettings({
+      ...DEFAULT_SETTINGS,
+      ...(initialSettings || {}),
+    });
     setStockPanels([]);
     setCutItems([]);
     setOptimizationResult(null);
