@@ -20,6 +20,8 @@ import {
   Check,
   Pencil,
   Ruler,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
 import {
@@ -44,17 +46,25 @@ interface FacadeDraftItem {
   type: FacadeItemType;
   height: string;
   drawerHeight?: string;
+  material?: string;
+  shelvesCount?: string;
 }
 
 /** Ajuste la liste des composants de façade au nombre demandé en conservant la saisie existante */
-function resizeFacadeDraft(items: FacadeDraftItem[], count: number): FacadeDraftItem[] {
-  const n = Math.max(1, Math.min(10, count));
+function resizeFacadeDraft(
+  items: FacadeDraftItem[],
+  count: number,
+  defaultMaterial?: string
+): FacadeDraftItem[] {
+  const n = Math.max(0, Math.min(10, count));
+  if (n === 0) return [];
   if (items.length === n) return items;
   if (items.length > n) return items.slice(0, n);
   const added: FacadeDraftItem[] = Array.from({ length: n - items.length }, () => ({
     type: 'porte' as FacadeItemType,
     height: '',
     drawerHeight: '',
+    material: defaultMaterial || '',
   }));
   return [...items, ...added];
 }
@@ -180,6 +190,7 @@ interface GuidedTemplateFields {
   elementName: string; // Toujours 'Caisson'
   cabinetCount: string; // Nombre de caissons identiques (ex: '1')
   customName: string; // Nom de chaque élément dans la liste de débit (ex: "Caisson Cuisine")
+  material: string; // Matière qui va constituer le corps du caisson (ex: "Mela 19mm")
   hasFeet: boolean; // Présence de pieds sur le caisson
   feetHeight: string; // Hauteur du pied en mm (ex: "100")
   height: string;
@@ -197,6 +208,7 @@ const EMPTY_GUIDED_FIELDS: GuidedTemplateFields = {
   elementName: 'Caisson',
   cabinetCount: '1',
   customName: '',
+  material: 'Mela 19mm',
   hasFeet: false,
   feetHeight: '',
   height: '',
@@ -444,6 +456,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         cabinetCount:
           c.cabinetCount && c.cabinetCount > 0 ? String(c.cabinetCount) : '1',
         customName: c.name || cabName,
+        material: c.material || 'Mela 19mm',
         hasFeet: Boolean(c.hasFeet),
         feetHeight: c.feetHeight ? String(c.feetHeight) : '',
         height: c.height ? String(c.height) : '',
@@ -536,6 +549,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const isGuidedFormComplete = useCallback((gf: GuidedTemplateFields): boolean => {
     if (!gf.elementName || !gf.elementName.trim()) return false;
     if (!gf.customName || !gf.customName.trim()) return false;
+    if (!gf.material || !gf.material.trim()) return false;
     const cc = parseInt(gf.cabinetCount, 10);
     if (!gf.cabinetCount || !gf.cabinetCount.trim() || isNaN(cc) || cc < 1) return false;
     const h = parseInt(gf.height, 10);
@@ -563,12 +577,13 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     return true;
   }, []);
 
-  // Mise à jour d'un champ du gabarit guidé ("Remplir les cases") avec ouverture automatique de la composition dès que tous les champs sont complets
+  // Mise à jour d'un champ du gabarit guidé ("Remplir les cases")
   const handleGuidedFieldChange = (
     field: keyof GuidedTemplateFields,
     value: string | boolean,
-    isSelectField = false
+    ..._rest: unknown[]
   ) => {
+    void _rest;
     if (autoOpenTimerRef.current) {
       clearTimeout(autoOpenTimerRef.current);
       autoOpenTimerRef.current = null;
@@ -600,6 +615,30 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       } else if (!prevCustom && value) {
         nextGf.customName = String(value);
       }
+    }
+
+    if (field === 'material') {
+      const matStr = String(value);
+      nextGf.material = matStr;
+      const detThickness = extractThicknessFromMaterialName(matStr);
+      setConfig((prev) => {
+        const next = { ...prev };
+        next.material = matStr;
+        next.sidesMaterial = matStr;
+        next.topMaterial = matStr;
+        next.bottomMaterial = matStr;
+        next.partitionsMaterial = matStr;
+        next.shelvesMaterial = matStr;
+        if (detThickness) {
+          next.thickness = detThickness;
+          next.drawerGrooveDepth = Math.round((detThickness / 3) * 10) / 10;
+        }
+        if (!next.backMaterial) {
+          const base = matStr.replace(/\s*\d{1,2}\s*mm/i, '').trim();
+          next.backMaterial = `${base || 'MDF'} ${next.backThickness || 8}mm`;
+        }
+        return next;
+      });
     }
 
     setGuidedFields(nextGf);
@@ -646,16 +685,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       }
       return next;
     });
-
-    if (isGuidedFormComplete(nextGf)) {
-      if (isSelectField) {
-        setShowCompositionModal(true);
-      } else {
-        autoOpenTimerRef.current = setTimeout(() => {
-          setShowCompositionModal(true);
-        }, 650);
-      }
-    }
   };
 
   // Initialisation dynamique de la modale de composition selon les dimensions réelles du caisson
@@ -835,6 +864,127 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     });
   };
 
+  // Déplacer un composant de façade vers le haut (changer l'ordre : Porte <-> Tiroir)
+  const moveFacadeItemUp = (index: number) => {
+    if (index <= 0) return;
+    setCompositionState((prev) => {
+      const items = [...prev.facadeItems];
+      const temp = items[index - 1];
+      items[index - 1] = items[index];
+      items[index] = temp;
+      return {
+        ...prev,
+        facadeItems: items,
+      };
+    });
+  };
+
+  // Déplacer un composant de façade vers le bas (changer l'ordre : Porte <-> Tiroir)
+  const moveFacadeItemDown = (index: number) => {
+    setCompositionState((prev) => {
+      if (index >= prev.facadeItems.length - 1) return prev;
+      const items = [...prev.facadeItems];
+      const temp = items[index + 1];
+      items[index + 1] = items[index];
+      items[index] = temp;
+      return {
+        ...prev,
+        facadeItems: items,
+      };
+    });
+  };
+
+  // Synchronisation en direct de compositionState vers config pour le calcul immédiat des débits et schéma 2D
+  useEffect(() => {
+    const useDetailed = compositionState.hasFacades && compositionState.facadesCount > 0;
+    const facadeItems = useDetailed
+      ? compositionState.facadeItems.map((it, i) => {
+          const dh = parseFloat(it.drawerHeight || '');
+          const resolvedH = facadeLayout.heights[i] || null;
+          return {
+            type: it.type,
+            height: i === facadeLayout.autoIndex ? null : resolvedH,
+            drawerHeight:
+              it.type === 'tiroir' && !isNaN(dh) && dh > 0
+                ? resolvedH && resolvedH > 0
+                  ? Math.min(dh, resolvedH)
+                  : dh
+                : null,
+            material: it.material?.trim() || undefined,
+            shelvesCount: it.shelvesCount ? parseInt(it.shelvesCount, 10) : undefined,
+          };
+        })
+      : undefined;
+    const drawersFromFacade = useDetailed ? facadeDrawerCount : 0;
+    const hasDrawers = compositionState.hasDrawers || drawersFromFacade > 0;
+    const drawersCount = drawersFromFacade > 0
+      ? drawersFromFacade
+      : compositionState.hasDrawers
+      ? Math.max(1, compositionState.drawersCount)
+      : 0;
+
+    const nextDoors =
+      compositionState.hasFacades && compositionState.facadesCount > 0
+        ? compositionState.facadesCount >= 2
+          ? 'two_doors'
+          : 'one_door'
+        : 'none';
+
+    setConfig((prev) => {
+      const isSameFacades = prev.hasFacades === compositionState.hasFacades;
+      const isSameCount =
+        prev.facadesCount === (compositionState.hasFacades ? compositionState.facadesCount : 0);
+      const isSamePlacement = prev.facadePlacement === compositionState.facadePlacement;
+      const isSameGap = prev.facadeGap === compositionState.facadeGap;
+      const isSameHasDrawers = prev.hasDrawers === hasDrawers;
+      const isSameDrawersCount = prev.drawersCount === drawersCount;
+      const isSameSlideThick = prev.drawerSlideThickness === compositionState.drawerSlideThickness;
+      const isSameSlideLen = prev.drawerSlideLength === compositionState.drawerSlideLength;
+      const isSameBottomType = prev.drawerBottomType === compositionState.drawerBottomType;
+      const isSameGroove = prev.drawerGrooveDepth === compositionState.drawerGrooveDepth;
+      const isSameDoors = prev.doors === nextDoors;
+      const isSameItems = JSON.stringify(prev.facadeItems) === JSON.stringify(facadeItems);
+
+      if (
+        isSameFacades &&
+        isSameCount &&
+        isSamePlacement &&
+        isSameGap &&
+        isSameHasDrawers &&
+        isSameDrawersCount &&
+        isSameSlideThick &&
+        isSameSlideLen &&
+        isSameBottomType &&
+        isSameGroove &&
+        isSameDoors &&
+        isSameItems
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        hasFacades: compositionState.hasFacades,
+        facadesCount: compositionState.hasFacades ? Math.max(0, compositionState.facadesCount) : 0,
+        facadeItems,
+        facadePlacement: compositionState.facadePlacement,
+        facadeGap: compositionState.facadeGap,
+        hasDrawers,
+        drawersCount,
+        drawerSlideThickness: compositionState.drawerSlideThickness,
+        drawerSlideLength: compositionState.drawerSlideLength,
+        drawerBottomType: compositionState.drawerBottomType,
+        drawerGrooveDepth: compositionState.drawerGrooveDepth,
+        doors: nextDoors,
+      };
+    });
+  }, [
+    compositionState,
+    facadeLayout.heights,
+    facadeLayout.autoIndex,
+    facadeDrawerCount,
+  ]);
+
   const handleValidateComposition = () => {
     if (compositionState.hasFacades && facadeLayout.error) return;
     const useDetailed = compositionState.hasFacades;
@@ -896,60 +1046,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     }));
     setShowCompositionModal(false);
     setShowPartsSummaryModal(true);
-  };
-
-  // Vérification forcée de tous les champs de "Remplir les cases" avant d'ouvrir la fenêtre de composition
-  const handleValidateGuidedTemplate = () => {
-    const missing: string[] = [];
-    if (!guidedFields.customName || !guidedFields.customName.trim()) {
-      missing.push("Nom dans la liste de débit");
-    }
-    const cc = parseInt(guidedFields.cabinetCount, 10);
-    if (!guidedFields.cabinetCount || !guidedFields.cabinetCount.trim() || isNaN(cc) || cc < 1) {
-      missing.push('Nombre de caissons identiques');
-    }
-    const h = parseInt(guidedFields.height, 10);
-    const w = parseInt(guidedFields.width, 10);
-    const d = parseInt(guidedFields.depth, 10);
-    const sh = parseInt(guidedFields.shelvesCount, 10);
-
-    if (!guidedFields.height.trim() || isNaN(h) || h < 50) missing.push('Hauteur (mm)');
-    if (!guidedFields.width.trim() || isNaN(w) || w < 50) missing.push('Largeur (mm)');
-    if (!guidedFields.depth.trim() || isNaN(d) || d < 50) missing.push('Profondeur (mm)');
-    if (guidedFields.hasFeet) {
-      const fh = parseInt(guidedFields.feetHeight, 10);
-      if (!guidedFields.feetHeight.trim() || isNaN(fh) || fh <= 0) {
-        missing.push('Hauteur du pied (mm)');
-      } else if (!isNaN(h) && fh >= h) {
-        setGuidedValidationError(
-          `La hauteur des pieds (${fh} mm) doit être strictement inférieure à la hauteur totale du caisson (${h} mm).`
-        );
-        return;
-      }
-    }
-    if (guidedFields.partitionsCount === '') missing.push('Séparations');
-    if (guidedFields.shelvesCount.trim() === '' || isNaN(sh) || sh < 0)
-      missing.push('Étagères par côté');
-    if (!guidedFields.assemblyType) missing.push("Mode d'assemblage");
-    if (guidedFields.assemblyType === 'bottom_inside_top_over') {
-      const ovS = parseInt(guidedFields.topOverhangSides, 10);
-      const ovF = parseInt(guidedFields.topOverhangFront, 10);
-      if (guidedFields.topOverhangSides.trim() === '' || isNaN(ovS) || ovS < 0)
-        missing.push('Débord côtés (mm)');
-      if (guidedFields.topOverhangFront.trim() === '' || isNaN(ovF) || ovF < 0)
-        missing.push('Débord avant (mm)');
-    }
-    if (!guidedFields.backType) missing.push('Fond du caisson');
-
-    if (missing.length > 0) {
-      setGuidedValidationError(
-        `Veuillez renseigner tous les champs obligatoires : ${missing.join(', ')}.`
-      );
-      return;
-    }
-
-    setGuidedValidationError(null);
-    setShowCompositionModal(true);
   };
 
   // Sélection ou saisie libre de la matière pour une partie spécifique du caisson dans la fenêtre récapitulative
@@ -1098,6 +1194,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           ? String(preset.config.cabinetCount)
           : '1',
       customName: preset.config.name || 'Caisson',
+      material: preset.config.material || 'Mela 19mm',
       hasFeet: Boolean(preset.config.hasFeet),
       feetHeight: preset.config.feetHeight ? String(preset.config.feetHeight) : '',
       height: preset.config.height ? String(preset.config.height) : '',
@@ -1823,6 +1920,68 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           </div>
                         )}
 
+                        {/* Choix de la matière qui constitue le corps du caisson */}
+                        <div className="p-2.5 bg-slate-900/90 border border-slate-700/80 rounded-xl space-y-1.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                            <label className="text-[11px] font-bold text-amber-300 block">
+                              Matière qui va constituer le caisson <span className="text-amber-400">*</span> :
+                            </label>
+                            {config.thickness > 0 && (
+                              <span className="text-[10px] text-emerald-400 font-mono font-semibold">
+                                Épaisseur détectée : {config.thickness} mm
+                              </span>
+                            )}
+                          </div>
+                          <select
+                            required
+                            value={guidedFields.material}
+                            onChange={(e) =>
+                              handleGuidedFieldChange('material', e.target.value, true)
+                            }
+                            className={`w-full bg-slate-800 border rounded-lg px-2.5 py-1.5 text-xs text-white font-semibold focus:outline-none focus:border-amber-500 cursor-pointer ${
+                              guidedValidationError && !guidedFields.material
+                                ? 'border-red-500'
+                                : 'border-slate-700'
+                            }`}
+                          >
+                            <option value="">-- Sélectionner la matière du caisson --</option>
+                            {stockPanels.length > 0 && (
+                              <optgroup label="📦 En Stock Saisi (Panneaux projet)">
+                                {stockPanels.map((p, sIdx) => (
+                                  <option key={`g-sp-${sIdx}`} value={p.material}>
+                                    {p.material} ({p.length}×{p.width} mm)
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {workshopStock.length > 0 && (
+                              <optgroup label="🏭 En Stock Atelier (Chutes)">
+                                {workshopStock.map((w, wIdx) => (
+                                  <option key={`g-ws-${wIdx}`} value={w.material}>
+                                    {w.material} ({w.length}×{w.width} mm)
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {customMaterials.length > 0 && (
+                              <optgroup label="⭐ Mes matières enregistrées">
+                                {customMaterials.map((m) => (
+                                  <option key={`g-custom-${m}`} value={m}>
+                                    {m}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            <optgroup label="📋 Matières courantes (Mélaminé, MDF, OSB)">
+                              {DEFAULT_BASE_MATERIALS.map((m) => (
+                                <option key={`g-base-${m}`} value={m}>
+                                  {m}
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </div>
+
                         {/* Autres paramètres du gabarit */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                           <div>
@@ -1968,28 +2127,530 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                    {/* SECTION FAÇADES DU MEUBLE (PORTES & TIROIRS) */}
+                    <div className="pt-3 border-t border-slate-700/80 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-900/90 p-3 rounded-xl border border-slate-700/70">
+                        <div>
+                          <h4 className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                            <Sliders className="w-4 h-4 text-amber-400" />
+                            <span>Façades du meuble (Portes &amp; Tiroirs)</span>
+                          </h4>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Choisissez le nombre de façades, leur type (porte ou tiroir) et leur matière.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-semibold text-slate-300 shrink-0">
+                            Nombre de façades :
+                          </label>
+                          <select
+                            value={compositionState.hasFacades ? compositionState.facadesCount : 0}
+                            onChange={(e) => {
+                              const count = parseInt(e.target.value, 10) || 0;
+                              if (count === 0) {
+                                setCompositionState((prev) => ({
+                                  ...prev,
+                                  hasFacades: false,
+                                  facadesCount: 0,
+                                  hasDrawers: false,
+                                  drawersCount: 0,
+                                  facadeItems: [],
+                                }));
+                              } else {
+                                const defaultMat =
+                                  guidedFields.material || config.material || 'Mela 19mm';
+                                setCompositionState((prev) => {
+                                  const items = resizeFacadeDraft(
+                                    prev.facadeItems,
+                                    count,
+                                    defaultMat
+                                  );
+                                  const drawers = items.filter((it) => it.type === 'tiroir').length;
+                                  return {
+                                    ...prev,
+                                    hasFacades: true,
+                                    facadesCount: count,
+                                    facadeItems: items,
+                                    hasDrawers: drawers > 0 ? true : prev.hasDrawers,
+                                    drawersCount: drawers > 0 ? drawers : prev.drawersCount,
+                                  };
+                                });
+                              }
+                            }}
+                            className="bg-slate-800 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs text-amber-300 font-bold font-mono cursor-pointer"
+                          >
+                            <option value="0">0 (Meuble ouvert sans façade)</option>
+                            <option value="1">1 façade</option>
+                            <option value="2">2 façades</option>
+                            <option value="3">3 façades</option>
+                            <option value="4">4 façades</option>
+                            <option value="5">5 façades</option>
+                            <option value="6">6 façades</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {(!compositionState.hasFacades || compositionState.facadesCount === 0) && (
+                        <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800 text-[11px] text-slate-400 flex items-center gap-2">
+                          <span>ℹ️ Meuble ouvert : sans façade ni tiroir. Les étagères et compartiments intérieurs restent directement accessibles.</span>
+                        </div>
+                      )}
+
+                      {compositionState.hasFacades && compositionState.facadesCount > 0 && (
+                        <div className="space-y-3 animate-in fade-in duration-150">
+                          {/* Positionnement et Espacement */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                                Positionnement des façades :
+                              </label>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCompositionState((prev) => ({
+                                      ...prev,
+                                      facadePlacement: 'applique',
+                                    }))
+                                  }
+                                  className={`p-2 rounded-lg border text-left transition-all ${
+                                    compositionState.facadePlacement === 'applique'
+                                      ? 'bg-amber-500/20 border-amber-500 text-white font-bold'
+                                      : 'bg-slate-850 border-slate-700 text-slate-400 hover:text-slate-200'
+                                  }`}
+                                >
+                                  <div className="text-[11px]">En applique</div>
+                                  <div className="text-[9px] text-slate-400">Recouvrement chants</div>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCompositionState((prev) => ({
+                                      ...prev,
+                                      facadePlacement: 'interieur',
+                                    }))
+                                  }
+                                  className={`p-2 rounded-lg border text-left transition-all ${
+                                    compositionState.facadePlacement === 'interieur'
+                                      ? 'bg-amber-500/20 border-amber-500 text-white font-bold'
+                                      : 'bg-slate-850 border-slate-700 text-slate-400 hover:text-slate-200'
+                                  }`}
+                                >
+                                  <div className="text-[11px]">À l&apos;intérieur</div>
+                                  <div className="text-[9px] text-slate-400">Encastrée (rentrante)</div>
+                                </button>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                                Jeu / espace entre façades (mm) :
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="20"
+                                step="0.5"
+                                value={compositionState.facadeGap}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  setCompositionState((prev) => ({
+                                    ...prev,
+                                    facadeGap: isNaN(val) || val < 0 ? 0 : val,
+                                  }));
+                                }}
+                                className="w-full bg-slate-850 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold"
+                              />
+                              <span className="text-[10px] text-slate-500 block mt-0.5">
+                                Jeu périphérique et entre chaque façade (ex: 2 mm)
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Aperçu de l'empilement réel (Haut -> Bas) */}
+                          <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 mb-1">
+                              <span className="flex items-center gap-1.5 text-amber-300">
+                                <Layers className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Aperçu de l&apos;empilement réel (Haut → Bas)</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {compositionState.facadeItems.length} élément(s) empilé(s)
+                              </span>
+                            </div>
+
+                            <div className="space-y-1">
+                              {compositionState.facadeItems.map((item, idx) => {
+                                const h =
+                                  facadeLayout.heights[idx] || parseFloat(item.height) || 0;
+                                const posLabel =
+                                  idx === 0
+                                    ? 'Haut'
+                                    : idx === compositionState.facadeItems.length - 1
+                                    ? 'Bas'
+                                    : 'Milieu';
+                                const matName =
+                                  item.material ||
+                                  guidedFields.material ||
+                                  config.material ||
+                                  'Mélaminé';
+                                return (
+                                  <div
+                                    key={`prev-${idx}`}
+                                    className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold uppercase">
+                                        {posLabel}
+                                      </span>
+                                      <span className="font-bold text-white">
+                                        {item.type === 'tiroir' ? 'Façade tiroir' : 'Porte'}
+                                      </span>
+                                      {item.type === 'tiroir' && item.drawerHeight && (
+                                        <span className="text-[10px] text-slate-400">
+                                          (bac {item.drawerHeight} mm)
+                                        </span>
+                                      )}
+                                      <span className="text-[10px] text-amber-300/80">
+                                        [{matName}]
+                                      </span>
+                                    </div>
+                                    <span className="text-amber-400 font-bold">
+                                      {h > 0 ? `${h} mm` : 'Auto'}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {guidedFields.hasFeet &&
+                                parseInt(guidedFields.feetHeight, 10) > 0 && (
+                                  <div className="flex items-center justify-between px-3 py-1 rounded-lg bg-slate-900/60 border border-amber-500/20 text-xs font-mono text-amber-300">
+                                    <span className="text-[10px] flex items-center gap-1">
+                                      <span>🦶 Pieds sous caisson</span>
+                                    </span>
+                                    <span>{guidedFields.feetHeight} mm</span>
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+
+                          {/* Configuration détaillée de chaque façade avec changement d'ordre et sélection matière */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-slate-300">
+                                Détail et ordre des composants :
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                L {facadeAvailableWidth} mm
+                              </span>
+                            </div>
+
+                            {compositionState.facadeItems.map((item, idx) => {
+                              const isAuto = idx === facadeLayout.autoIndex;
+                              const resolved = facadeLayout.heights[idx];
+                              const facadeH = parseFloat(item.height) || resolved || 0;
+                              const drawerHVal = parseFloat(item.drawerHeight || '') || 0;
+                              const missingDrawerH =
+                                item.type === 'tiroir' && !(parseFloat(item.height) > 0);
+                              const exceedsFacadeH =
+                                item.type === 'tiroir' && facadeH > 0 && drawerHVal > facadeH;
+                              const standardDrawerHeights = [
+                                60, 80, 100, 120, 140, 150, 160, 180, 200, 220, 250,
+                              ];
+                              const itemMat =
+                                item.material ||
+                                guidedFields.material ||
+                                config.material ||
+                                'Mela 19mm';
+
+                              return (
+                                <div
+                                  key={`facade-card-${idx}`}
+                                  className="p-3 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-2.5 shadow-sm"
+                                >
+                                  {/* Barre supérieure : Badge position + Boutons d'ordre Monter / Descendre */}
+                                  <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                                        #{idx + 1}{' '}
+                                        {idx === 0
+                                          ? 'HAUT'
+                                          : idx === compositionState.facadeItems.length - 1
+                                          ? 'BAS'
+                                          : 'MILIEU'}
+                                      </span>
+                                      <span className="text-xs font-bold text-white">
+                                        {item.type === 'tiroir' ? 'Façade Tiroir' : 'Porte'}
+                                      </span>
+                                    </div>
+
+                                    {/* Boutons pour modifier l'ordre des façades */}
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        disabled={idx === 0}
+                                        onClick={() => moveFacadeItemUp(idx)}
+                                        title="Monter cette façade vers le haut"
+                                        className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1 transition-colors"
+                                      >
+                                        <ArrowUp className="w-3.5 h-3.5" />
+                                        <span>Monter</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          idx === compositionState.facadeItems.length - 1
+                                        }
+                                        onClick={() => moveFacadeItemDown(idx)}
+                                        title="Descendre cette façade vers le bas"
+                                        className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1 transition-colors"
+                                      >
+                                        <ArrowDown className="w-3.5 h-3.5" />
+                                        <span>Descendre</span>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Contrôles principaux : Type, Matière de la façade, Hauteur */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    {/* Type */}
+                                    <div>
+                                      <label className="block text-[10px] font-semibold text-slate-400 mb-1">
+                                        Type d&apos;élément :
+                                      </label>
+                                      <select
+                                        value={item.type}
+                                        onChange={(e) =>
+                                          updateFacadeItem(idx, {
+                                            type: e.target.value as FacadeItemType,
+                                          })
+                                        }
+                                        className="w-full bg-slate-800 border border-slate-700 focus:border-amber-500 rounded-lg px-2 py-1.5 text-xs text-white font-semibold cursor-pointer"
+                                      >
+                                        <option value="porte">Porte</option>
+                                        <option value="tiroir">Façade tiroir</option>
+                                      </select>
+                                    </div>
+
+                                    {/* Matière de cette façade */}
+                                    <div>
+                                      <label className="block text-[10px] font-semibold text-slate-400 mb-1">
+                                        Matière de cette façade :
+                                      </label>
+                                      <select
+                                        value={itemMat}
+                                        onChange={(e) =>
+                                          updateFacadeItem(idx, { material: e.target.value })
+                                        }
+                                        className="w-full bg-slate-800 border border-slate-700 focus:border-amber-500 rounded-lg px-2 py-1.5 text-xs text-amber-300 font-bold cursor-pointer"
+                                      >
+                                        {selectableMaterials.map((m) => (
+                                          <option key={`m-facade-${idx}-${m}`} value={m}>
+                                            {m}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+
+                                    {/* Hauteur de la façade */}
+                                    <div>
+                                      <div className="flex items-center justify-between mb-1">
+                                        <label className="block text-[10px] font-semibold text-slate-400">
+                                          Hauteur façade (mm) :
+                                        </label>
+                                        {resolved > 0 && (
+                                          <span
+                                            className={`text-[10px] font-mono font-bold ${
+                                              isAuto ? 'text-emerald-400' : 'text-slate-400'
+                                            }`}
+                                          >
+                                            {isAuto ? `Auto : ${resolved} mm` : `${resolved} mm`}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        value={item.height}
+                                        onChange={(e) =>
+                                          updateFacadeItem(idx, { height: e.target.value })
+                                        }
+                                        placeholder={
+                                          item.type === 'tiroir' ? 'Hauteur façade *' : 'Auto'
+                                        }
+                                        className={`w-full bg-slate-800 border rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold ${
+                                          missingDrawerH
+                                            ? 'border-red-500'
+                                            : 'border-slate-700 focus:border-amber-500'
+                                        }`}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Options spécifiques si Façade tiroir */}
+                                  {item.type === 'tiroir' && (
+                                    <div className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-2 animate-in fade-in duration-150">
+                                      {/* Hauteur du bac de tiroir */}
+                                      <div className="space-y-1">
+                                        <div className="flex flex-wrap items-center justify-between gap-1 text-[10px]">
+                                          <span className="font-semibold text-amber-300 flex items-center gap-1">
+                                            <Ruler className="w-3 h-3 text-amber-400" />
+                                            <span>Hauteur du bac (tiroir) * :</span>
+                                          </span>
+                                          <span className="text-slate-400 font-mono">
+                                            {facadeH > 0
+                                              ? `Max autorisé : ${facadeH} mm`
+                                              : 'Saisissez d’abord la hauteur façade'}
+                                          </span>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-1">
+                                          {standardDrawerHeights.map((dh) => {
+                                            const isTooHigh = facadeH > 0 && dh > facadeH;
+                                            const isSelected = drawerHVal === dh;
+                                            return (
+                                              <button
+                                                key={`it-${idx}-dh-${dh}`}
+                                                type="button"
+                                                disabled={isTooHigh}
+                                                onClick={() => {
+                                                  if (!isTooHigh) {
+                                                    updateFacadeItem(idx, {
+                                                      drawerHeight: String(dh),
+                                                    });
+                                                  }
+                                                }}
+                                                className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${
+                                                  isTooHigh
+                                                    ? 'opacity-30 line-through cursor-not-allowed bg-slate-900 text-slate-600'
+                                                    : isSelected
+                                                    ? 'bg-amber-500 text-slate-950 font-black'
+                                                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                                }`}
+                                              >
+                                                {dh} mm
+                                              </button>
+                                            );
+                                          })}
+                                          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5">
+                                            <input
+                                              type="number"
+                                              min="1"
+                                              max={facadeH > 0 ? facadeH : undefined}
+                                              placeholder="Autre"
+                                              value={item.drawerHeight || ''}
+                                              onChange={(e) =>
+                                                updateFacadeItem(idx, {
+                                                  drawerHeight: e.target.value,
+                                                })
+                                              }
+                                              className="w-12 bg-transparent text-[10px] font-mono font-bold text-white focus:outline-none"
+                                            />
+                                            <span className="text-[9px] text-slate-400">mm</span>
+                                          </div>
+                                        </div>
+                                        {exceedsFacadeH && (
+                                          <p className="text-[10px] text-red-400 font-semibold">
+                                            La hauteur du tiroir ({drawerHVal} mm) ne peut pas dépasser celle de la façade ({facadeH} mm).
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {/* Épaisseur des coulisses */}
+                                      <div className="flex flex-wrap items-center justify-between gap-1 pt-1.5 border-t border-slate-800/80 text-[10px]">
+                                        <span className="font-semibold text-slate-300">
+                                          Épaisseur coulisses :
+                                        </span>
+                                        <div className="flex flex-wrap items-center gap-1">
+                                          {allSlideThicknesses.map((th) => (
+                                            <button
+                                              key={`th-${idx}-${th}`}
+                                              type="button"
+                                              onClick={() => handleSelectSlideThickness(th)}
+                                              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                                                compositionState.drawerSlideThickness === th
+                                                  ? 'bg-amber-500 text-slate-950'
+                                                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                              }`}
+                                            >
+                                              {formatSlideThickness(th)}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Options si Porte */}
+                                  {item.type === 'porte' && (
+                                    <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800 flex items-center justify-between gap-2 text-[11px]">
+                                      <span className="text-slate-300">
+                                        Étagères intérieures associées à cette porte :
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max="10"
+                                          placeholder="0"
+                                          value={item.shelvesCount || ''}
+                                          onChange={(e) =>
+                                            updateFacadeItem(idx, {
+                                              shelvesCount: e.target.value,
+                                            })
+                                          }
+                                          className="w-14 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-center text-xs font-mono font-bold text-white"
+                                        />
+                                        <span className="text-[10px] text-slate-400">étagère(s)</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {facadeLayout.error && (
+                            <div className="flex items-start gap-1.5 text-[11px] text-red-300 bg-red-500/10 border border-red-500/40 rounded-lg px-2.5 py-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                              <span>{facadeLayout.error}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800">
                       <span className="text-[11px] text-slate-400">
                         {isGuidedFormComplete(guidedFields)
-                          ? '✅ Tous les champs sont saisis — la composition du caisson (façades & tiroirs) est prête.'
-                          : 'Remplissez tous les champs obligatoires pour ouvrir la composition du caisson.'}
+                          ? '✅ Meuble complet configuré — prêt à être ajouté au projet.'
+                          : 'Remplissez les dimensions et la matière du caisson.'}
                       </span>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setShowCompositionModal(true)}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                          onClick={() => setShowPartsSummaryModal(true)}
+                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors"
                         >
-                          <Sliders className="w-3.5 h-3.5" />
-                          <span>Composition (Façades &amp; Tiroirs)</span>
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Matière par partie...</span>
                         </button>
                         <button
                           type="button"
-                          onClick={handleValidateGuidedTemplate}
-                          className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                          disabled={!hasValidDimensions || calculated.cutItems.length === 0}
+                          onClick={handleInjectPieces}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all disabled:opacity-40"
                         >
-                          <Layers className="w-3.5 h-3.5" />
-                          <span>Valider &amp; Récapitulatif</span>
+                          {editingCabinetName ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Plus className="w-4 h-4" />
+                          )}
+                          <span>
+                            {editingCabinetName
+                              ? 'Mettre à jour ce caisson dans le projet'
+                              : 'Ajouter ce caisson au projet'}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -3087,6 +3748,36 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             {config.thickness > 0
               ? `calculée(s) selon l'épaisseur de ${config.thickness} mm.`
               : 'calculée(s).'}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {calculated.pieces.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowPartsSummaryModal(true)}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors flex items-center gap-1.5"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Détail matières par partie</span>
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={!hasValidDimensions || calculated.cutItems.length === 0}
+              onClick={handleInjectPieces}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs transition-all shadow-md disabled:opacity-40"
+            >
+              {editingCabinetName ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
+              <span>
+                {editingCabinetName
+                  ? 'Mettre à jour ce caisson dans le projet'
+                  : 'Ajouter ce caisson au projet'}
+              </span>
+            </button>
           </div>
         </div>
       </div>

@@ -592,17 +592,21 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
           spec !== null && spec.frontHeight > 0
       );
 
-    // Regroupement des composants identiques (même type et même hauteur)
-    const groups = new Map<string, { type: FacadeItem['type']; h: number; count: number; auto: boolean }>();
+    // Regroupement des composants identiques (même type, même hauteur et même matière)
+    const groups = new Map<
+      string,
+      { type: FacadeItem['type']; h: number; material?: string; count: number; auto: boolean }
+    >();
     items.forEach((it, i) => {
       const h = Math.max(FACADE_MIN_HEIGHT, layout.heights[i] || FACADE_MIN_HEIGHT);
-      const key = `${it.type}-${h}`;
+      const mat = it.material?.trim();
+      const key = `${it.type}-${h}-${mat || ''}`;
       const g = groups.get(key);
       if (g) {
         g.count += 1;
         g.auto = g.auto || i === layout.autoIndex;
       } else {
-        groups.set(key, { type: it.type, h, count: 1, auto: i === layout.autoIndex });
+        groups.set(key, { type: it.type, h, material: mat, count: 1, auto: i === layout.autoIndex });
       }
     });
 
@@ -615,9 +619,10 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       const totalQty = g.count * cabinetCount;
       const label = g.type === 'tiroir' ? 'Façade tiroir' : 'Porte';
       const partId = g.type === 'tiroir' ? `facade_tiroir_${g.h}` : `facade_porte_${g.h}`;
-      const defaultMat = g.type === 'tiroir'
+      const fallbackMat = g.type === 'tiroir'
         ? (config.partMaterials?.['facade_tiroir'] || config.partMaterials?.['doors'] || resolvedDoorMaterial)
         : (config.partMaterials?.['porte'] || config.partMaterials?.['doors'] || resolvedDoorMaterial);
+      const defaultMat = g.material || fallbackMat;
       const pieceMat = getPartMat(partId, defaultMat);
       const autoFormula = g.auto
         ? `Auto : ${baseH} - ${2 * FACADE_EDGE_CLEARANCE} (jeux)${fixedDesc ? ` - ${fixedDesc}` : ''}${
