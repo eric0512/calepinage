@@ -176,6 +176,11 @@ export default function Home() {
     setWorkshopStock((prev) => prev.filter((it) => it.id !== id));
   }, []);
 
+  // Supprimer tout le stock atelier
+  const handleClearWorkshopStock = useCallback(() => {
+    setWorkshopStock([]);
+  }, []);
+
   // Ajouter manuellement une chute au stock atelier
   const handleAddManualWorkshopItem = useCallback(
     (newItem: WorkshopItem) => {
@@ -858,6 +863,7 @@ export default function Home() {
               onAddFromWorkshop={handleAddFromWorkshop}
               onReintegrateToWorkshop={reintegrateToWorkshop}
               onDeleteWorkshopItem={handleDeleteWorkshopItem}
+              onClearWorkshopStock={handleClearWorkshopStock}
               onAddManualWorkshopItem={handleAddManualWorkshopItem}
             />
 

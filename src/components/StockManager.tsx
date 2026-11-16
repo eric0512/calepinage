@@ -22,6 +22,7 @@ interface StockManagerProps {
   onAddFromWorkshop: (item: WorkshopItem) => void;
   onReintegrateToWorkshop: (panel: StockPanel) => void;
   onDeleteWorkshopItem: (id: string) => void;
+  onClearWorkshopStock?: () => void;
   onAddManualWorkshopItem: (item: WorkshopItem) => void;
 }
 
@@ -40,6 +41,7 @@ export const StockManager: React.FC<StockManagerProps> = ({
   onAddFromWorkshop,
   onReintegrateToWorkshop,
   onDeleteWorkshopItem,
+  onClearWorkshopStock,
   onAddManualWorkshopItem,
 }) => {
   // Liste ordonnée alphabétiquement de toutes les matières disponibles et suggestions
@@ -201,26 +203,6 @@ export const StockManager: React.FC<StockManagerProps> = ({
     onChange(panels.filter((p) => p.id !== id));
   };
 
-  const handleDeleteAll = () => {
-    if (panels.length === 0) return;
-    if (
-      !window.confirm(
-        `Supprimer tout le stock de panneaux bruts (${totalPanelsCount} panneau(x)) de ce projet ?`
-      )
-    ) {
-      return;
-    }
-    const workshopOnes = panels.filter((p) => p.workshopSourceId);
-    if (workshopOnes.length > 0) {
-      workshopOnes.forEach((p) => onReintegrateToWorkshop(p));
-      setWorkshopToast(
-        `${workshopOnes.length} panneau(x) d'atelier réintégré(s) au Stock Atelier !`
-      );
-      setTimeout(() => setWorkshopToast(null), 3000);
-    }
-    onChange([]);
-  };
-
   const applyPresetSize = (l: number, w: number) => {
     setLength(l);
     setWidth(w);
@@ -269,17 +251,6 @@ export const StockManager: React.FC<StockManagerProps> = ({
               </span>
             )}
           </button>
-          {panels.length > 0 && (
-            <button
-              type="button"
-              onClick={handleDeleteAll}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-600 text-red-300 hover:text-white font-semibold text-xs transition-colors shadow-sm border border-red-500/30"
-              title="Supprimer tout le stock de panneaux bruts du projet"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Supprimer tout le stock</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -592,6 +563,25 @@ export const StockManager: React.FC<StockManagerProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {workshopStock.length > 0 && onClearWorkshopStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Supprimer tout le Stock Atelier (${totalWorkshopPanels} chute(s)) ?`
+                          )
+                        ) {
+                          onClearWorkshopStock();
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-950/60 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 transition-colors"
+                      title="Supprimer toutes les chutes du Stock Atelier"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Supprimer tout le stock</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setShowManualWorkshopForm((prev) => !prev)}
