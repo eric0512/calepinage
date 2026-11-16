@@ -1,4 +1,4 @@
-import { EdgeBandingEdges } from '@/types/cutting';
+import { EdgeBandingEdges, PanelResult } from '@/types/cutting';
 
 /**
  * Extrait l'épaisseur numérique (en mm) d'une chaîne de bande de chant (ex: "2mm", "0,8mm", "Sans").
@@ -118,5 +118,79 @@ export function getDisplayEdges(
     bottom: optBottom,
     left: optLeft,
     right: optRight,
+  };
+}
+
+export interface MaterialEdgeBandingSummary {
+  material: string;
+  totalMm: number;
+  totalMeters: number;
+  edgesCount: number;
+}
+
+export interface ProjectEdgeBandingSummary {
+  totalMm: number;
+  totalMeters: number;
+  totalEdgesCount: number;
+  byMaterial: MaterialEdgeBandingSummary[];
+}
+
+/**
+ * Calcule la longueur totale de bande de champs nécessaire pour l'ensemble du projet
+ * (à partir des pièces placées sur les panneaux du plan de coupe), avec ventilation par matière.
+ */
+export function computeProjectEdgeBandingLength(
+  panels: PanelResult[]
+): ProjectEdgeBandingSummary {
+  let totalMm = 0;
+  let totalEdgesCount = 0;
+  const matMap = new Map<string, { totalMm: number; edgesCount: number }>();
+
+  panels.forEach((panel) => {
+    panel.placedPieces.forEach((piece) => {
+      const edges = piece.edgeBandingEdges;
+      if (!edges) return;
+
+      const fLen =
+        piece.finishedLength && piece.finishedLength > 0
+          ? piece.finishedLength
+          : Math.max(piece.originalLength, piece.originalWidth);
+      const fWid =
+        piece.finishedWidth && piece.finishedWidth > 0
+          ? piece.finishedWidth
+          : Math.min(piece.originalLength, piece.originalWidth);
+
+      const lenEdges = (edges.top ? 1 : 0) + (edges.bottom ? 1 : 0);
+      const widEdges = (edges.left ? 1 : 0) + (edges.right ? 1 : 0);
+      const count = lenEdges + widEdges;
+      if (count === 0) return;
+
+      const pieceMm = lenEdges * fLen + widEdges * fWid;
+      totalMm += pieceMm;
+      totalEdgesCount += count;
+
+      const matKey = (piece.material || panel.material || 'Autre').trim();
+      const prev = matMap.get(matKey) || { totalMm: 0, edgesCount: 0 };
+      matMap.set(matKey, {
+        totalMm: prev.totalMm + pieceMm,
+        edgesCount: prev.edgesCount + count,
+      });
+    });
+  });
+
+  const byMaterial: MaterialEdgeBandingSummary[] = Array.from(matMap.entries())
+    .map(([material, data]) => ({
+      material,
+      totalMm: Math.round(data.totalMm),
+      totalMeters: Math.round((data.totalMm / 1000) * 100) / 100,
+      edgesCount: data.edgesCount,
+    }))
+    .sort((a, b) => b.totalMm - a.totalMm);
+
+  return {
+    totalMm: Math.round(totalMm),
+    totalMeters: Math.round((totalMm / 1000) * 100) / 100,
+    totalEdgesCount,
+    byMaterial,
   };
 }

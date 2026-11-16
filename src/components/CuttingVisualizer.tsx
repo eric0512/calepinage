@@ -24,6 +24,7 @@ import {
   getDisplayEdges,
   formatEdgesLabel,
   hasAnyEdgeBanding,
+  computeProjectEdgeBandingLength,
 } from '@/lib/edge-banding';
 
 interface CuttingVisualizerProps {
@@ -434,6 +435,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   }
 
   const currentPanel = panels[selectedPanelIdx] || panels[0];
+  const edgeBandingSummary = computeProjectEdgeBandingLength(panels);
 
   return (
     <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-5 shadow-sm space-y-4">
@@ -566,6 +568,51 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Récapitulatif de la longueur totale de bande de champs nécessaire pour tout le projet */}
+      <div className="bg-slate-900/80 border border-orange-500/30 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
+            <span className="w-3.5 h-1 bg-orange-500 rounded-full" />
+          </div>
+          <div>
+            <div className="font-bold text-orange-300 flex items-center gap-1.5 flex-wrap">
+              <span>
+                Bande de champs nécessaire pour le projet
+                {edgeBanding ? ` (${edgeBanding})` : ''} :
+              </span>
+              <span className="font-mono text-white text-sm">
+                {edgeBandingSummary.totalMeters.toFixed(2).replace('.', ',')} m
+              </span>
+              {edgeBandingSummary.totalMm > 0 && (
+                <span className="text-[11px] font-mono text-slate-400 font-normal">
+                  ({edgeBandingSummary.totalMm} mm • {edgeBandingSummary.totalEdgesCount} chant
+                  {edgeBandingSummary.totalEdgesCount > 1 ? 's' : ''})
+                </span>
+              )}
+            </div>
+            {edgeBandingSummary.totalMm === 0 && (
+              <div className="text-[11px] text-slate-400">
+                Aucun chant sélectionné dans la liste de débit (cliquez sur H, B, G, D sur vos pièces).
+              </div>
+            )}
+          </div>
+        </div>
+
+        {edgeBandingSummary.byMaterial.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {edgeBandingSummary.byMaterial.map((m) => (
+              <span
+                key={m.material}
+                className="px-2 py-0.5 rounded-md bg-slate-950 border border-orange-500/30 text-[11px] font-mono text-orange-200"
+              >
+                <strong className="text-white">{m.material}</strong> :{' '}
+                {m.totalMeters.toFixed(2).replace('.', ',')} m ({m.edgesCount} ch.)
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Navigation par onglets de panneaux si vue unitaire */}
