@@ -45,6 +45,7 @@ import type { FacadeItemType, DrawerBottomType } from '@/types/cutting';
 interface FacadeDraftItem {
   type: FacadeItemType;
   height: string;
+  heightValidated?: boolean;
   drawerHeight?: string;
   material?: string;
   shelvesCount?: string;
@@ -776,7 +777,15 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   ]);
 
   // Calcul en direct de la répartition des hauteurs de la façade (jeux et espacements déduits)
-  const compoHeight = config.height || parseInt(guidedFields.height, 10) || 0;
+  const rawCompoHeight = config.height || parseInt(guidedFields.height, 10) || 0;
+  const compoFeetHeight =
+    (config.hasFeet ?? guidedFields.hasFeet)
+      ? config.feetHeight || parseInt(guidedFields.feetHeight, 10) || 0
+      : 0;
+  const compoHeight =
+    compoFeetHeight > 0 && rawCompoHeight > compoFeetHeight
+      ? Math.max(50, rawCompoHeight - compoFeetHeight)
+      : rawCompoHeight;
   const compoWidth = config.width || parseInt(guidedFields.width, 10) || 0;
   const compoThickness = config.thickness || 18;
   const facadeAvailableHeight = getFacadeAvailableHeight(
@@ -853,7 +862,27 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   // Mise à jour d'un composant de la façade (type ou hauteur) avec synchronisation des tiroirs
   const updateFacadeItem = (index: number, patch: Partial<FacadeDraftItem>) => {
     setCompositionState((prev) => {
-      const items = prev.facadeItems.map((it, i) => (i === index ? { ...it, ...patch } : it));
+      const isManualHeightEdit =
+        patch.height !== undefined && patch.heightValidated === undefined;
+      const items = prev.facadeItems.map((it, i) => {
+        if (i === index) {
+          return {
+            ...it,
+            ...patch,
+            ...(isManualHeightEdit ? { heightValidated: false } : {}),
+          };
+        }
+        // Si l'utilisateur modifie manuellement une hauteur et qu'un autre élément avait été auto-validé,
+        // on remet cet élément en mode auto pour qu'il se recalcule automatiquement et propose à nouveau la validation
+        if (isManualHeightEdit && it.heightValidated) {
+          return {
+            ...it,
+            height: '',
+            heightValidated: false,
+          };
+        }
+        return it;
+      });
       const drawers = items.filter((it) => it.type === 'tiroir').length;
       return {
         ...prev,
@@ -1762,10 +1791,10 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     {/* Tous les champs suivants sont masqués à l'ouverture tant qu'aucun élément n'est sélectionné */}
                     {guidedFields.elementName ? (
                       <div className="space-y-3 animate-in fade-in duration-200">
-                        {/* Ligne : Nom dans la liste de débit & Pieds sur ce caisson */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
-                          <div className="sm:col-span-2">
-                            <label className="text-[11px] text-slate-300 block mb-1">
+                        {/* Ligne : Nom dans la liste de débit & Pieds sur ce caisson (réduit + Hauteur du pied à droite) */}
+                        <div className="flex flex-wrap sm:flex-nowrap items-end gap-2 sm:gap-2.5">
+                          <div className="flex-1 min-w-[150px]">
+                            <label className="text-[11px] text-slate-300 block mb-1 truncate">
                               Nom dans la liste de débit <span className="text-amber-400">*</span> :
                             </label>
                             <input
@@ -1784,9 +1813,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                             />
                           </div>
 
-                          <div className="sm:col-span-1">
-                            <label className="text-[11px] text-slate-300 block mb-1 truncate" title="Pieds sur ce caisson ?">
-                              Pieds sur ce caisson ? <span className="text-amber-400">*</span> :
+                          <div className="w-28 sm:w-32 shrink-0">
+                            <label
+                              className="text-[11px] text-slate-300 block mb-1 truncate"
+                              title="Pieds sur ce caisson ?"
+                            >
+                              Pieds caisson <span className="text-amber-400">*</span> :
                             </label>
                             <select
                               value={guidedFields.hasFeet ? 'true' : 'false'}
@@ -1794,12 +1826,38 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                 const hasFeet = e.target.value === 'true';
                                 handleGuidedFieldChange('hasFeet', hasFeet, true);
                               }}
-                              className="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500"
+                              className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500"
                             >
-                              <option value="false">Non (sans pieds)</option>
-                              <option value="true">Oui (avec pieds)</option>
+                              <option value="false">Non</option>
+                              <option value="true">Oui</option>
                             </select>
                           </div>
+
+                          {guidedFields.hasFeet && (
+                            <div className="w-32 sm:w-36 shrink-0 animate-in fade-in duration-150">
+                              <label className="text-[11px] font-semibold text-amber-300 block mb-1 truncate">
+                                Hauteur du pied (mm) <span className="text-amber-400">*</span> :
+                              </label>
+                              <input
+                                type="number"
+                                required
+                                min="10"
+                                max="500"
+                                placeholder="Ex: 100"
+                                value={guidedFields.feetHeight}
+                                onChange={(e) =>
+                                  handleGuidedFieldChange('feetHeight', e.target.value)
+                                }
+                                className={`w-full bg-slate-800 border rounded px-2 py-1.5 text-white text-xs font-mono font-bold text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
+                                  guidedValidationError &&
+                                  (!guidedFields.feetHeight.trim() ||
+                                    parseInt(guidedFields.feetHeight, 10) <= 0)
+                                    ? 'border-red-500'
+                                    : 'border-amber-500/50'
+                                }`}
+                              />
+                            </div>
+                          )}
                         </div>
 
                         {/* LIGNE 1 : Hauteur, Largeur et Profondeur toujours sur la même ligne */}
@@ -1862,63 +1920,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                             />
                           </div>
                         </div>
-
-                        {/* Champ conditionnel : Hauteur du pied entre la LIGNE 1 (H/L/P) et la LIGNE 2 (Séparations/Étagères) */}
-                        {guidedFields.hasFeet && (
-                          <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg animate-in fade-in duration-200">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                              <div className="flex items-center gap-3">
-                                <div>
-                                  <label className="text-[11px] font-semibold text-amber-300 block mb-1 truncate">
-                                    Hauteur du pied (mm) <span className="text-amber-400">*</span> :
-                                  </label>
-                                  <div className="flex items-center gap-1.5">
-                                    <input
-                                      type="number"
-                                      required
-                                      min="10"
-                                      max="500"
-                                      placeholder="Ex: 100"
-                                      value={guidedFields.feetHeight}
-                                      onChange={(e) =>
-                                        handleGuidedFieldChange('feetHeight', e.target.value)
-                                      }
-                                      className={`w-28 bg-slate-800 border rounded px-2.5 py-1 text-white font-mono text-center placeholder-slate-500 focus:outline-none focus:border-amber-500 ${
-                                        guidedValidationError &&
-                                        (!guidedFields.feetHeight.trim() ||
-                                          parseInt(guidedFields.feetHeight, 10) <= 0)
-                                          ? 'border-red-500'
-                                          : 'border-slate-700'
-                                      }`}
-                                    />
-                                    <span className="text-xs text-slate-400 font-mono">mm</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Indicateur dynamique de calcul de la hauteur du corps débité */}
-                              {parseInt(guidedFields.height, 10) > 0 &&
-                                parseInt(guidedFields.feetHeight, 10) > 0 && (
-                                  <div className="text-xs text-slate-300 bg-slate-900/80 px-3 py-1.5 rounded-md border border-slate-700/80 shrink-0">
-                                    <div className="text-[10px] text-slate-400 uppercase font-semibold">
-                                      Hauteur caisson débité
-                                    </div>
-                                    <div className="font-mono text-amber-300 font-bold text-xs sm:text-sm">
-                                      {Math.max(
-                                        0,
-                                        parseInt(guidedFields.height, 10) -
-                                          parseInt(guidedFields.feetHeight, 10)
-                                      )}{' '}
-                                      mm{' '}
-                                      <span className="text-[10px] text-slate-400 font-normal">
-                                        ({guidedFields.height} - {guidedFields.feetHeight} pieds)
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-                            </div>
-                          </div>
-                        )}
 
                         {/* Choix de la matière qui constitue le corps du caisson */}
                         <div className="p-2.5 bg-slate-900/90 border border-slate-700/80 rounded-xl space-y-1.5">
@@ -2350,7 +2351,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                               const facadeH = parseFloat(item.height) || resolved || 0;
                               const drawerHVal = parseFloat(item.drawerHeight || '') || 0;
                               const missingDrawerH =
-                                item.type === 'tiroir' && !(parseFloat(item.height) > 0);
+                                item.type === 'tiroir' && !(facadeH > 0);
                               const exceedsFacadeH =
                                 item.type === 'tiroir' && facadeH > 0 && drawerHVal > facadeH;
                               const standardDrawerHeights = [
@@ -2451,39 +2452,86 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                       </select>
                                     </div>
 
-                                    {/* Hauteur de la façade */}
+                                    {/* Hauteur de la façade (auto-remplie si N-1 façades saisies, avec bouton Valider) */}
                                     <div>
-                                      <div className="flex items-center justify-between mb-1">
-                                        <label className="block text-[10px] font-semibold text-slate-400">
+                                      <div className="flex items-center justify-between mb-1 gap-1">
+                                        <label className="block text-[10px] font-semibold text-slate-400 truncate">
                                           Hauteur façade (mm) :
                                         </label>
-                                        {resolved > 0 && (
-                                          <span
-                                            className={`text-[10px] font-mono font-bold ${
-                                              isAuto ? 'text-emerald-400' : 'text-slate-400'
-                                            }`}
-                                          >
-                                            {isAuto ? `Auto : ${resolved} mm` : `${resolved} mm`}
+                                        {isAuto && resolved > 0 ? (
+                                          <span className="text-[10px] font-mono font-bold text-amber-300 shrink-0">
+                                            Calculé : {resolved} mm (espaces déduits)
                                           </span>
+                                        ) : item.heightValidated ? (
+                                          <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-0.5 shrink-0">
+                                            <Check className="w-3 h-3" /> Validée ({resolved || item.height} mm)
+                                          </span>
+                                        ) : resolved > 0 ? (
+                                          <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0">
+                                            {resolved} mm
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.5"
+                                          value={
+                                            item.height !== ''
+                                              ? item.height
+                                              : isAuto && resolved > 0
+                                              ? String(resolved)
+                                              : ''
+                                          }
+                                          onChange={(e) =>
+                                            updateFacadeItem(idx, { height: e.target.value })
+                                          }
+                                          placeholder={
+                                            item.type === 'tiroir' ? 'Hauteur façade *' : 'Auto'
+                                          }
+                                          className={`flex-1 min-w-0 bg-slate-800 border rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold ${
+                                            isAuto && resolved > 0
+                                              ? 'border-amber-500 text-amber-300 bg-amber-500/10'
+                                              : item.heightValidated
+                                              ? 'border-emerald-500/70 text-emerald-300'
+                                              : missingDrawerH && !isAuto
+                                              ? 'border-red-500 text-white'
+                                              : 'border-slate-700 focus:border-amber-500 text-white'
+                                          }`}
+                                        />
+                                        {isAuto && resolved > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              updateFacadeItem(idx, {
+                                                height: String(resolved),
+                                                heightValidated: true,
+                                              })
+                                            }
+                                            title={`Valider la hauteur calculée automatiquement (${resolved} mm, espaces déduits)`}
+                                            className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center gap-1 shrink-0 shadow-sm transition-all"
+                                          >
+                                            <Check className="w-3.5 h-3.5" />
+                                            <span>Valider</span>
+                                          </button>
+                                        )}
+                                        {item.heightValidated && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              updateFacadeItem(idx, {
+                                                height: '',
+                                                heightValidated: false,
+                                              })
+                                            }
+                                            title="Remettre en calcul automatique"
+                                            className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[10px] font-semibold shrink-0 transition-colors"
+                                          >
+                                            Auto
+                                          </button>
                                         )}
                                       </div>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="0.5"
-                                        value={item.height}
-                                        onChange={(e) =>
-                                          updateFacadeItem(idx, { height: e.target.value })
-                                        }
-                                        placeholder={
-                                          item.type === 'tiroir' ? 'Hauteur façade *' : 'Auto'
-                                        }
-                                        className={`w-full bg-slate-800 border rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold ${
-                                          missingDrawerH
-                                            ? 'border-red-500'
-                                            : 'border-slate-700 focus:border-amber-500'
-                                        }`}
-                                      />
                                     </div>
                                   </div>
 
@@ -4385,34 +4433,53 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                   type="number"
                                   min="0"
                                   step="0.5"
-                                  value={item.height}
+                                  value={
+                                    item.height !== ''
+                                      ? item.height
+                                      : isAuto && resolved > 0
+                                      ? String(resolved)
+                                      : ''
+                                  }
                                   onChange={(e) => updateFacadeItem(idx, { height: e.target.value })}
                                   placeholder={item.type === 'tiroir' ? 'Hauteur façade *' : 'Auto'}
                                   title={
                                     item.type === 'tiroir'
-                                      ? 'Hauteur de la façade du tiroir (obligatoire)'
-                                      : 'Hauteur de la porte (laisser vide pour un calcul automatique)'
+                                      ? 'Hauteur de la façade du tiroir'
+                                      : 'Hauteur de la porte (calcul automatique si dernier élément)'
                                   }
-                                  className={`w-full bg-slate-900 border rounded-lg px-2.5 py-1.5 text-xs text-white font-mono font-bold ${
-                                    missingDrawerH
-                                      ? 'border-red-500/70 focus:border-red-400'
-                                      : 'border-slate-700 focus:border-amber-500'
+                                  className={`w-full bg-slate-900 border rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold ${
+                                    isAuto && resolved > 0
+                                      ? 'border-amber-500 text-amber-300 bg-amber-500/10'
+                                      : item.heightValidated
+                                      ? 'border-emerald-500/70 text-emerald-300'
+                                      : missingDrawerH && !isAuto
+                                      ? 'border-red-500/70 focus:border-red-400 text-white'
+                                      : 'border-slate-700 focus:border-amber-500 text-white'
                                   }`}
                                 />
-                                <span
-                                  className={`text-[11px] font-mono font-bold text-right ${
-                                    isAuto ? 'text-emerald-400' : 'text-slate-400'
-                                  }`}
-                                >
-                                  {isAuto
-                                    ? `= ${resolved} mm`
-                                    : resolved > 0
-                                    ? `${resolved} mm`
-                                    : '—'}
-                                  {isAuto && (
-                                    <span className="block text-[9px] font-semibold uppercase">auto</span>
-                                  )}
-                                </span>
+                                {isAuto && resolved > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateFacadeItem(idx, {
+                                        height: String(resolved),
+                                        heightValidated: true,
+                                      })
+                                    }
+                                    className="px-2 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] flex items-center justify-center gap-1 shadow-sm"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    <span>Valider</span>
+                                  </button>
+                                ) : (
+                                  <span
+                                    className={`text-[11px] font-mono font-bold text-right ${
+                                      item.heightValidated ? 'text-emerald-400' : 'text-slate-400'
+                                    }`}
+                                  >
+                                    {resolved > 0 ? `${resolved} mm` : '—'}
+                                  </span>
+                                )}
                               </div>
 
                               {/* Options spécifiques dès que Façade tiroir est sélectionné : Hauteur du tiroir & Épaisseur des coulisses */}

@@ -126,9 +126,22 @@ export function computeFacadeLayout(
   const n = items.length;
   const safeGap = gap > 0 ? gap : 0;
   const gapsTotal = n > 1 ? (n - 1) * safeGap : 0;
+  const heights = items.map((it) => (it.height && it.height > 0 ? it.height : 0));
+  const emptyIdx = items
+    .map((it, i) => (it.height && it.height > 0 ? -1 : i))
+    .filter((i) => i >= 0);
+  const fixedSum = heights.reduce((s, h) => s + h, 0);
+
+  let autoIndex = -1;
+  if (emptyIdx.length === 1 && availableHeight > 0) {
+    autoIndex = emptyIdx[0];
+    const autoH = Math.floor(availableHeight - fixedSum - gapsTotal);
+    heights[autoIndex] = Math.max(0, autoH);
+  }
+
   const base: FacadeLayoutResult = {
-    heights: items.map((it) => (it.height && it.height > 0 ? it.height : 0)),
-    autoIndex: -1,
+    heights,
+    autoIndex,
     available: availableHeight,
     gapsTotal,
     remaining: 0,
@@ -137,13 +150,35 @@ export function computeFacadeLayout(
   };
   if (n === 0) return base;
 
-  const missingDrawer = items.findIndex(
-    (it) => it.type === 'tiroir' && !(it.height && it.height > 0)
-  );
-  if (missingDrawer >= 0) {
+  if (emptyIdx.length > 1) {
     return {
       ...base,
-      error: `La hauteur de la façade du tiroir (élément ${missingDrawer + 1}) est obligatoire.`,
+      error: `Saisissez la hauteur de ${n - 1} élément${n - 1 > 1 ? 's' : ''} sur ${n} : le dernier sera calculé automatiquement.`,
+    };
+  }
+
+  if (emptyIdx.length === 1) {
+    const autoH = heights[autoIndex];
+    if (autoH < FACADE_MIN_HEIGHT) {
+      return {
+        ...base,
+        error: `Hauteurs trop importantes : il ne reste que ${Math.max(0, autoH)} mm pour l'élément ${autoIndex + 1} (minimum ${FACADE_MIN_HEIGHT} mm).`,
+      };
+    }
+  }
+
+  const invalidDrawerBox = items.findIndex(
+    (it, idx) =>
+      it.type === 'tiroir' &&
+      heights[idx] > 0 &&
+      it.drawerHeight &&
+      it.drawerHeight > heights[idx]
+  );
+  if (invalidDrawerBox >= 0) {
+    const it = items[invalidDrawerBox];
+    return {
+      ...base,
+      error: `La hauteur du tiroir (élément ${invalidDrawerBox + 1} : ${it.drawerHeight} mm) ne peut pas être supérieure à la hauteur de la façade (${heights[invalidDrawerBox]} mm).`,
     };
   }
 
@@ -160,48 +195,8 @@ export function computeFacadeLayout(
     };
   }
 
-  const invalidDrawerBox = items.findIndex(
-    (it) =>
-      it.type === 'tiroir' &&
-      it.height &&
-      it.height > 0 &&
-      it.drawerHeight &&
-      it.drawerHeight > it.height
-  );
-  if (invalidDrawerBox >= 0) {
-    const it = items[invalidDrawerBox];
-    return {
-      ...base,
-      error: `La hauteur du tiroir (élément ${invalidDrawerBox + 1} : ${it.drawerHeight} mm) ne peut pas être supérieure à la hauteur de la façade (${it.height} mm).`,
-    };
-  }
-
-  const emptyIdx = items
-    .map((it, i) => (it.height && it.height > 0 ? -1 : i))
-    .filter((i) => i >= 0);
-  const fixedSum = base.heights.reduce((s, h) => s + h, 0);
-
-  if (emptyIdx.length > 1) {
-    return {
-      ...base,
-      error: `Saisissez la hauteur de ${n - 1} élément${n - 1 > 1 ? 's' : ''} sur ${n} : un seul élément peut être calculé automatiquement.`,
-    };
-  }
-
   if (emptyIdx.length === 1) {
-    const autoIndex = emptyIdx[0];
-    const autoH = Math.floor(availableHeight - fixedSum - gapsTotal);
-    const heights = [...base.heights];
-    heights[autoIndex] = Math.max(0, autoH);
-    if (autoH < FACADE_MIN_HEIGHT) {
-      return {
-        ...base,
-        heights,
-        autoIndex,
-        error: `Hauteurs trop importantes : il ne reste que ${Math.max(0, autoH)} mm pour l'élément ${autoIndex + 1} (minimum ${FACADE_MIN_HEIGHT} mm).`,
-      };
-    }
-    return { ...base, heights, autoIndex };
+    return base;
   }
 
   // Toutes les hauteurs sont saisies
