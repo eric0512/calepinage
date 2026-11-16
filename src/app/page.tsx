@@ -870,6 +870,7 @@ export default function Home() {
               allAvailableMaterials={allAvailableMaterials}
               stockPanels={stockPanels}
               workshopStock={workshopStock}
+              edgeBanding={settings.edgeBanding}
               isCabinetModalOpen={showCabinetModal}
               onOpenCabinetModal={() => setShowCabinetModal(true)}
               onCloseCabinetModal={() => setShowCabinetModal(false)}

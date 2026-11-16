@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { CutItem, StockPanel, WorkshopItem, CabinetConfig } from '@/types/cutting';
+import { CutItem, EdgeBandingEdges, StockPanel, WorkshopItem, CabinetConfig } from '@/types/cutting';
+import {
+  computeCutDimensions,
+  parseEdgeBandingThickness,
+  hasAnyEdgeBanding,
+} from '@/lib/edge-banding';
 import {
   ListPlus,
   Plus,
@@ -36,6 +41,7 @@ interface CutListManagerProps {
   allAvailableMaterials?: string[];
   stockPanels?: StockPanel[];
   workshopStock?: WorkshopItem[];
+  edgeBanding?: string;
   onRequestOptimize?: (newItems?: CutItem[]) => void;
   isCabinetModalOpen?: boolean;
   onOpenCabinetModal?: () => void;
@@ -215,11 +221,13 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   allAvailableMaterials,
   stockPanels,
   workshopStock,
+  edgeBanding,
   onRequestOptimize,
   isCabinetModalOpen = false,
   onOpenCabinetModal,
   onCloseCabinetModal,
 }) => {
+  const edgeThickness = parseEdgeBandingThickness(edgeBanding);
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -592,7 +600,7 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   const handleUpdate = (
     id: string,
     field: keyof CutItem,
-    val: string | number | boolean
+    val: string | number | boolean | EdgeBandingEdges
   ) => {
     onChange(
       items.map((it) => {
@@ -1085,6 +1093,12 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                   </span>
                                 </th>
                                 <th className="py-2 px-1 text-center w-12 sm:w-16">Qté</th>
+                                <th
+                                  className="py-2 px-1 text-center w-24 sm:w-28"
+                                  title="Chants avec bande de champs (H: Haut/Long.1, B: Bas/Long.2, G: Gauche/Larg.1, D: Droite/Larg.2)"
+                                >
+                                  Chants{edgeThickness > 0 ? ` (${edgeThickness}mm)` : ''}
+                                </th>
                                 <th className="py-2 px-1 text-center w-10 sm:w-20" title="Sens du fil du bois">
                                   Fil<span className="hidden sm:inline"> du bois</span>
                                 </th>
@@ -1092,7 +1106,32 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700/60 text-slate-200">
-                              {group.items.map((item) => (
+                              {group.items.map((item) => {
+                                const edges: EdgeBandingEdges = item.edgeBandingEdges || {};
+                                const { cutLength, cutWidth, hasDeduction } = computeCutDimensions(
+                                  item.length,
+                                  item.width,
+                                  edges,
+                                  edgeThickness
+                                );
+                                const toggleEdge = (edgeKey: keyof EdgeBandingEdges) => {
+                                  const nextEdges: EdgeBandingEdges = {
+                                    ...edges,
+                                    [edgeKey]: !edges[edgeKey],
+                                  };
+                                  handleUpdate(item.id, 'edgeBandingEdges', nextEdges);
+                                };
+                                const toggleAllEdges = () => {
+                                  const allOn =
+                                    !!edges.top && !!edges.bottom && !!edges.left && !!edges.right;
+                                  handleUpdate(item.id, 'edgeBandingEdges', {
+                                    top: !allOn,
+                                    bottom: !allOn,
+                                    left: !allOn,
+                                    right: !allOn,
+                                  });
+                                };
+                                return (
                                 <tr
                                   key={item.id}
                                   className="hover:bg-slate-750/50 transition-colors group"
@@ -1171,6 +1210,14 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                           </span>
                                         )}
                                     </div>
+                                    {hasDeduction && (
+                                      <div className="text-[10px] font-mono text-orange-300 mt-0.5">
+                                        Débit coupe : <strong>{cutLength} × {cutWidth} mm</strong>{' '}
+                                        <span className="text-slate-400">
+                                          (chants -{edgeThickness} mm)
+                                        </span>
+                                      </div>
+                                    )}
                                   </td>
                                   <td className="py-1.5 sm:py-2 px-1 text-center">
                                     <input
@@ -1187,6 +1234,51 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                       }
                                       className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 font-mono text-center font-bold text-emerald-400 w-10 sm:w-12 text-xs"
                                     />
+                                  </td>
+                                  <td className="py-1.5 sm:py-2 px-1 text-center">
+                                    <div className="inline-flex items-center gap-0.5 bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5">
+                                      {(
+                                        [
+                                          { key: 'top', label: 'H', title: 'Chant Haut (Longueur 1)' },
+                                          { key: 'bottom', label: 'B', title: 'Chant Bas (Longueur 2)' },
+                                          { key: 'left', label: 'G', title: 'Chant Gauche (Largeur 1)' },
+                                          { key: 'right', label: 'D', title: 'Chant Droit (Largeur 2)' },
+                                        ] as const
+                                      ).map((eDef) => {
+                                        const active = !!edges[eDef.key];
+                                        return (
+                                          <button
+                                            key={eDef.key}
+                                            type="button"
+                                            onClick={() => toggleEdge(eDef.key)}
+                                            title={`${eDef.title}${active ? ' (Actif)' : ''}`}
+                                            className={`w-5 h-5 rounded text-[10px] font-mono font-bold transition-colors ${
+                                              active
+                                                ? 'bg-orange-500 text-slate-950 shadow-sm'
+                                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                            }`}
+                                          >
+                                            {eDef.label}
+                                          </button>
+                                        );
+                                      })}
+                                      <button
+                                        type="button"
+                                        onClick={toggleAllEdges}
+                                        title="Tout sélectionner / Tout désélectionner (4 chants)"
+                                        className={`w-5 h-5 rounded text-[9px] font-mono font-bold transition-colors border-l border-slate-700/70 ${
+                                          hasAnyEdgeBanding(edges) &&
+                                          edges.top &&
+                                          edges.bottom &&
+                                          edges.left &&
+                                          edges.right
+                                            ? 'bg-amber-500 text-slate-950'
+                                            : 'text-slate-400 hover:bg-slate-800 hover:text-amber-300'
+                                        }`}
+                                      >
+                                        4
+                                      </button>
+                                    </div>
                                   </td>
                                   <td className="py-1.5 sm:py-2 px-1 text-center">
                                     <button
@@ -1230,7 +1322,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                                     </div>
                                   </td>
                                 </tr>
-                              ))}
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>

@@ -101,17 +101,25 @@ export interface CabinetConfig {
   drawerGrooveDepth?: number; // Profondeur de la rainure du fond de tiroir (mm, égale à 1/3 de l'épaisseur de la matière)
 }
 
+export interface EdgeBandingEdges {
+  top?: boolean; // Longueur 1 (chant haut)
+  bottom?: boolean; // Longueur 2 (chant bas)
+  left?: boolean; // Largeur 1 (chant gauche)
+  right?: boolean; // Largeur 2 (chant droit)
+}
+
 export interface CutItem {
   id: string;
   name: string; // Étiquette / Nom de la pièce
   material: string; // Matière correspondante
   thickness?: number; // Épaisseur en mm (ex: 19)
-  length: number; // en mm
-  width: number; // en mm
+  length: number; // en mm (cote finie)
+  width: number; // en mm (cote finie)
   quantity: number; // Quantité requise
   canRotate: boolean; // Autoriser rotation (si le sens du fil du bois le permet)
   color?: string; // Couleur d'identification visuelle
   cabinetConfig?: CabinetConfig; // Configuration et dimensions du caisson associé
+  edgeBandingEdges?: EdgeBandingEdges; // Chants sur lesquels il y a de la bande de champs
 }
 
 export interface PlacedPiece {
@@ -121,10 +129,13 @@ export interface PlacedPiece {
   material: string;
   x: number;
   y: number;
-  length: number; // Dimension le long de l'axe X
-  width: number; // Dimension le long de l'axe Y
+  length: number; // Dimension de coupe le long de l'axe X
+  width: number; // Dimension de coupe le long de l'axe Y
   originalLength: number;
   originalWidth: number;
+  finishedLength?: number; // Cote finie avant déduction de la bande de chant
+  finishedWidth?: number; // Cote finie avant déduction de la bande de chant
+  edgeBandingEdges?: EdgeBandingEdges; // Chants à plaquer
   rotated: boolean;
   color: string;
 }

@@ -10,6 +10,13 @@ import {
   CabinetSectionKey,
 } from '@/lib/piece-labels';
 import { OptimizationResult, CutItem, CutSettings } from '@/types/cutting';
+import {
+  computeCutDimensions,
+  formatEdgesLabel,
+  getDisplayEdges,
+  hasAnyEdgeBanding,
+  parseEdgeBandingThickness,
+} from '@/lib/edge-banding';
 
 interface PrintDossierProps {
   result: OptimizationResult;
@@ -118,6 +125,7 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
               <th className="p-1.5">Désignation</th>
               <th className="p-1.5">Matière</th>
               <th className="p-1.5">Dimensions (L × l mm)</th>
+              <th className="p-1.5 text-center">Chants</th>
               <th className="p-1.5 text-center">Quantité</th>
               <th className="p-1.5 text-center">Fil du Bois</th>
             </tr>
@@ -126,35 +134,59 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
             {groupedPrintItems.map((cabGroup) => (
               <React.Fragment key={cabGroup.cabinet}>
                 <tr className="bg-slate-200 font-bold border-t-2 border-b border-gray-400">
-                  <td colSpan={6} className="p-1.5 text-xs text-gray-900 tracking-wide">
+                  <td colSpan={7} className="p-1.5 text-xs text-gray-900 tracking-wide">
                     📦 {cabGroup.cabinet}
                   </td>
                 </tr>
                 {cabGroup.sections.map((sec) => (
                   <React.Fragment key={`${cabGroup.cabinet}-${sec.info.key}`}>
                     <tr className="bg-gray-100 font-semibold border-b border-gray-300">
-                      <td colSpan={6} className="p-1 pl-4 text-[11px] text-gray-700 italic">
+                      <td colSpan={7} className="p-1 pl-4 text-[11px] text-gray-700 italic">
                         ▸ {sec.info.title} {sec.info.subtitle}
                       </td>
                     </tr>
-                    {sec.items.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="p-1.5 text-center">
-                          <div className="w-4 h-4 border border-black mx-auto" />
-                        </td>
-                        <td className="p-1.5 font-semibold pl-6">{item.name}</td>
-                        <td className="p-1.5">{item.material}</td>
-                        <td className="p-1.5 font-mono">
-                          {item.length} × {item.width} mm
-                        </td>
-                        <td className="p-1.5 text-center font-bold font-mono">
-                          {item.quantity}
-                        </td>
-                        <td className="p-1.5 text-center">
-                          {item.canRotate ? 'Libre' : 'Sens du fil obligatoire'}
-                        </td>
-                      </tr>
-                    ))}
+                    {sec.items.map((item) => {
+                      const edgeThick = parseEdgeBandingThickness(settings.edgeBanding);
+                      const { cutLength, cutWidth, hasDeduction } = computeCutDimensions(
+                        item.length,
+                        item.width,
+                        item.edgeBandingEdges,
+                        edgeThick
+                      );
+                      const edgesLabel = formatEdgesLabel(item.edgeBandingEdges);
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="p-1.5 text-center">
+                            <div className="w-4 h-4 border border-black mx-auto" />
+                          </td>
+                          <td className="p-1.5 font-semibold pl-6">{item.name}</td>
+                          <td className="p-1.5">{item.material}</td>
+                          <td className="p-1.5 font-mono">
+                            <div>
+                              {item.length} × {item.width} mm
+                            </div>
+                            {hasDeduction && (
+                              <div className="text-[10px] text-orange-700 font-bold">
+                                Coupe : {cutLength} × {cutWidth} mm
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-1.5 text-center font-mono text-[11px]">
+                            {edgesLabel ? (
+                              <span className="font-bold text-orange-700">{edgesLabel}</span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="p-1.5 text-center font-bold font-mono">
+                            {item.quantity}
+                          </td>
+                          <td className="p-1.5 text-center">
+                            {item.canRotate ? 'Libre' : 'Sens du fil obligatoire'}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </React.Fragment>
                 ))}
               </React.Fragment>
@@ -300,6 +332,14 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
 
                       const topDim = Math.round(isSwapped ? piece.width : piece.length);
                       const leftDim = Math.round(isSwapped ? piece.length : piece.width);
+                      const hasEdges = hasAnyEdgeBanding(piece.edgeBandingEdges);
+                      const edgesLabel = formatEdgesLabel(piece.edgeBandingEdges);
+                      const displayEdges = getDisplayEdges(
+                        piece.edgeBandingEdges,
+                        piece.rotated,
+                        isSwapped
+                      );
+                      const edgeInset = 4;
 
                       // Taille de police pour les cotations
                       const fSizeDim = Math.min(
@@ -318,6 +358,65 @@ export const PrintDossier: React.FC<PrintDossierProps> = ({
                             stroke="#000000"
                             strokeWidth="1.5"
                           />
+
+                          {/* Repères des chants à plaquer */}
+                          {displayEdges.top && (
+                            <line
+                              x1={px + 2}
+                              y1={py + edgeInset}
+                              x2={px + pw - 2}
+                              y2={py + edgeInset}
+                              stroke="#ea580c"
+                              strokeWidth="5"
+                              strokeLinecap="round"
+                            />
+                          )}
+                          {displayEdges.bottom && (
+                            <line
+                              x1={px + 2}
+                              y1={py + ph - edgeInset}
+                              x2={px + pw - 2}
+                              y2={py + ph - edgeInset}
+                              stroke="#ea580c"
+                              strokeWidth="5"
+                              strokeLinecap="round"
+                            />
+                          )}
+                          {displayEdges.left && (
+                            <line
+                              x1={px + edgeInset}
+                              y1={py + 2}
+                              x2={px + edgeInset}
+                              y2={py + ph - 2}
+                              stroke="#ea580c"
+                              strokeWidth="5"
+                              strokeLinecap="round"
+                            />
+                          )}
+                          {displayEdges.right && (
+                            <line
+                              x1={px + pw - edgeInset}
+                              y1={py + 2}
+                              x2={px + pw - edgeInset}
+                              y2={py + ph - 2}
+                              stroke="#ea580c"
+                              strokeWidth="5"
+                              strokeLinecap="round"
+                            />
+                          )}
+                          {hasEdges && pw >= 65 && ph >= 55 && (
+                            <text
+                              x={px + pw - 8}
+                              y={py + ph - 10}
+                              textAnchor="end"
+                              fill="#9a3412"
+                              fontSize={Math.min(14, Math.max(9, fSizeDim * 0.65))}
+                              fontWeight="bold"
+                              fontFamily="monospace"
+                            >
+                              Chant: {edgesLabel}
+                            </text>
+                          )}
 
                           {/* 1. Cote sur l'arête haute (largeur) */}
                           {pw >= 28 && (

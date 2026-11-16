@@ -1,6 +1,7 @@
 import {
   CutItem,
   CutSettings,
+  EdgeBandingEdges,
   OptimizationResult,
   PanelResult,
   PlacedPiece,
@@ -8,6 +9,10 @@ import {
   OffcutArea,
   CutLine,
 } from '@/types/cutting';
+import {
+  computeCutDimensions,
+  parseEdgeBandingThickness,
+} from '@/lib/edge-banding';
 
 interface FreeRectangle {
   x: number;
@@ -23,6 +28,9 @@ interface PieceToPlace {
   material: string;
   length: number;
   width: number;
+  finishedLength: number;
+  finishedWidth: number;
+  edgeBandingEdges?: EdgeBandingEdges;
   canRotate: boolean;
   color: string;
 }
@@ -45,7 +53,8 @@ export function optimizeCutting(
   cutItems: CutItem[],
   settings: CutSettings
 ): OptimizationResult {
-  const { kerf, minOffcutLength, minOffcutWidth } = settings;
+  const { kerf, minOffcutLength, minOffcutWidth, edgeBanding } = settings;
+  const edgeThickness = parseEdgeBandingThickness(edgeBanding);
 
   // 1. Regrouper les stocks et les pièces par matière
   const materials = Array.from(
@@ -77,14 +86,23 @@ export function optimizeCutting(
 
     materialItems.forEach((item, itemIdx) => {
       const color = item.color || PALETTE[itemIdx % PALETTE.length];
+      const { finishedLength, finishedWidth, cutLength, cutWidth } = computeCutDimensions(
+        item.length,
+        item.width,
+        item.edgeBandingEdges,
+        edgeThickness
+      );
       for (let q = 0; q < item.quantity; q++) {
         piecesToPlace.push({
           pieceId: `${item.id}-${q + 1}`,
           itemId: item.id,
           name: item.name || `Pièce ${itemIdx + 1}`,
           material: item.material,
-          length: Math.max(item.length, item.width), // convention : length >= width
-          width: Math.min(item.length, item.width),
+          length: cutLength,
+          width: cutWidth,
+          finishedLength,
+          finishedWidth,
+          edgeBandingEdges: item.edgeBandingEdges,
           canRotate: item.canRotate,
           color,
         });
@@ -431,6 +449,9 @@ function packSinglePanel(
       width: placedWid,
       originalLength: targetPiece.length,
       originalWidth: targetPiece.width,
+      finishedLength: targetPiece.finishedLength,
+      finishedWidth: targetPiece.finishedWidth,
+      edgeBandingEdges: targetPiece.edgeBandingEdges,
       rotated: bestRotated,
       color: targetPiece.color,
     });

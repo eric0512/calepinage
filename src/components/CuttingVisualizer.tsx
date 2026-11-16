@@ -20,6 +20,11 @@ import {
 } from 'lucide-react';
 import { exportCuttingPlansToPdf, exportLabelsToPdf } from '@/lib/pdf-export';
 import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-labels';
+import {
+  getDisplayEdges,
+  formatEdgesLabel,
+  hasAnyEdgeBanding,
+} from '@/lib/edge-banding';
 
 interface CuttingVisualizerProps {
   panels: PanelResult[];
@@ -1107,6 +1112,12 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
               Trait de coupe guillotine ({kerf.toFixed(1)} mm)
             </span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-4 h-1 bg-orange-500 rounded-full" />
+            <span className="text-orange-300">
+              Bande de chant{edgeBanding ? ` (${edgeBanding})` : ''}
+            </span>
+          </div>
         </div>
 
         <div className="text-[11px] text-slate-400 flex items-center gap-1">
@@ -1562,6 +1573,14 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                 const isHovered = hoveredPiece?.id === piece.id;
                 const pieceCabinet = getPieceCabinet(piece.name);
                 const piecePart = getPiecePart(piece.name);
+                const hasEdges = hasAnyEdgeBanding(piece.edgeBandingEdges);
+                const edgesLabel = formatEdgesLabel(piece.edgeBandingEdges);
+                const displayEdges = getDisplayEdges(
+                  piece.edgeBandingEdges,
+                  piece.rotated,
+                  isSwapped
+                );
+                const edgeInset = 4;
                 // Dimensions de la pièce sur le plan orienté
                 const topDim = Math.round(isSwapped ? piece.width : piece.length);
                 const leftDim = Math.round(isSwapped ? piece.length : piece.width);
@@ -1581,7 +1600,9 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                     className="cursor-pointer group"
                   >
                     <title>
-                      {pieceCabinet ? `Destination : ${pieceCabinet}\nPièce : ${piecePart}\nDimensions : ${Math.round(piece.length)} × ${Math.round(piece.width)} mm` : `${piece.name} (${Math.round(piece.length)} × ${Math.round(piece.width)} mm)`}
+                      {pieceCabinet
+                        ? `Destination : ${pieceCabinet}\nPièce : ${piecePart}\nCoupe : ${Math.round(piece.length)} × ${Math.round(piece.width)} mm${hasEdges ? `\nChants à plaquer : ${edgesLabel}` : ''}`
+                        : `${piece.name} (${Math.round(piece.length)} × ${Math.round(piece.width)} mm)${hasEdges ? `\nChants : ${edgesLabel}` : ''}`}
                     </title>
                     {/* Rectangle de la pièce avec teinte très claire (nuance de gris clair à l'impression) */}
                     <rect
@@ -1595,6 +1616,68 @@ const SinglePanelSVG: React.FC<SinglePanelSVGProps> = ({
                       strokeWidth={isHovered ? '3' : '1.5'}
                       rx="3"
                     />
+
+                    {/* Repères visuels des chants à plaquer sur la pièce */}
+                    {displayEdges.top && (
+                      <line
+                        x1={px + 2}
+                        y1={py + edgeInset}
+                        x2={px + pw - 2}
+                        y2={py + edgeInset}
+                        stroke="#f97316"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                      />
+                    )}
+                    {displayEdges.bottom && (
+                      <line
+                        x1={px + 2}
+                        y1={py + ph - edgeInset}
+                        x2={px + pw - 2}
+                        y2={py + ph - edgeInset}
+                        stroke="#f97316"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                      />
+                    )}
+                    {displayEdges.left && (
+                      <line
+                        x1={px + edgeInset}
+                        y1={py + 2}
+                        x2={px + edgeInset}
+                        y2={py + ph - 2}
+                        stroke="#f97316"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                      />
+                    )}
+                    {displayEdges.right && (
+                      <line
+                        x1={px + pw - edgeInset}
+                        y1={py + 2}
+                        x2={px + pw - edgeInset}
+                        y2={py + ph - 2}
+                        stroke="#f97316"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                      />
+                    )}
+
+                    {/* Mention texte des chants sur la pièce si espace suffisant */}
+                    {hasEdges && pw >= 65 && ph >= 55 && (
+                      <text
+                        x={px + pw - 10}
+                        y={py + ph - 12}
+                        textAnchor="end"
+                        fill="#c2410c"
+                        fontSize={Math.min(14, Math.max(9, fontSizeDim * 0.65))}
+                        fontWeight="bold"
+                        fontFamily="monospace"
+                        className="pointer-events-none select-none"
+                      >
+                        Chant: {edgesLabel}
+                      </text>
+                    )}
 
                     {/* Cotations sur les arêtes haute et gauche, et nom au centre en noir pur pour contraste optimal */}
                     <g className="pointer-events-none select-none">
