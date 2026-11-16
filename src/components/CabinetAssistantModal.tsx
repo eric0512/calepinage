@@ -34,12 +34,13 @@ import {
   parseCabinetPromptWithNLP,
   extractThicknessFromMaterialName,
   computeFacadeLayout,
+  computeHorizontalFacadeLayout,
   getFacadeAvailableHeight,
   DEFAULT_BASE_MATERIALS,
   inferCabinetConfigFromItems,
 } from '@/lib/cabinet-calculator';
 import { getPieceCabinet, getPiecePart, UNASSIGNED_CABINET_LABEL } from '@/lib/piece-labels';
-import type { FacadeItemType, DrawerBottomType } from '@/types/cutting';
+import type { FacadeItemType, FacadeDirection, DrawerBottomType } from '@/types/cutting';
 
 /** Composant de façade en cours de saisie (hauteur vide = calcul automatique) */
 interface FacadeDraftItem {
@@ -49,6 +50,7 @@ interface FacadeDraftItem {
   drawerHeight?: string;
   material?: string;
   shelvesCount?: string;
+  stackInColumn?: boolean;
 }
 
 /** Ajuste la liste des composants de façade au nombre demandé en conservant la saisie existante */
@@ -278,6 +280,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     hasFacades: false,
     facadesCount: 1,
     facadePlacement: 'applique' as 'applique' | 'interieur',
+    facadeDirection: undefined as FacadeDirection | undefined,
     facadeGap: 2,
     facadeItems: [{ type: 'porte', height: '' }] as FacadeDraftItem[],
     hasDrawers: false,
@@ -493,6 +496,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         hasFacades: !!c.hasFacades,
         facadesCount: compCount,
         facadePlacement: c.facadePlacement || 'applique',
+        facadeDirection: c.facadeDirection,
         facadeGap: c.facadeGap ?? 2,
         facadeItems:
           c.facadeItems && c.facadeItems.length > 0
@@ -506,6 +510,10 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   it.drawerHeight !== null && it.drawerHeight !== undefined && it.drawerHeight > 0
                     ? String(it.drawerHeight)
                     : '',
+                material: it.material,
+                shelvesCount:
+                  it.shelvesCount !== undefined ? String(it.shelvesCount) : undefined,
+                stackInColumn: it.stackInColumn,
               }))
             : resizeFacadeDraft([], compCount),
         hasDrawers: !!c.hasDrawers,
@@ -802,26 +810,82 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       ? compoWidth - 2 * compoThickness
       : compoWidth) - 4
   );
-  const facadeLayout = useMemo(
+  const effectiveFacadeDirection: FacadeDirection =
+    compositionState.facadeDirection ||
+    (compoWidth > compoHeight && compoHeight > 0 ? 'horizontal' : 'vertical');
+
+  const mappedFacadeDrafts = useMemo(
+    () =>
+      compositionState.facadeItems.map((it) => {
+        const h = parseFloat(it.height);
+        const dh = parseFloat(it.drawerHeight || '');
+        // Si la hauteur a été calculée automatiquement (même après validation par l'utilisateur),
+        // elle reste dynamique afin que la somme des hauteurs ne dépasse jamais la hauteur disponible
+        const effectiveH = !it.heightValidated && !isNaN(h) && h > 0 ? h : null;
+        return {
+          type: it.type,
+          height: effectiveH,
+          drawerHeight: !isNaN(dh) && dh > 0 ? dh : null,
+          stackInColumn: !!it.stackInColumn,
+        };
+      }),
+    [compositionState.facadeItems]
+  );
+
+  const verticalFacadeLayout = useMemo(
     () =>
       computeFacadeLayout(
-        compositionState.facadeItems.map((it) => {
-          const h = parseFloat(it.height);
-          const dh = parseFloat(it.drawerHeight || '');
-          // Si la hauteur a été calculée automatiquement (même après validation par l'utilisateur),
-          // elle reste dynamique afin que la somme des hauteurs ne dépasse jamais la hauteur disponible
-          const effectiveH = !it.heightValidated && !isNaN(h) && h > 0 ? h : null;
-          return {
-            type: it.type,
-            height: effectiveH,
-            drawerHeight: !isNaN(dh) && dh > 0 ? dh : null,
-          };
-        }),
+        mappedFacadeDrafts,
         facadeAvailableHeight,
         compositionState.facadeGap
       ),
-    [compositionState.facadeItems, compositionState.facadeGap, facadeAvailableHeight]
+    [mappedFacadeDrafts, facadeAvailableHeight, compositionState.facadeGap]
   );
+
+  const horizontalFacadeLayout = useMemo(
+    () =>
+      computeHorizontalFacadeLayout(
+        mappedFacadeDrafts,
+        facadeAvailableWidth,
+        facadeAvailableHeight,
+        compositionState.facadeGap
+      ),
+    [
+      mappedFacadeDrafts,
+      facadeAvailableWidth,
+      facadeAvailableHeight,
+      compositionState.facadeGap,
+    ]
+  );
+
+  const activeAutoIndices = useMemo(
+    () =>
+      effectiveFacadeDirection === 'horizontal'
+        ? horizontalFacadeLayout.autoIndices
+        : verticalFacadeLayout.autoIndex >= 0
+        ? [verticalFacadeLayout.autoIndex]
+        : [],
+    [
+      effectiveFacadeDirection,
+      horizontalFacadeLayout.autoIndices,
+      verticalFacadeLayout.autoIndex,
+    ]
+  );
+
+  const facadeLayout = useMemo(
+    () =>
+      effectiveFacadeDirection === 'horizontal'
+        ? {
+            ...verticalFacadeLayout,
+            heights: horizontalFacadeLayout.heights,
+            autoIndex: horizontalFacadeLayout.autoIndices[0] ?? -1,
+            error: horizontalFacadeLayout.error,
+            warning: horizontalFacadeLayout.warning,
+          }
+        : verticalFacadeLayout,
+    [effectiveFacadeDirection, horizontalFacadeLayout, verticalFacadeLayout]
+  );
+
   const facadeDrawerCount = compositionState.facadeItems.filter((it) => it.type === 'tiroir').length;
 
   // Épaisseurs de coulisses de fermeture par ordre croissant (12,5mm, 12,7mm, 13mm, 19mm + personnalisées)
@@ -938,7 +1002,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           const resolvedH = facadeLayout.heights[i] || null;
           return {
             type: it.type,
-            height: i === facadeLayout.autoIndex ? null : resolvedH,
+            height: activeAutoIndices.includes(i) ? null : resolvedH,
             drawerHeight:
               it.type === 'tiroir' && !isNaN(dh) && dh > 0
                 ? resolvedH && resolvedH > 0
@@ -947,6 +1011,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 : null,
             material: it.material?.trim() || undefined,
             shelvesCount: it.shelvesCount ? parseInt(it.shelvesCount, 10) : undefined,
+            stackInColumn: !!it.stackInColumn,
           };
         })
       : undefined;
@@ -970,6 +1035,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       const isSameCount =
         prev.facadesCount === (compositionState.hasFacades ? compositionState.facadesCount : 0);
       const isSamePlacement = prev.facadePlacement === compositionState.facadePlacement;
+      const isSameDirection = prev.facadeDirection === effectiveFacadeDirection;
       const isSameGap = prev.facadeGap === compositionState.facadeGap;
       const isSameHasDrawers = prev.hasDrawers === hasDrawers;
       const isSameDrawersCount = prev.drawersCount === drawersCount;
@@ -984,6 +1050,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         isSameFacades &&
         isSameCount &&
         isSamePlacement &&
+        isSameDirection &&
         isSameGap &&
         isSameHasDrawers &&
         isSameDrawersCount &&
@@ -1003,6 +1070,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         facadesCount: compositionState.hasFacades ? Math.max(0, compositionState.facadesCount) : 0,
         facadeItems,
         facadePlacement: compositionState.facadePlacement,
+        facadeDirection: effectiveFacadeDirection,
         facadeGap: compositionState.facadeGap,
         hasDrawers,
         drawersCount,
@@ -1015,8 +1083,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
     });
   }, [
     compositionState,
+    effectiveFacadeDirection,
     facadeLayout.heights,
-    facadeLayout.autoIndex,
+    activeAutoIndices,
     facadeDrawerCount,
   ]);
 
@@ -2274,70 +2343,191 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                             </div>
                           </div>
 
-                          {/* Aperçu de l'empilement réel (Haut -> Bas) */}
-                          <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-1.5">
-                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-300 mb-1">
+                          {/* Sens de placement des façades (auto : Gauche -> Droite si plus large que haut) */}
+                          <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="text-[11px]">
+                              <span className="font-semibold text-slate-300">
+                                Sens de placement :
+                              </span>
+                              <span className="ml-1.5 text-[10px] text-amber-300/90 font-mono">
+                                {compoWidth > compoHeight && compoHeight > 0
+                                  ? '(Caisson plus large que haut : Gauche → Droite)'
+                                  : '(Haut → Bas)'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setCompositionState((prev) => ({
+                                    ...prev,
+                                    facadeDirection: 'horizontal',
+                                  }))
+                                }
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                                  effectiveFacadeDirection === 'horizontal'
+                                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                                    : 'bg-slate-850 text-slate-300 border-slate-700 hover:bg-slate-800'
+                                }`}
+                              >
+                                ↔️ Gauche → Droite
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setCompositionState((prev) => ({
+                                    ...prev,
+                                    facadeDirection: 'vertical',
+                                  }))
+                                }
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                                  effectiveFacadeDirection === 'vertical'
+                                    ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                                    : 'bg-slate-850 text-slate-300 border-slate-700 hover:bg-slate-800'
+                                }`}
+                              >
+                                ↕️ Haut → Bas
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Aperçu de l'empilement réel */}
+                          <div className="p-3 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-slate-300">
                               <span className="flex items-center gap-1.5 text-amber-300">
                                 <Layers className="w-3.5 h-3.5 text-amber-400" />
-                                <span>Aperçu de l&apos;empilement réel (Haut → Bas)</span>
+                                <span>
+                                  {effectiveFacadeDirection === 'horizontal'
+                                    ? 'Aperçu de la répartition (Gauche → Droite)'
+                                    : 'Aperçu de l’empilement réel (Haut → Bas)'}
+                                </span>
                               </span>
                               <span className="text-[10px] text-slate-400 font-mono">
-                                {compositionState.facadeItems.length} élément(s) empilé(s)
+                                {effectiveFacadeDirection === 'horizontal'
+                                  ? `${horizontalFacadeLayout.columnsCount} colonne(s) • L ${horizontalFacadeLayout.columnWidth} mm chacune`
+                                  : `${compositionState.facadeItems.length} élément(s) empilé(s)`}
                               </span>
                             </div>
 
-                            <div className="space-y-1">
-                              {compositionState.facadeItems.map((item, idx) => {
-                                const h =
-                                  facadeLayout.heights[idx] || parseFloat(item.height) || 0;
-                                const posLabel =
-                                  idx === 0
-                                    ? 'Haut'
-                                    : idx === compositionState.facadeItems.length - 1
-                                    ? 'Bas'
-                                    : 'Milieu';
-                                const matName =
-                                  item.material ||
-                                  guidedFields.material ||
-                                  config.material ||
-                                  'Mélaminé';
-                                return (
-                                  <div
-                                    key={`prev-${idx}`}
-                                    className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold uppercase">
-                                        {posLabel}
+                            {effectiveFacadeDirection === 'horizontal' ? (
+                              <div className="space-y-1.5">
+                                <div
+                                  className="grid gap-1.5"
+                                  style={{
+                                    gridTemplateColumns: `repeat(${Math.max(
+                                      1,
+                                      horizontalFacadeLayout.columnsCount
+                                    )}, minmax(0, 1fr))`,
+                                  }}
+                                >
+                                  {horizontalFacadeLayout.columns.map((col) => (
+                                    <div
+                                      key={`h-col-${col.columnIndex}`}
+                                      className="p-1.5 rounded-lg bg-slate-900/90 border border-slate-800 flex flex-col gap-1"
+                                    >
+                                      <div className="text-[9px] font-mono text-center text-slate-400 border-b border-slate-800 pb-0.5">
+                                        Col. {col.columnIndex + 1} • L{' '}
+                                        <span className="text-amber-300 font-bold">
+                                          {horizontalFacadeLayout.columnWidth}
+                                        </span>{' '}
+                                        mm
+                                      </div>
+                                      {col.itemIndices.map((origIdx) => {
+                                        const item = compositionState.facadeItems[origIdx];
+                                        if (!item) return null;
+                                        const h =
+                                          facadeLayout.heights[origIdx] ||
+                                          parseFloat(item.height) ||
+                                          0;
+                                        const matName =
+                                          item.material ||
+                                          guidedFields.material ||
+                                          config.material ||
+                                          'Mélaminé';
+                                        return (
+                                          <div
+                                            key={`h-item-${origIdx}`}
+                                            className="px-2 py-1.5 rounded bg-slate-950/90 border border-slate-700/70 text-center space-y-0.5"
+                                          >
+                                            <div className="text-[10px] font-bold text-white truncate">
+                                              {item.type === 'tiroir' ? 'Tiroir' : 'Porte'}
+                                            </div>
+                                            <div className="text-[10px] font-mono text-amber-400 font-bold">
+                                              {h > 0 ? `H ${h} mm` : 'Auto'}
+                                            </div>
+                                            <div className="text-[9px] text-amber-300/75 truncate">
+                                              {matName}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ))}
+                                </div>
+                                {guidedFields.hasFeet &&
+                                  parseInt(guidedFields.feetHeight, 10) > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-1 rounded-lg bg-slate-900/60 border border-amber-500/20 text-xs font-mono text-amber-300">
+                                      <span className="text-[10px] flex items-center gap-1">
+                                        <span>🦶 Pieds sous caisson</span>
                                       </span>
-                                      <span className="font-bold text-white">
-                                        {item.type === 'tiroir' ? 'Façade tiroir' : 'Porte'}
-                                      </span>
-                                      {item.type === 'tiroir' && item.drawerHeight && (
-                                        <span className="text-[10px] text-slate-400">
-                                          (bac {item.drawerHeight} mm)
+                                      <span>{guidedFields.feetHeight} mm</span>
+                                    </div>
+                                  )}
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                {compositionState.facadeItems.map((item, idx) => {
+                                  const h =
+                                    facadeLayout.heights[idx] || parseFloat(item.height) || 0;
+                                  const posLabel =
+                                    idx === 0
+                                      ? 'Haut'
+                                      : idx === compositionState.facadeItems.length - 1
+                                      ? 'Bas'
+                                      : 'Milieu';
+                                  const matName =
+                                    item.material ||
+                                    guidedFields.material ||
+                                    config.material ||
+                                    'Mélaminé';
+                                  return (
+                                    <div
+                                      key={`prev-${idx}`}
+                                      className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold uppercase">
+                                          {posLabel}
                                         </span>
-                                      )}
-                                      <span className="text-[10px] text-amber-300/80">
-                                        [{matName}]
+                                        <span className="font-bold text-white">
+                                          {item.type === 'tiroir' ? 'Façade tiroir' : 'Porte'}
+                                        </span>
+                                        {item.type === 'tiroir' && item.drawerHeight && (
+                                          <span className="text-[10px] text-slate-400">
+                                            (bac {item.drawerHeight} mm)
+                                          </span>
+                                        )}
+                                        <span className="text-[10px] text-amber-300/80">
+                                          [{matName}]
+                                        </span>
+                                      </div>
+                                      <span className="text-amber-400 font-bold">
+                                        {h > 0 ? `${h} mm` : 'Auto'}
                                       </span>
                                     </div>
-                                    <span className="text-amber-400 font-bold">
-                                      {h > 0 ? `${h} mm` : 'Auto'}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              {guidedFields.hasFeet &&
-                                parseInt(guidedFields.feetHeight, 10) > 0 && (
-                                  <div className="flex items-center justify-between px-3 py-1 rounded-lg bg-slate-900/60 border border-amber-500/20 text-xs font-mono text-amber-300">
-                                    <span className="text-[10px] flex items-center gap-1">
-                                      <span>🦶 Pieds sous caisson</span>
-                                    </span>
-                                    <span>{guidedFields.feetHeight} mm</span>
-                                  </div>
-                                )}
-                            </div>
+                                  );
+                                })}
+                                {guidedFields.hasFeet &&
+                                  parseInt(guidedFields.feetHeight, 10) > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-1 rounded-lg bg-slate-900/60 border border-amber-500/20 text-xs font-mono text-amber-300">
+                                      <span className="text-[10px] flex items-center gap-1">
+                                        <span>🦶 Pieds sous caisson</span>
+                                      </span>
+                                      <span>{guidedFields.feetHeight} mm</span>
+                                    </div>
+                                  )}
+                              </div>
+                            )}
                           </div>
 
                           {/* Configuration détaillée de chaque façade avec changement d'ordre et sélection matière */}
@@ -2346,13 +2536,15 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                               <span className="text-[11px] font-bold text-slate-300">
                                 Détail et ordre des composants :
                               </span>
-                              <span className="text-[10px] text-slate-500 font-mono">
-                                L {facadeAvailableWidth} mm
+                              <span className="text-[10px] text-amber-300 font-mono font-semibold">
+                                {effectiveFacadeDirection === 'horizontal'
+                                  ? `${horizontalFacadeLayout.columnsCount} × L ${horizontalFacadeLayout.columnWidth} mm (jeu ${compositionState.facadeGap} mm)`
+                                  : `L ${facadeAvailableWidth} mm`}
                               </span>
                             </div>
 
                             {compositionState.facadeItems.map((item, idx) => {
-                              const isAuto = idx === facadeLayout.autoIndex;
+                              const isAuto = activeAutoIndices.includes(idx);
                               const resolved = facadeLayout.heights[idx];
                               const facadeH = parseFloat(item.height) || resolved || 0;
                               const drawerHVal = parseFloat(item.drawerHeight || '') || 0;
@@ -2369,25 +2561,38 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                 config.material ||
                                 'Mela 19mm';
 
+                              const posBadge =
+                                effectiveFacadeDirection === 'horizontal'
+                                  ? idx === 0
+                                    ? 'GAUCHE'
+                                    : idx === compositionState.facadeItems.length - 1
+                                    ? 'DROITE'
+                                    : 'MILIEU'
+                                  : idx === 0
+                                  ? 'HAUT'
+                                  : idx === compositionState.facadeItems.length - 1
+                                  ? 'BAS'
+                                  : 'MILIEU';
+
                               return (
                                 <div
                                   key={`facade-card-${idx}`}
                                   className="p-3 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-2.5 shadow-sm"
                                 >
-                                  {/* Barre supérieure : Badge position + Boutons d'ordre Monter / Descendre */}
+                                  {/* Barre supérieure : Badge position + Boutons d'ordre */}
                                   <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800">
                                     <div className="flex items-center gap-2">
                                       <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                                        #{idx + 1}{' '}
-                                        {idx === 0
-                                          ? 'HAUT'
-                                          : idx === compositionState.facadeItems.length - 1
-                                          ? 'BAS'
-                                          : 'MILIEU'}
+                                        #{idx + 1} {posBadge}
                                       </span>
                                       <span className="text-xs font-bold text-white">
                                         {item.type === 'tiroir' ? 'Façade Tiroir' : 'Porte'}
                                       </span>
+                                      {effectiveFacadeDirection === 'horizontal' && (
+                                        <span className="text-[10px] font-mono text-slate-400">
+                                          (L {horizontalFacadeLayout.columnWidth} mm)
+                                        </span>
+                                      )}
                                     </div>
 
                                     {/* Boutons pour modifier l'ordre des façades */}
@@ -2396,11 +2601,19 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                         type="button"
                                         disabled={idx === 0}
                                         onClick={() => moveFacadeItemUp(idx)}
-                                        title="Monter cette façade vers le haut"
+                                        title={
+                                          effectiveFacadeDirection === 'horizontal'
+                                            ? 'Déplacer vers la gauche'
+                                            : 'Monter cette façade vers le haut'
+                                        }
                                         className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1 transition-colors"
                                       >
                                         <ArrowUp className="w-3.5 h-3.5" />
-                                        <span>Monter</span>
+                                        <span>
+                                          {effectiveFacadeDirection === 'horizontal'
+                                            ? 'Gauche'
+                                            : 'Monter'}
+                                        </span>
                                       </button>
                                       <button
                                         type="button"
@@ -2408,14 +2621,61 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                           idx === compositionState.facadeItems.length - 1
                                         }
                                         onClick={() => moveFacadeItemDown(idx)}
-                                        title="Descendre cette façade vers le bas"
+                                        title={
+                                          effectiveFacadeDirection === 'horizontal'
+                                            ? 'Déplacer vers la droite'
+                                            : 'Descendre cette façade vers le bas'
+                                        }
                                         className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-[11px] font-bold flex items-center gap-1 transition-colors"
                                       >
                                         <ArrowDown className="w-3.5 h-3.5" />
-                                        <span>Descendre</span>
+                                        <span>
+                                          {effectiveFacadeDirection === 'horizontal'
+                                            ? 'Droite'
+                                            : 'Descendre'}
+                                        </span>
                                       </button>
                                     </div>
                                   </div>
+
+                                  {/* Disposition des tiroirs en mode Gauche -> Droite : répartis ou l'un sous l'autre */}
+                                  {effectiveFacadeDirection === 'horizontal' &&
+                                    item.type === 'tiroir' &&
+                                    idx > 0 && (
+                                      <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                                        <span className="text-slate-300 font-medium">
+                                          Placement de ce tiroir :
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              updateFacadeItem(idx, { stackInColumn: false })
+                                            }
+                                            className={`px-2 py-0.5 rounded-md font-semibold border transition-colors ${
+                                              !item.stackInColumn
+                                                ? 'bg-amber-500 text-slate-950 border-amber-400'
+                                                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                                            }`}
+                                          >
+                                            Réparti (compartiment à droite)
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              updateFacadeItem(idx, { stackInColumn: true })
+                                            }
+                                            className={`px-2 py-0.5 rounded-md font-semibold border transition-colors ${
+                                              item.stackInColumn
+                                                ? 'bg-amber-500 text-slate-950 border-amber-400'
+                                                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                                            }`}
+                                          >
+                                            Sous le précédent (même colonne)
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
 
                                   {/* Contrôles principaux : Type, Matière de la façade, Hauteur */}
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

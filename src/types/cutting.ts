@@ -41,6 +41,7 @@ export type AssemblyType =
 export type BackType = 'none' | 'applique' | 'groove';
 export type DoorsType = 'none' | 'one_door' | 'two_doors';
 export type FacadePlacement = 'applique' | 'interieur';
+export type FacadeDirection = 'vertical' | 'horizontal';
 export type FacadeItemType = 'porte' | 'tiroir';
 export type DrawerBottomType = 'applique' | 'groove';
 
@@ -50,6 +51,7 @@ export interface FacadeItem {
   drawerHeight?: number | null; // Hauteur choisie du tiroir (bac) en mm (doit être <= height de la façade)
   material?: string; // Matière spécifique de la façade (sélectionnée dans la liste de choix)
   shelvesCount?: number; // Nombre d'étagères intérieures dans ce compartiment (pour une porte)
+  stackInColumn?: boolean; // En mode horizontal (Gauche -> Droite), empiler sous la façade précédente dans la même colonne
 }
 
 export interface CabinetConfig {
@@ -86,6 +88,7 @@ export interface CabinetConfig {
   hasFacades?: boolean;
   facadesCount?: number; // Nombre de composants de façade (0 si aucune)
   facadePlacement?: FacadePlacement; // 'applique' ou 'interieur'
+  facadeDirection?: FacadeDirection; // 'horizontal' (Gauche -> Droite si plus large que haut) ou 'vertical' (Haut -> Bas)
   facadeGap?: number; // Espace entre composants de façade (mm)
   // Composition détaillée de la façade, du haut vers le bas (composants empilés sur toute la largeur).
   // height = null → hauteur calculée automatiquement (espace restant, jeux et espacements déduits)

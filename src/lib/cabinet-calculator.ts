@@ -218,6 +218,107 @@ export function computeFacadeLayout(
   };
 }
 
+export interface HorizontalFacadeColumn {
+  columnIndex: number;
+  itemIndices: number[];
+  layout: FacadeLayoutResult;
+}
+
+export interface HorizontalFacadeLayoutResult {
+  columns: HorizontalFacadeColumn[];
+  columnsCount: number;
+  columnWidth: number;
+  gapsWTotal: number;
+  heights: number[];
+  autoIndices: number[];
+  error: string | null;
+  warning: string | null;
+}
+
+/**
+ * Répartit les façades horizontalement de gauche à droite en colonnes de largeur identique
+ * (jeux périphériques et espacements intermédiaires déduits).
+ * Les éléments marqués `stackInColumn: true` sont empilés verticalement dans la même colonne.
+ */
+export function computeHorizontalFacadeLayout(
+  items: FacadeItem[],
+  availableWidth: number,
+  availableHeight: number,
+  gap: number
+): HorizontalFacadeLayoutResult {
+  const n = items.length;
+  const safeGap = gap > 0 ? gap : 0;
+  if (n === 0) {
+    return {
+      columns: [],
+      columnsCount: 0,
+      columnWidth: 0,
+      gapsWTotal: 0,
+      heights: [],
+      autoIndices: [],
+      error: null,
+      warning: null,
+    };
+  }
+
+  // Regrouper les façades en colonnes (Gauche -> Droite)
+  const colGroups: { itemIndices: number[]; colItems: FacadeItem[] }[] = [];
+  items.forEach((it, idx) => {
+    if (idx === 0 || !it.stackInColumn) {
+      colGroups.push({ itemIndices: [idx], colItems: [it] });
+    } else {
+      const last = colGroups[colGroups.length - 1];
+      last.itemIndices.push(idx);
+      last.colItems.push(it);
+    }
+  });
+
+  const columnsCount = colGroups.length;
+  const gapsWTotal = columnsCount > 1 ? (columnsCount - 1) * safeGap : 0;
+  const rawColW = Math.floor((availableWidth - gapsWTotal) / columnsCount);
+  const columnWidth = Math.max(0, rawColW);
+
+  const heights = new Array<number>(n).fill(0);
+  const autoIndices: number[] = [];
+  let firstError: string | null =
+    availableWidth > 0 && rawColW < FACADE_MIN_HEIGHT
+      ? `Largeur insuffisante pour ${columnsCount} façades côte à côte (${rawColW} mm par façade, minimum ${FACADE_MIN_HEIGHT} mm).`
+      : null;
+  let firstWarning: string | null = null;
+
+  const columns: HorizontalFacadeColumn[] = colGroups.map((grp, colIdx) => {
+    const colLayout = computeFacadeLayout(grp.colItems, availableHeight, safeGap);
+    grp.itemIndices.forEach((origIdx, localIdx) => {
+      heights[origIdx] = colLayout.heights[localIdx] || 0;
+      if (colLayout.autoIndex === localIdx) {
+        autoIndices.push(origIdx);
+      }
+    });
+    if (!firstError && colLayout.error) {
+      firstError = `Colonne ${colIdx + 1} : ${colLayout.error}`;
+    }
+    if (!firstWarning && colLayout.warning) {
+      firstWarning = `Colonne ${colIdx + 1} : ${colLayout.warning}`;
+    }
+    return {
+      columnIndex: colIdx,
+      itemIndices: grp.itemIndices,
+      layout: colLayout,
+    };
+  });
+
+  return {
+    columns,
+    columnsCount,
+    columnWidth,
+    gapsWTotal,
+    heights,
+    autoIndices,
+    error: firstError,
+    warning: firstWarning,
+  };
+}
+
 /**
  * Calcule avec rigueur mathématique toutes les pièces à débiter pour un caisson.
  */
@@ -434,8 +535,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         partitionsCount > 1
           ? `Séparations verticales (${partitionQty} pcs pour ${cabinetCount} caisson${cabinetCount > 1 ? 's' : ''})${feetBadge}`
           : cabinetCount > 1
-          ? `Séparation verticale (${partitionQty} pcs pour ${cabinetCount} caissons)${feetBadge}`
-          : `Séparation verticale centrale${feetBadge}`,
+            ? `Séparation verticale (${partitionQty} pcs pour ${cabinetCount} caissons)${feetBadge}`
+            : `Séparation verticale centrale${feetBadge}`,
       description:
         partitionsCount > 1
           ? `${config.name} - Séparations (${partitionsCount})`
@@ -460,9 +561,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     if (partitionsCount > 0) {
       // Étagère divisée par les montants intermédiaires
       shelfWidth = Math.floor((interiorWidth - partitionsCount * thickness) / (partitionsCount + 1));
-      shelfFormula = `Compartiment (${partitionsCount + 1}) : (${interiorWidth} - ${
-        partitionsCount > 1 ? `${partitionsCount}×${thickness}` : thickness
-      }) / ${partitionsCount + 1} = ${shelfWidth} mm`;
+      shelfFormula = `Compartiment (${partitionsCount + 1}) : (${interiorWidth} - ${partitionsCount > 1 ? `${partitionsCount}×${thickness}` : thickness
+        }) / ${partitionsCount + 1} = ${shelfWidth} mm`;
     }
 
     const shelfMargin = 5;
@@ -548,32 +648,59 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   const activeFacadesCount = hasFacadesConfig
     ? config.facadesCount || 0
     : doors === 'two_doors'
-    ? 2
-    : doors === 'one_door'
-    ? 1
-    : 0;
+      ? 2
+      : doors === 'one_door'
+        ? 1
+        : 0;
 
   // Spécifications des tiroirs issues de la composition détaillée de la façade (hauteur façade + hauteur tiroir choisie)
   let drawerSpecsFromFacade: { frontHeight: number; drawerHeight: number | null }[] = [];
 
   if (activeFacadesCount > 0 && config.facadeItems && config.facadeItems.length > 0) {
-    // Composition détaillée : composants empilés du haut vers le bas, sur toute la largeur
     const isInside = config.facadePlacement === 'interieur';
     const gap = config.facadeGap !== undefined && config.facadeGap >= 0 ? config.facadeGap : 2;
     const items = config.facadeItems;
     const availH = getFacadeAvailableHeight(boxHeight, thickness, config.facadePlacement);
-    const facadeW = Math.max(
+    const availW = Math.max(
       FACADE_MIN_HEIGHT,
       (isInside ? interiorWidth : width) - 2 * FACADE_EDGE_CLEARANCE
     );
-    const layout = computeFacadeLayout(items, availH, gap);
-    const placementLabel = isInside ? 'intérieure' : 'en applique';
     const baseH = isInside ? interiorHeight : boxHeight;
+    const baseW = isInside ? interiorWidth : width;
+    const isHorizontal =
+      config.facadeDirection === 'horizontal' ||
+      (config.facadeDirection === undefined && width > boxHeight);
+
+    const placementLabel = isInside ? 'intérieure' : 'en applique';
+
+    let resolvedHeights: number[];
+    let autoIndices: number[];
+    let facadeW: number;
+    let widthFormula: string;
+    let gapsHCount = items.length - 1;
+
+    if (isHorizontal) {
+      const hLayout = computeHorizontalFacadeLayout(items, availW, availH, gap);
+      resolvedHeights = hLayout.heights;
+      autoIndices = hLayout.autoIndices;
+      facadeW = Math.max(FACADE_MIN_HEIGHT, hLayout.columnWidth || availW);
+      widthFormula =
+        hLayout.columnsCount > 1
+          ? `(${baseW} - ${2 * FACADE_EDGE_CLEARANCE} - ${hLayout.columnsCount - 1}×${gap}) / ${hLayout.columnsCount} = ${facadeW} mm`
+          : `L ${facadeW} mm`;
+      gapsHCount = 0;
+    } else {
+      const vLayout = computeFacadeLayout(items, availH, gap);
+      resolvedHeights = vLayout.heights;
+      autoIndices = vLayout.autoIndex >= 0 ? [vLayout.autoIndex] : [];
+      facadeW = availW;
+      widthFormula = `L ${facadeW} mm`;
+    }
 
     drawerSpecsFromFacade = items
       .map((it, i) => {
         if (it.type !== 'tiroir') return null;
-        const frontH = layout.heights[i];
+        const frontH = resolvedHeights[i];
         const chosenDrawerH =
           it.drawerHeight && it.drawerHeight > 0
             ? frontH > 0
@@ -593,20 +720,26 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       { type: FacadeItem['type']; h: number; material?: string; count: number; auto: boolean }
     >();
     items.forEach((it, i) => {
-      const h = Math.max(FACADE_MIN_HEIGHT, layout.heights[i] || FACADE_MIN_HEIGHT);
+      const h = Math.max(FACADE_MIN_HEIGHT, resolvedHeights[i] || FACADE_MIN_HEIGHT);
       const mat = it.material?.trim();
       const key = `${it.type}-${h}-${mat || ''}`;
       const g = groups.get(key);
       if (g) {
         g.count += 1;
-        g.auto = g.auto || i === layout.autoIndex;
+        g.auto = g.auto || autoIndices.includes(i);
       } else {
-        groups.set(key, { type: it.type, h, material: mat, count: 1, auto: i === layout.autoIndex });
+        groups.set(key, {
+          type: it.type,
+          h,
+          material: mat,
+          count: 1,
+          auto: autoIndices.includes(i),
+        });
       }
     });
 
     const fixedDesc = items
-      .map((it, i) => (i === layout.autoIndex ? null : `${layout.heights[i]}`))
+      .map((it, i) => (autoIndices.includes(i) ? null : `${resolvedHeights[i]}`))
       .filter(Boolean)
       .join(' - ');
 
@@ -620,16 +753,16 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       const defaultMat = g.material || fallbackMat;
       const pieceMat = getPartMat(partId, defaultMat);
       const autoFormula = g.auto
-        ? `Auto : ${baseH} - ${2 * FACADE_EDGE_CLEARANCE} (jeux)${fixedDesc ? ` - ${fixedDesc}` : ''}${
-            layout.gapsTotal > 0 ? ` - ${items.length - 1}×${gap} (espaces)` : ''
-          } = ${g.h} mm`
+        ? `Auto : ${baseH} - ${2 * FACADE_EDGE_CLEARANCE} (jeux)${!isHorizontal && fixedDesc ? ` - ${fixedDesc}` : ''
+        }${!isHorizontal && gapsHCount > 0 ? ` - ${gapsHCount}×${gap} (espaces)` : ''
+        } = ${g.h} mm`
         : `Hauteur saisie ${g.h} mm`;
       pieces.push({
         partKey: 'doors',
         partId,
-        role: `${label} ${placementLabel} (H ${g.h} mm${g.count > 1 ? `, ${g.count} par caisson` : ''})${feetBadge}`,
+        role: `${label} ${placementLabel} (H ${g.h} × L ${facadeW} mm${g.count > 1 ? `, ${g.count} par caisson` : ''})${feetBadge}`,
         description: `${config.name} - ${label}`,
-        formula: `${autoFormula} × L ${facadeW} mm [${g.count} × ${cabinetCount} = ${totalQty} pcs]`,
+        formula: `${autoFormula} × ${widthFormula} [${g.count} × ${cabinetCount} = ${totalQty} pcs]`,
         length: Math.max(g.h, facadeW),
         width: Math.min(g.h, facadeW),
         quantity: totalQty,
@@ -685,8 +818,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
           activeFacadesCount > 1
             ? `(${width} - 4 - ${activeFacadesCount - 1}×${gap}) / ${activeFacadesCount} = ${facadeW} mm × ${facadeH} mm [${activeFacadesCount} × ${cabinetCount} = ${totalQty} pcs]`
             : feetHeight > 0
-            ? `(${width} - 4mm) × (${boxHeight}mm [${height}-${feetHeight} pieds] - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`
-            : `(${width} - 4mm) × (${height} - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
+              ? `(${width} - 4mm) × (${boxHeight}mm [${height}-${feetHeight} pieds] - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`
+              : `(${width} - 4mm) × (${height} - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
         length: Math.max(facadeH, facadeW),
         width: Math.min(facadeH, facadeW),
         quantity: totalQty,
@@ -716,8 +849,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     // Longueur des coulisses / côtés de tiroir (interdit toute valeur supérieure à la profondeur disponible du caisson)
     const slideLen =
       config.drawerSlideLength &&
-      config.drawerSlideLength > 0 &&
-      config.drawerSlideLength <= maxAllowedSlideLen
+        config.drawerSlideLength > 0 &&
+        config.drawerSlideLength <= maxAllowedSlideLen
         ? config.drawerSlideLength
         : autoSlideLen;
     resolvedDrawerSlideLen = slideLen;
@@ -772,8 +905,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       const hNote = isCustomHeight
         ? ' (hauteur tiroir choisie)'
         : useFrontHeights
-        ? ' (hauteur façade - 40 mm)'
-        : '';
+          ? ' (hauteur façade - 40 mm)'
+          : '';
       const sidesPartId = `drawer_sides_${boxH}`;
       const frontBackPartId = `drawer_front_back_${boxH}`;
 
