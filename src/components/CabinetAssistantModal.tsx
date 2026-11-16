@@ -156,7 +156,7 @@ const EMPTY_CONFIG: CabinetConfig = {
   height: 0,
   width: 0,
   depth: 0,
-  thickness: 0,
+  thickness: 19,
   assemblyType: '' as AssemblyType,
   topOverhangSides: undefined,
   topOverhangFront: undefined,
@@ -167,7 +167,7 @@ const EMPTY_CONFIG: CabinetConfig = {
   shelfRecess: 5,
   partitionsCount: -1,
   doors: 'none',
-  material: '',
+  material: 'Mela 19mm',
   sidesMaterial: '',
   topMaterial: '',
   bottomMaterial: '',
@@ -787,7 +787,10 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       ? Math.max(50, rawCompoHeight - compoFeetHeight)
       : rawCompoHeight;
   const compoWidth = config.width || parseInt(guidedFields.width, 10) || 0;
-  const compoThickness = config.thickness || 18;
+  const compoThickness =
+    config.thickness ||
+    extractThicknessFromMaterialName(guidedFields.material || config.material || '') ||
+    19;
   const facadeAvailableHeight = getFacadeAvailableHeight(
     compoHeight,
     compoThickness,
@@ -805,9 +808,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         compositionState.facadeItems.map((it) => {
           const h = parseFloat(it.height);
           const dh = parseFloat(it.drawerHeight || '');
+          // Si la hauteur a été calculée automatiquement (même après validation par l'utilisateur),
+          // elle reste dynamique afin que la somme des hauteurs ne dépasse jamais la hauteur disponible
+          const effectiveH = !it.heightValidated && !isNaN(h) && h > 0 ? h : null;
           return {
             type: it.type,
-            height: !isNaN(h) && h > 0 ? h : null,
+            height: effectiveH,
             drawerHeight: !isNaN(dh) && dh > 0 ? dh : null,
           };
         }),
@@ -2458,13 +2464,13 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                         <label className="block text-[10px] font-semibold text-slate-400 truncate">
                                           Hauteur façade (mm) :
                                         </label>
-                                        {isAuto && resolved > 0 ? (
+                                        {item.heightValidated && resolved > 0 ? (
+                                          <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-0.5 shrink-0">
+                                            <Check className="w-3 h-3" /> Validée ({resolved} mm)
+                                          </span>
+                                        ) : isAuto && resolved > 0 ? (
                                           <span className="text-[10px] font-mono font-bold text-amber-300 shrink-0">
                                             Calculé : {resolved} mm (espaces déduits)
-                                          </span>
-                                        ) : item.heightValidated ? (
-                                          <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-0.5 shrink-0">
-                                            <Check className="w-3 h-3" /> Validée ({resolved || item.height} mm)
                                           </span>
                                         ) : resolved > 0 ? (
                                           <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0">
@@ -2478,7 +2484,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                           min="0"
                                           step="0.5"
                                           value={
-                                            item.height !== ''
+                                            !item.heightValidated && item.height !== ''
                                               ? item.height
                                               : isAuto && resolved > 0
                                               ? String(resolved)
@@ -2491,21 +2497,21 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                             item.type === 'tiroir' ? 'Hauteur façade *' : 'Auto'
                                           }
                                           className={`flex-1 min-w-0 bg-slate-800 border rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold ${
-                                            isAuto && resolved > 0
-                                              ? 'border-amber-500 text-amber-300 bg-amber-500/10'
-                                              : item.heightValidated
+                                            item.heightValidated && resolved > 0
                                               ? 'border-emerald-500/70 text-emerald-300'
+                                              : isAuto && resolved > 0
+                                              ? 'border-amber-500 text-amber-300 bg-amber-500/10'
                                               : missingDrawerH && !isAuto
                                               ? 'border-red-500 text-white'
                                               : 'border-slate-700 focus:border-amber-500 text-white'
                                           }`}
                                         />
-                                        {isAuto && resolved > 0 && (
+                                        {isAuto && resolved > 0 && !item.heightValidated && (
                                           <button
                                             type="button"
                                             onClick={() =>
                                               updateFacadeItem(idx, {
-                                                height: String(resolved),
+                                                height: '',
                                                 heightValidated: true,
                                               })
                                             }
@@ -2525,7 +2531,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                                 heightValidated: false,
                                               })
                                             }
-                                            title="Remettre en calcul automatique"
+                                            title="Remettre en attente de validation"
                                             className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[10px] font-semibold shrink-0 transition-colors"
                                           >
                                             Auto
@@ -4434,7 +4440,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                   min="0"
                                   step="0.5"
                                   value={
-                                    item.height !== ''
+                                    !item.heightValidated && item.height !== ''
                                       ? item.height
                                       : isAuto && resolved > 0
                                       ? String(resolved)
@@ -4448,21 +4454,21 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                                       : 'Hauteur de la porte (calcul automatique si dernier élément)'
                                   }
                                   className={`w-full bg-slate-900 border rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold ${
-                                    isAuto && resolved > 0
-                                      ? 'border-amber-500 text-amber-300 bg-amber-500/10'
-                                      : item.heightValidated
+                                    item.heightValidated && resolved > 0
                                       ? 'border-emerald-500/70 text-emerald-300'
+                                      : isAuto && resolved > 0
+                                      ? 'border-amber-500 text-amber-300 bg-amber-500/10'
                                       : missingDrawerH && !isAuto
                                       ? 'border-red-500/70 focus:border-red-400 text-white'
                                       : 'border-slate-700 focus:border-amber-500 text-white'
                                   }`}
                                 />
-                                {isAuto && resolved > 0 ? (
+                                {isAuto && resolved > 0 && !item.heightValidated ? (
                                   <button
                                     type="button"
                                     onClick={() =>
                                       updateFacadeItem(idx, {
-                                        height: String(resolved),
+                                        height: '',
                                         heightValidated: true,
                                       })
                                     }
