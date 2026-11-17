@@ -23,7 +23,8 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
-import { CutItem, StockPanel, WorkshopItem } from '@/types/cutting';
+import { CutItem, EdgeBandingEdges, StockPanel, WorkshopItem } from '@/types/cutting';
+import { EdgeBandingButton, EdgeBandingModal } from '@/components/EdgeBandingModal';
 import {
   CabinetConfig,
   CabinetPartKey,
@@ -40,7 +41,7 @@ import {
   inferCabinetConfigFromItems,
 } from '@/lib/cabinet-calculator';
 import { getPieceCabinet, getPiecePart, UNASSIGNED_CABINET_LABEL } from '@/lib/piece-labels';
-import { parseEdgeBandingThickness } from '@/lib/edge-banding';
+import { parseEdgeBandingThickness, computeCutDimensions } from '@/lib/edge-banding';
 import type { FacadeItemType, FacadeDirection, DrawerBottomType } from '@/types/cutting';
 
 /** Composant de façade en cours de saisie (hauteur vide = calcul automatique) */
@@ -281,6 +282,23 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const [guidedValidationError, setGuidedValidationError] = useState<string | null>(null);
   const [showPartsSummaryModal, setShowPartsSummaryModal] = useState(false);
   const [showCompositionModal, setShowCompositionModal] = useState(false);
+  const [isManualEdgeInput, setIsManualEdgeInput] = useState(false);
+  const [manualEdgeInput, setManualEdgeInput] = useState('');
+  const [editingPartEdges, setEditingPartEdges] = useState<CabinetPieceCalculation | null>(null);
+
+  const edgeThickness = parseEdgeBandingThickness(edgeBanding);
+  const isEdgeBandingMissing = !edgeBanding || edgeBanding.trim() === '';
+
+  const handleOpenPartsSummaryModal = () => {
+    if (isEdgeBandingMissing) {
+      setGuidedValidationError(
+        'Le champ « Bande de champ » est obligatoire. Veuillez choisir 0, 1, 2, 3 mm ou saisir une épaisseur manuelle.'
+      );
+      return;
+    }
+    setGuidedValidationError(null);
+    setShowPartsSummaryModal(true);
+  };
   const [compositionState, setCompositionState] = useState({
     hasFacades: false,
     facadesCount: 1,
@@ -1463,6 +1481,13 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
 
   // Injection des pièces calculées dans la liste de débit (ajout ou mise à jour du caisson)
   const handleInjectPieces = () => {
+    if (isEdgeBandingMissing) {
+      alert(
+        'Le champ « Bande de champ » est obligatoire. Veuillez choisir 0, 1, 2, 3 mm ou saisir une épaisseur manuelle.'
+      );
+      setShowPartsSummaryModal(false);
+      return;
+    }
     if (!hasValidDimensions || calculated.cutItems.length === 0) {
       alert(
         'Veuillez renseigner les dimensions du caisson (Hauteur, Largeur, Profondeur) avant de l’enregistrer dans le projet.'
@@ -1893,40 +1918,99 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                             />
                           </div>
 
-                          <div className="w-28 sm:w-32 shrink-0">
+                          <div className="w-36 sm:w-44 shrink-0">
                             <label
                               className="text-[11px] text-slate-300 block mb-1 truncate"
-                              title="Épaisseur de la bande de champ en mm (0 = Sans)"
+                              title="Épaisseur de la bande de champ (obligatoire : 0, 1, 2, 3 mm ou saisie manuelle)"
                             >
-                              Bande de champ (mm) :
+                              Bande de champ <span className="text-amber-400">*</span> :
                             </label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              max="10"
-                              placeholder="Ex: 2"
-                              value={
-                                edgeBanding.trim().toLowerCase() === 'sans'
+                            {(() => {
+                              const cleanEdge = edgeBanding.trim().toLowerCase();
+                              const presetKey =
+                                cleanEdge === ''
+                                  ? ''
+                                  : cleanEdge === 'sans' || cleanEdge === '0' || cleanEdge === '0mm'
                                   ? '0'
-                                  : parseEdgeBandingThickness(edgeBanding) > 0
-                                  ? String(parseEdgeBandingThickness(edgeBanding))
-                                  : ''
-                              }
-                              onChange={(e) => {
-                                const raw = e.target.value.replace(',', '.').trim();
-                                if (!onEdgeBandingChange) return;
-                                if (raw === '') {
-                                  onEdgeBandingChange('');
-                                  return;
-                                }
-                                const num = parseFloat(raw);
-                                if (!isNaN(num) && num >= 0) {
-                                  onEdgeBandingChange(num === 0 ? 'Sans' : `${raw}mm`);
-                                }
-                              }}
-                              className="w-full bg-slate-800 border border-slate-700 focus:border-amber-500 rounded px-2 py-1.5 text-amber-300 text-xs font-mono font-bold text-center placeholder-slate-500 focus:outline-none"
-                            />
+                                  : cleanEdge === '1mm' || cleanEdge === '1'
+                                  ? '1'
+                                  : cleanEdge === '2mm' || cleanEdge === '2'
+                                  ? '2'
+                                  : cleanEdge === '3mm' || cleanEdge === '3'
+                                  ? '3'
+                                  : '__manual__';
+                              const selectVal = isManualEdgeInput ? '__manual__' : presetKey;
+
+                              return (
+                                <div className="flex items-center gap-1">
+                                  <select
+                                    required
+                                    value={selectVal}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setGuidedValidationError(null);
+                                      if (val === '__manual__') {
+                                        setIsManualEdgeInput(true);
+                                        setManualEdgeInput(
+                                          edgeThickness > 0 ? String(edgeThickness) : ''
+                                        );
+                                      } else {
+                                        setIsManualEdgeInput(false);
+                                        setManualEdgeInput('');
+                                        if (onEdgeBandingChange) {
+                                          onEdgeBandingChange(val === '0' ? 'Sans' : `${val}mm`);
+                                        }
+                                      }
+                                    }}
+                                    className={`w-full bg-slate-800 border rounded px-2 py-1.5 text-xs font-semibold focus:outline-none focus:border-amber-500 ${
+                                      isEdgeBandingMissing && !isManualEdgeInput
+                                        ? 'border-amber-500/80 text-amber-300'
+                                        : 'border-slate-700 text-amber-300'
+                                    }`}
+                                  >
+                                    <option value="" disabled>
+                                      -- Choisir * --
+                                    </option>
+                                    <option value="0">0 mm (Sans)</option>
+                                    <option value="1">1 mm</option>
+                                    <option value="2">2 mm</option>
+                                    <option value="3">3 mm</option>
+                                    <option value="__manual__">Saisie manuelle...</option>
+                                  </select>
+
+                                  {selectVal === '__manual__' && (
+                                    <div className="flex items-center gap-0.5 bg-slate-900 border border-amber-500/70 rounded px-1.5 py-1 shrink-0">
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        min="0"
+                                        max="10"
+                                        placeholder="0.8"
+                                        value={manualEdgeInput}
+                                        autoFocus
+                                        onChange={(e) => {
+                                          const raw = e.target.value;
+                                          setManualEdgeInput(raw);
+                                          setGuidedValidationError(null);
+                                          if (!onEdgeBandingChange) return;
+                                          const clean = raw.replace(',', '.').trim();
+                                          if (clean === '') {
+                                            onEdgeBandingChange('');
+                                            return;
+                                          }
+                                          const num = parseFloat(clean);
+                                          if (!isNaN(num) && num >= 0) {
+                                            onEdgeBandingChange(num === 0 ? 'Sans' : `${clean}mm`);
+                                          }
+                                        }}
+                                        className="w-11 bg-transparent text-xs font-mono font-bold text-amber-300 text-center focus:outline-none"
+                                      />
+                                      <span className="text-[10px] text-slate-400 font-mono">mm</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           <div className="w-24 sm:w-28 shrink-0">
@@ -2984,7 +3068,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setShowPartsSummaryModal(true)}
+                          onClick={handleOpenPartsSummaryModal}
                           className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors"
                         >
                           <Layers className="w-3.5 h-3.5" />
@@ -4092,7 +4176,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
             {calculated.pieces.length > 0 && (
               <button
                 type="button"
-                onClick={() => setShowPartsSummaryModal(true)}
+                onClick={handleOpenPartsSummaryModal}
                 className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors flex items-center gap-1.5"
               >
                 <Layers className="w-3.5 h-3.5" />
@@ -4272,6 +4356,15 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                   part.material &&
                   !DEFAULT_BASE_MATERIALS.includes(part.material.trim()) &&
                   !customMaterials.includes(part.material.trim());
+                const partEdgeKey = part.partId || part.partKey;
+                const partEdges: EdgeBandingEdges =
+                  (partEdgeKey && config.partEdgeBanding?.[partEdgeKey]) || {};
+                const { cutLength, cutWidth, hasDeduction } = computeCutDimensions(
+                  part.length,
+                  part.width,
+                  partEdges,
+                  edgeThickness
+                );
 
                 return (
                   <div
@@ -4279,7 +4372,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     className="p-3.5 rounded-2xl bg-slate-850 border border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
                     <div className="space-y-1 min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span
                           className="w-3 h-3 rounded-full shrink-0"
                           style={{ backgroundColor: part.color }}
@@ -4290,9 +4383,20 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">
                           Qté : {part.quantity}
                         </span>
+                        {edgeThickness > 0 && (
+                          <EdgeBandingButton
+                            edges={partEdges}
+                            onClick={() => setEditingPartEdges(part)}
+                          />
+                        )}
                       </div>
                       <div className="text-xs font-mono text-emerald-400 pl-5">
                         Dimensions débit : <strong>{part.length} × {part.width} mm</strong>
+                        {edgeThickness > 0 && hasDeduction && (
+                          <span className="ml-2 text-orange-300">
+                            → Coupe : <strong>{cutLength} × {cutWidth} mm</strong>
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-400 pl-5 italic">
                         {part.formula}
@@ -5301,6 +5405,35 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
           </div>
         </div>
       )}
+      {/* Modale graphique interactive pour désigner les chants à plaquer sur une partie du caisson */}
+      <EdgeBandingModal
+        isOpen={Boolean(editingPartEdges)}
+        title={editingPartEdges?.role || ''}
+        material={editingPartEdges?.material}
+        length={editingPartEdges?.length || 0}
+        width={editingPartEdges?.width || 0}
+        edgeThickness={edgeThickness}
+        edges={
+          editingPartEdges
+            ? config.partEdgeBanding?.[
+                editingPartEdges.partId || editingPartEdges.partKey || ''
+              ]
+            : undefined
+        }
+        onChange={(nextEdges) => {
+          if (!editingPartEdges) return;
+          const key = editingPartEdges.partId || editingPartEdges.partKey;
+          if (!key) return;
+          setConfig((prev) => ({
+            ...prev,
+            partEdgeBanding: {
+              ...(prev.partEdgeBanding || {}),
+              [key]: nextEdges,
+            },
+          }));
+        }}
+        onClose={() => setEditingPartEdges(null)}
+      />
     </div>,
     document.body
   );

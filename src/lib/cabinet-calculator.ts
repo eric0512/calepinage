@@ -1036,17 +1036,24 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   };
 
   // Conversion en CutItem pour la liste de débit
-  const cutItems: CutItem[] = pieces.map((p, idx) => ({
-    id: `cabinet-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
-    name: p.description,
-    material: p.material,
-    length: p.length,
-    width: p.width,
-    quantity: p.quantity,
-    canRotate: true,
-    color: p.color,
-    cabinetConfig: { ...finalConfig },
-  }));
+  const cutItems: CutItem[] = pieces.map((p, idx) => {
+    const partEdges =
+      (p.partId && config.partEdgeBanding?.[p.partId]) ||
+      (p.partKey && config.partEdgeBanding?.[p.partKey]) ||
+      undefined;
+    return {
+      id: `cabinet-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      name: p.description,
+      material: p.material,
+      length: p.length,
+      width: p.width,
+      quantity: p.quantity,
+      canRotate: true,
+      color: p.color,
+      cabinetConfig: { ...finalConfig },
+      ...(partEdges ? { edgeBandingEdges: partEdges } : {}),
+    };
+  });
 
   return {
     config: finalConfig,
