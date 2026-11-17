@@ -99,17 +99,35 @@ export interface FacadeLayoutResult {
 }
 
 /**
- * Hauteur disponible pour les façades selon leur positionnement.
- * - En applique : hauteur extérieure - 2 × 2 mm de jeu
- * - À l'intérieur : hauteur intérieure (H - 2 × épaisseur) - 2 × 2 mm de jeu
+ * Hauteur disponible pour les façades selon leur positionnement et le jeu périphérique.
+ * - En applique : hauteur extérieure - 2 × jeu
+ * - À l'intérieur : hauteur intérieure (H - 2 × épaisseur) - 2 × jeu
  */
 export function getFacadeAvailableHeight(
   height: number,
   thickness: number,
-  placement: 'applique' | 'interieur' | undefined
+  placement: 'applique' | 'interieur' | undefined,
+  clearance: number = FACADE_EDGE_CLEARANCE
 ): number {
+  const safeClearance = clearance >= 0 ? clearance : FACADE_EDGE_CLEARANCE;
   const base = placement === 'interieur' ? height - 2 * thickness : height;
-  return Math.max(0, base - 2 * FACADE_EDGE_CLEARANCE);
+  return Math.max(0, base - 2 * safeClearance);
+}
+
+/**
+ * Largeur disponible pour les façades selon leur positionnement et le jeu périphérique.
+ * - En applique : largeur extérieure - 2 × jeu
+ * - À l'intérieur : largeur intérieure (L - 2 × épaisseur) - 2 × jeu
+ */
+export function getFacadeAvailableWidth(
+  width: number,
+  thickness: number,
+  placement: 'applique' | 'interieur' | undefined,
+  clearance: number = FACADE_EDGE_CLEARANCE
+): number {
+  const safeClearance = clearance >= 0 ? clearance : FACADE_EDGE_CLEARANCE;
+  const base = placement === 'interieur' ? width - 2 * thickness : width;
+  return Math.max(0, base - 2 * safeClearance);
 }
 
 /**
@@ -660,10 +678,10 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const isInside = config.facadePlacement === 'interieur';
     const gap = config.facadeGap !== undefined && config.facadeGap >= 0 ? config.facadeGap : 2;
     const items = config.facadeItems;
-    const availH = getFacadeAvailableHeight(boxHeight, thickness, config.facadePlacement);
+    const availH = getFacadeAvailableHeight(boxHeight, thickness, config.facadePlacement, gap);
     const availW = Math.max(
       FACADE_MIN_HEIGHT,
-      (isInside ? interiorWidth : width) - 2 * FACADE_EDGE_CLEARANCE
+      getFacadeAvailableWidth(width, thickness, config.facadePlacement, gap)
     );
     const baseH = isInside ? interiorHeight : boxHeight;
     const baseW = isInside ? interiorWidth : width;
@@ -686,7 +704,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       facadeW = Math.max(FACADE_MIN_HEIGHT, hLayout.columnWidth || availW);
       widthFormula =
         hLayout.columnsCount > 1
-          ? `(${baseW} - ${2 * FACADE_EDGE_CLEARANCE} - ${hLayout.columnsCount - 1}×${gap}) / ${hLayout.columnsCount} = ${facadeW} mm`
+          ? `(${baseW} - ${2 * gap} - ${hLayout.columnsCount - 1}×${gap}) / ${hLayout.columnsCount} = ${facadeW} mm`
           : `L ${facadeW} mm`;
       gapsHCount = 0;
     } else {
@@ -753,7 +771,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       const defaultMat = g.material || fallbackMat;
       const pieceMat = getPartMat(partId, defaultMat);
       const autoFormula = g.auto
-        ? `Auto : ${baseH} - ${2 * FACADE_EDGE_CLEARANCE} (jeux)${!isHorizontal && fixedDesc ? ` - ${fixedDesc}` : ''
+        ? `Auto : ${baseH} - ${2 * gap} (jeux)${!isHorizontal && fixedDesc ? ` - ${fixedDesc}` : ''
         }${!isHorizontal && gapsHCount > 0 ? ` - ${gapsHCount}×${gap} (espaces)` : ''
         } = ${g.h} mm`
         : `Hauteur saisie ${g.h} mm`;
@@ -773,11 +791,12 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   } else if (activeFacadesCount > 0) {
     const isInside = config.facadePlacement === 'interieur';
     const gap = config.facadeGap !== undefined && config.facadeGap >= 0 ? config.facadeGap : 2;
+    const perimDed = 2 * gap;
 
     if (isInside) {
-      // Façades rentrantes / à l'intérieur du caisson (jeu périphérique 2 mm tout autour)
-      const facadeH = Math.max(50, interiorHeight - 4);
-      const totalAvailableW = Math.max(50, interiorWidth - 4);
+      // Façades rentrantes / à l'intérieur du caisson (jeu périphérique 2 × gap tout autour)
+      const facadeH = Math.max(50, interiorHeight - perimDed);
+      const totalAvailableW = Math.max(50, interiorWidth - perimDed);
       const facadeW =
         activeFacadesCount === 1
           ? totalAvailableW
@@ -787,12 +806,12 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       pieces.push({
         partKey: 'doors',
         partId: 'doors',
-        role: `Façade rentrante intérieure (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})${feetBadge}`,
+        role: `Façade rentrante intérieure (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu ${gap} mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})${feetBadge}`,
         description: `${config.name} - Façade intérieure`,
         formula:
           activeFacadesCount > 1
-            ? `(${interiorWidth} - 4 - ${activeFacadesCount - 1}×${gap}) / ${activeFacadesCount} = ${facadeW} mm × ${facadeH} mm [${activeFacadesCount} × ${cabinetCount} = ${totalQty} pcs]`
-            : `(${interiorWidth} - 4mm) × (${interiorHeight} - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
+            ? `(${interiorWidth} - ${perimDed} - ${activeFacadesCount - 1}×${gap}) / ${activeFacadesCount} = ${facadeW} mm × ${facadeH} mm [${activeFacadesCount} × ${cabinetCount} = ${totalQty} pcs]`
+            : `(${interiorWidth} - ${perimDed}mm) × (${interiorHeight} - ${perimDed}mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
         length: Math.max(facadeH, facadeW),
         width: Math.min(facadeH, facadeW),
         quantity: totalQty,
@@ -800,9 +819,9 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         color: PIECE_COLORS.door,
       });
     } else {
-      // Façades en applique (recouvrement du caisson avec jeu périphérique de 2 mm)
-      const facadeH = Math.max(50, boxHeight - 4);
-      const totalAvailableW = Math.max(50, width - 4);
+      // Façades en applique (recouvrement du caisson avec jeu périphérique 2 × gap)
+      const facadeH = Math.max(50, boxHeight - perimDed);
+      const totalAvailableW = Math.max(50, width - perimDed);
       const facadeW =
         activeFacadesCount === 1
           ? totalAvailableW
@@ -812,14 +831,14 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       pieces.push({
         partKey: 'doors',
         partId: 'doors',
-        role: `Façade en applique (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu 2 mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})${feetBadge}`,
+        role: `Façade en applique (${activeFacadesCount} composant${activeFacadesCount > 1 ? 's' : ''}, jeu ${gap} mm${activeFacadesCount > 1 ? `, espacement ${gap} mm` : ''})${feetBadge}`,
         description: `${config.name} - Façade`,
         formula:
           activeFacadesCount > 1
-            ? `(${width} - 4 - ${activeFacadesCount - 1}×${gap}) / ${activeFacadesCount} = ${facadeW} mm × ${facadeH} mm [${activeFacadesCount} × ${cabinetCount} = ${totalQty} pcs]`
+            ? `(${width} - ${perimDed} - ${activeFacadesCount - 1}×${gap}) / ${activeFacadesCount} = ${facadeW} mm × ${facadeH} mm [${activeFacadesCount} × ${cabinetCount} = ${totalQty} pcs]`
             : feetHeight > 0
-              ? `(${width} - 4mm) × (${boxHeight}mm [${height}-${feetHeight} pieds] - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`
-              : `(${width} - 4mm) × (${height} - 4mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
+              ? `(${width} - ${perimDed}mm) × (${boxHeight}mm [${height}-${feetHeight} pieds] - ${perimDed}mm) [1 × ${cabinetCount} = ${totalQty} pcs]`
+              : `(${width} - ${perimDed}mm) × (${height} - ${perimDed}mm) [1 × ${cabinetCount} = ${totalQty} pcs]`,
         length: Math.max(facadeH, facadeW),
         width: Math.min(facadeH, facadeW),
         quantity: totalQty,

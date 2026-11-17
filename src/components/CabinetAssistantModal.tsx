@@ -37,6 +37,7 @@ import {
   computeFacadeLayout,
   computeHorizontalFacadeLayout,
   getFacadeAvailableHeight,
+  getFacadeAvailableWidth,
   DEFAULT_BASE_MATERIALS,
   inferCabinetConfigFromItems,
 } from '@/lib/cabinet-calculator';
@@ -825,13 +826,14 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   const facadeAvailableHeight = getFacadeAvailableHeight(
     compoHeight,
     compoThickness,
-    compositionState.facadePlacement
+    compositionState.facadePlacement,
+    compositionState.facadeGap
   );
-  const facadeAvailableWidth = Math.max(
-    0,
-    (compositionState.facadePlacement === 'interieur'
-      ? compoWidth - 2 * compoThickness
-      : compoWidth) - 4
+  const facadeAvailableWidth = getFacadeAvailableWidth(
+    compoWidth,
+    compoThickness,
+    compositionState.facadePlacement,
+    compositionState.facadeGap
   );
   const effectiveFacadeDirection: FacadeDirection =
     compositionState.facadeDirection ||
