@@ -42,6 +42,7 @@ interface CutListManagerProps {
   stockPanels?: StockPanel[];
   workshopStock?: WorkshopItem[];
   edgeBanding?: string;
+  onEdgeBandingChange?: (val: string) => void;
   onRequestOptimize?: (newItems?: CutItem[]) => void;
   isCabinetModalOpen?: boolean;
   onOpenCabinetModal?: () => void;
@@ -222,6 +223,7 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
   stockPanels,
   workshopStock,
   edgeBanding,
+  onEdgeBandingChange,
   onRequestOptimize,
   isCabinetModalOpen = false,
   onOpenCabinetModal,
@@ -1665,6 +1667,8 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
         }
         stockPanels={stockPanels}
         workshopStock={workshopStock}
+        edgeBanding={edgeBanding}
+        onEdgeBandingChange={onEdgeBandingChange}
       />
     </div>
   );

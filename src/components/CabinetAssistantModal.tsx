@@ -40,6 +40,7 @@ import {
   inferCabinetConfigFromItems,
 } from '@/lib/cabinet-calculator';
 import { getPieceCabinet, getPiecePart, UNASSIGNED_CABINET_LABEL } from '@/lib/piece-labels';
+import { parseEdgeBandingThickness } from '@/lib/edge-banding';
 import type { FacadeItemType, FacadeDirection, DrawerBottomType } from '@/types/cutting';
 
 /** Composant de façade en cours de saisie (hauteur vide = calcul automatique) */
@@ -83,6 +84,8 @@ interface CabinetAssistantModalProps {
   availableMaterials: string[];
   stockPanels?: StockPanel[];
   workshopStock?: WorkshopItem[];
+  edgeBanding?: string;
+  onEdgeBandingChange?: (val: string) => void;
 }
 
 export interface CustomCabinetPreset {
@@ -263,6 +266,8 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
   availableMaterials,
   stockPanels = [],
   workshopStock = [],
+  edgeBanding = '',
+  onEdgeBandingChange,
 }) => {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'visual' | 'ai'>('ai');
@@ -1866,9 +1871,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     {/* Tous les champs suivants sont masqués à l'ouverture tant qu'aucun élément n'est sélectionné */}
                     {guidedFields.elementName ? (
                       <div className="space-y-3 animate-in fade-in duration-200">
-                        {/* Ligne : Nom dans la liste de débit & Pieds sur ce caisson (réduit + Hauteur du pied à droite) */}
+                        {/* Ligne : Nom dans la liste de débit, Bande de champ, Pieds caisson & Hauteur du pied */}
                         <div className="flex flex-wrap sm:flex-nowrap items-end gap-2 sm:gap-2.5">
-                          <div className="flex-1 min-w-[150px]">
+                          <div className="w-36 sm:w-44 shrink-0">
                             <label className="text-[11px] text-slate-300 block mb-1 truncate">
                               Nom dans la liste de débit <span className="text-amber-400">*</span> :
                             </label>
@@ -1889,6 +1894,42 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           </div>
 
                           <div className="w-28 sm:w-32 shrink-0">
+                            <label
+                              className="text-[11px] text-slate-300 block mb-1 truncate"
+                              title="Épaisseur de la bande de champ en mm (0 = Sans)"
+                            >
+                              Bande de champ (mm) :
+                            </label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="10"
+                              placeholder="Ex: 2"
+                              value={
+                                edgeBanding.trim().toLowerCase() === 'sans'
+                                  ? '0'
+                                  : parseEdgeBandingThickness(edgeBanding) > 0
+                                  ? String(parseEdgeBandingThickness(edgeBanding))
+                                  : ''
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(',', '.').trim();
+                                if (!onEdgeBandingChange) return;
+                                if (raw === '') {
+                                  onEdgeBandingChange('');
+                                  return;
+                                }
+                                const num = parseFloat(raw);
+                                if (!isNaN(num) && num >= 0) {
+                                  onEdgeBandingChange(num === 0 ? 'Sans' : `${raw}mm`);
+                                }
+                              }}
+                              className="w-full bg-slate-800 border border-slate-700 focus:border-amber-500 rounded px-2 py-1.5 text-amber-300 text-xs font-mono font-bold text-center placeholder-slate-500 focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="w-24 sm:w-28 shrink-0">
                             <label
                               className="text-[11px] text-slate-300 block mb-1 truncate"
                               title="Pieds sur ce caisson ?"
@@ -2948,23 +2989,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         >
                           <Layers className="w-3.5 h-3.5" />
                           <span>Matière par partie...</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!hasValidDimensions || calculated.cutItems.length === 0}
-                          onClick={handleInjectPieces}
-                          className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all disabled:opacity-40"
-                        >
-                          {editingCabinetName ? (
-                            <Check className="w-4 h-4" />
-                          ) : (
-                            <Plus className="w-4 h-4" />
-                          )}
-                          <span>
-                            {editingCabinetName
-                              ? 'Mettre à jour ce caisson dans le projet'
-                              : 'Ajouter ce caisson au projet'}
-                          </span>
                         </button>
                       </div>
                     </div>
@@ -4075,23 +4099,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 <span>Détail matières par partie</span>
               </button>
             )}
-            <button
-              type="button"
-              disabled={!hasValidDimensions || calculated.cutItems.length === 0}
-              onClick={handleInjectPieces}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs transition-all shadow-md disabled:opacity-40"
-            >
-              {editingCabinetName ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <Plus className="w-4 h-4" />
-              )}
-              <span>
-                {editingCabinetName
-                  ? 'Mettre à jour ce caisson dans le projet'
-                  : 'Ajouter ce caisson au projet'}
-              </span>
-            </button>
           </div>
         </div>
       </div>

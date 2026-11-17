@@ -877,6 +877,9 @@ export default function Home() {
               stockPanels={stockPanels}
               workshopStock={workshopStock}
               edgeBanding={settings.edgeBanding}
+              onEdgeBandingChange={(val) =>
+                setSettings((prev) => ({ ...prev, edgeBanding: val }))
+              }
               isCabinetModalOpen={showCabinetModal}
               onOpenCabinetModal={() => setShowCabinetModal(true)}
               onCloseCabinetModal={() => setShowCabinetModal(false)}
