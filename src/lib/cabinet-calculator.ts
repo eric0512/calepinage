@@ -889,8 +889,6 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     // Hauteur du bac de tiroir par défaut (hauteur disponible divisée par nb de tiroirs avec jeu de 25-30 mm)
     const drawerBoxH = Math.min(220, Math.max(80, Math.floor((interiorHeight / dCount) - 30)));
 
-    const bottomQty = 1 * dCount * cabinetCount;
-
     // Hauteur et longueur côté de chaque bac : hauteur choisie dans la composition (bornée à la hauteur de façade),
     // ou déduite de la hauteur de sa façade (façade - 40 mm), sinon répartition standard.
     // Longueur du côté : saisie par tiroir (config.drawerSlideLengths?.[i]) bornée à maxAllowedSlideLen, sinon slideLen.
