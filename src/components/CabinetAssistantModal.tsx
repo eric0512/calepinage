@@ -4284,124 +4284,6 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 </div>
               </div>
 
-              {/* Longueur des coulisses de tiroir (si le caisson contient au moins un tiroir) */}
-              {((config.drawersCount && config.drawersCount > 0) ||
-                compositionState.hasDrawers ||
-                facadeDrawerCount > 0) &&
-                (() => {
-                  const dVal = config.depth || parseInt(guidedFields.depth, 10) || 0;
-                  const bType = config.backType || (guidedFields.backType as BackType) || 'none';
-                  const chosenBackMat = config.partMaterials?.['back'] || config.backMaterial || '';
-                  const bTh =
-                    bType === 'groove'
-                      ? extractThicknessFromMaterialName(chosenBackMat) ||
-                        config.backThickness ||
-                        8
-                      : 0;
-                  const interiorD = Math.max(0, dVal - bTh);
-                  const maxSlide = dVal > 0 ? Math.max(100, interiorD - 10) : 1000;
-                  const currentSlideLen =
-                    compositionState.drawerSlideLength || config.drawerSlideLength || 0;
-                  const standardSlideLengths = [250, 300, 350, 400, 450, 500, 550, 600];
-
-                  const updateSlideLength = (val: number) => {
-                    const clamped = Math.max(100, Math.min(maxSlide, val));
-                    setCompositionState((prev) => ({
-                      ...prev,
-                      drawerSlideLength: clamped,
-                      hasDrawers: true,
-                    }));
-                    setConfig((prev) => ({
-                      ...prev,
-                      drawerSlideLength: clamped,
-                    }));
-                  };
-
-                  return (
-                    <div className="p-2.5 rounded-xl bg-slate-950/70 border border-amber-500/30 space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <Ruler className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span className="text-[11px] font-bold text-amber-300">
-                            Longueur des coulisses (détermine la longueur des côtés de tiroir) :
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono text-emerald-400 font-semibold">
-                          Max possible : {maxSlide} mm (Prof. {dVal} mm
-                          {bType === 'groove'
-                            ? ` - Fond encastré ${bTh} mm`
-                            : bType === 'applique'
-                            ? ' - Fond en applique'
-                            : ' - Sans fond'}
-                          {' - 10 mm jeu)'}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <div className="flex items-center gap-1 bg-slate-900 border border-amber-500/50 rounded-lg px-2 py-1">
-                          <input
-                            type="number"
-                            min="100"
-                            max={maxSlide}
-                            step="10"
-                            value={currentSlideLen > 0 ? currentSlideLen : ''}
-                            placeholder={String(Math.min(maxSlide, 400))}
-                            onChange={(e) => {
-                              const raw = parseInt(e.target.value, 10);
-                              if (isNaN(raw)) {
-                                setCompositionState((prev) => ({ ...prev, drawerSlideLength: 0 }));
-                                setConfig((prev) => ({ ...prev, drawerSlideLength: 0 }));
-                                return;
-                              }
-                              const clamped = Math.min(maxSlide, raw);
-                              setCompositionState((prev) => ({
-                                ...prev,
-                                drawerSlideLength: clamped,
-                                hasDrawers: true,
-                              }));
-                              setConfig((prev) => ({
-                                ...prev,
-                                drawerSlideLength: clamped,
-                              }));
-                            }}
-                            className="w-16 bg-transparent text-xs font-mono font-bold text-amber-300 text-center focus:outline-none"
-                          />
-                          <span className="text-[10px] font-mono text-slate-400">mm</span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-1">
-                          {standardSlideLengths.map((sl) => {
-                            const disabled = dVal > 0 && sl > maxSlide;
-                            const isSelected = currentSlideLen === sl;
-                            return (
-                              <button
-                                key={`sum-sl-${sl}`}
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => updateSlideLength(sl)}
-                                title={
-                                  disabled
-                                    ? `Trop long (max ${maxSlide} mm)`
-                                    : `Choisir des coulisses de ${sl} mm`
-                                }
-                                className={`px-2 py-1 rounded-md text-[10px] font-mono font-bold transition-colors ${
-                                  disabled
-                                    ? 'opacity-30 line-through cursor-not-allowed bg-slate-900 text-slate-600'
-                                    : isSelected
-                                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                                }`}
-                              >
-                                {sl} mm
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
               {/* Formulaire d'ajout rapide d'une nouvelle matière à la boîte */}
               {showAddMaterialInput && (
                 <div className="p-3 bg-slate-850 rounded-xl border border-amber-500/40 space-y-2 animate-in fade-in duration-150">
@@ -4521,6 +4403,93 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       <div className="text-[11px] text-slate-400 pl-5 italic">
                         {part.formula}
                       </div>
+
+                      {part.drawerIndex !== undefined &&
+                        (() => {
+                          const dIdx = part.drawerIndex;
+                          const dVal = config.depth || parseInt(guidedFields.depth, 10) || 0;
+                          const bType =
+                            config.backType || (guidedFields.backType as BackType) || 'none';
+                          const chosenBackMat =
+                            config.partMaterials?.['back'] || config.backMaterial || '';
+                          const bTh =
+                            bType === 'groove'
+                              ? extractThicknessFromMaterialName(chosenBackMat) ||
+                                config.backThickness ||
+                                8
+                              : 0;
+                          const maxSide =
+                            part.maxDrawerSideLength ||
+                            (dVal > 0 ? Math.max(100, Math.floor(dVal - bTh - 10)) : 1000);
+                          const currentSideLen =
+                            config.drawerSlideLengths?.[dIdx] ??
+                            part.drawerSideLength ??
+                            0;
+                          const deducedSlide =
+                            currentSideLen >= 50 ? Math.floor(currentSideLen / 50) * 50 : 0;
+
+                          const updateDrawerSideLength = (val: number) => {
+                            const clamped = Math.max(50, Math.min(maxSide, val));
+                            setConfig((prev) => {
+                              const nextArr = [...(prev.drawerSlideLengths || [])];
+                              nextArr[dIdx] = clamped;
+                              return { ...prev, drawerSlideLengths: nextArr };
+                            });
+                          };
+
+                          return (
+                            <div className="mt-2 ml-5 p-2.5 rounded-xl bg-slate-950/70 border border-amber-500/30 space-y-1.5">
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono">
+                                <span className="text-emerald-400 font-semibold">
+                                  Longueur max disponible : <strong>{maxSide} mm</strong>
+                                  {dVal > 0 && (
+                                    <span className="text-slate-400 font-normal ml-1">
+                                      (Prof. {dVal} -{' '}
+                                      {bType === 'groove'
+                                        ? `Fond encastré ${bTh}`
+                                        : 'Fond non encastré'}{' '}
+                                      - 10 mm jeu)
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2.5">
+                                <label className="text-[11px] font-semibold text-amber-300">
+                                  Longueur du côté :
+                                </label>
+                                <div className="relative w-28">
+                                  <input
+                                    type="number"
+                                    min={50}
+                                    max={maxSide}
+                                    step={1}
+                                    value={currentSideLen || ''}
+                                    onChange={(e) => {
+                                      const raw = parseInt(e.target.value, 10);
+                                      if (!isNaN(raw) && raw > 0) {
+                                        updateDrawerSideLength(raw);
+                                      } else {
+                                        setConfig((prev) => {
+                                          const nextArr = [...(prev.drawerSlideLengths || [])];
+                                          delete nextArr[dIdx];
+                                          return { ...prev, drawerSlideLengths: nextArr };
+                                        });
+                                      }
+                                    }}
+                                    placeholder={`Max ${maxSide}`}
+                                    className="w-full px-2.5 py-1 pr-8 rounded-lg bg-slate-900 border border-amber-500/50 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-400 text-center"
+                                  />
+                                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">
+                                    mm
+                                  </span>
+                                </div>
+                                <span className="px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-[11px] font-mono font-bold text-amber-300">
+                                  Coulisse : {deducedSlide > 0 ? `${deducedSlide} mm` : '—'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                     </div>
 
                     {/* Saisie libre et sélecteur de matière spécifique pour cette partie */}

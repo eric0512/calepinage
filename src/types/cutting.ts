@@ -98,6 +98,7 @@ export interface CabinetConfig {
   drawersCount?: number; // Nombre de tiroirs (0 si aucun)
   drawerSlideThickness?: number; // Épaisseur des coulisses (mm par côté, ex: 13)
   drawerSlideLength?: number; // Longueur des coulisses (mm)
+  drawerSlideLengths?: number[]; // Longueur des côtés de tiroir par tiroir (index 0..N-1, mm)
   drawerBottomType?: DrawerBottomType; // Pose du fond du tiroir : 'applique' ou 'groove' (encastré)
   drawerGrooveDepth?: number; // Profondeur de la rainure du fond de tiroir (mm, égale à 1/3 de l'épaisseur de la matière)
 }

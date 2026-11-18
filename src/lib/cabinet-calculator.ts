@@ -60,6 +60,9 @@ export interface CabinetPieceCalculation {
   quantity: number;
   material: string;
   color: string;
+  drawerIndex?: number;
+  drawerSideLength?: number;
+  maxDrawerSideLength?: number;
 }
 
 export interface CalculatedCabinet {
@@ -888,10 +891,12 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     const bottomQty = 1 * dCount * cabinetCount;
 
-    // Hauteur de chaque bac : hauteur de tiroir choisie dans la composition (bornée à la hauteur de la façade),
-    // ou déduite de la hauteur de sa façade (façade - 40 mm), sinon répartition standard
+    // Hauteur et longueur côté de chaque bac : hauteur choisie dans la composition (bornée à la hauteur de façade),
+    // ou déduite de la hauteur de sa façade (façade - 40 mm), sinon répartition standard.
+    // Longueur du côté : saisie par tiroir (config.drawerSlideLengths?.[i]) bornée à maxAllowedSlideLen, sinon slideLen.
     const useFrontHeights = drawerSpecsFromFacade.length === dCount;
     const boxGroups = new Map<number, { count: number; isCustomHeight: boolean }>();
+    const perDrawerSpecs: { index: number; boxH: number; isCustomHeight: boolean; sideLen: number }[] = [];
     for (let i = 0; i < dCount; i++) {
       let boxH = drawerBoxH;
       let isCustom = false;
@@ -907,6 +912,13 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
           );
         }
       }
+      const rawCustomSide = config.drawerSlideLengths?.[i];
+      const drawerSideLen =
+        rawCustomSide && rawCustomSide > 0
+          ? Math.min(maxAllowedSlideLen, Math.max(50, Math.round(rawCustomSide)))
+          : slideLen;
+      perDrawerSpecs.push({ index: i, boxH, isCustomHeight: isCustom, sideLen: drawerSideLen });
+
       const existing = boxGroups.get(boxH);
       if (existing) {
         existing.count += 1;
@@ -918,8 +930,43 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
 
     const mainSidesTotalTh = Math.round(2 * thickness * 10) / 10;
 
+    // Côtés de tiroir : une entrée par tiroir pour permettre une longueur de côté / coulisse distincte par tiroir
+    perDrawerSpecs.forEach(({ index: dIdx, boxH, isCustomHeight, sideLen: dSideLen }) => {
+      const sidesQty = 2 * cabinetCount;
+      const hNote = isCustomHeight
+        ? ' (hauteur tiroir choisie)'
+        : useFrontHeights
+          ? ' (hauteur façade - 40 mm)'
+          : '';
+      const sidesPartId = dCount === 1 ? `drawer_sides_${boxH}` : `drawer_sides_${dIdx}`;
+      const sidesMat = getPartMat(
+        sidesPartId,
+        getPartMat(
+          `drawer_sides_${boxH}`,
+          getPartMat('drawer_sides', getPartMat('drawers', resolvedDrawerMaterial))
+        )
+      );
+      const deducedSlide = Math.floor(dSideLen / 50) * 50;
+      const drawerLabel = dCount > 1 ? `Tiroir ${dIdx + 1}` : '1 tiroir';
+
+      pieces.push({
+        partKey: 'drawers',
+        partId: sidesPartId,
+        role: `Côtés de tiroir (${drawerLabel}, H ${boxH} mm, côté ${dSideLen} mm)`,
+        description: `${config.name} - Côtés tiroir${dCount > 1 ? ` ${dIdx + 1}` : ''}`,
+        formula: `Côté ${dSideLen} mm (coulisse ${deducedSlide} mm) × H ${boxH} mm${hNote} [2 × 1 × ${cabinetCount} = ${sidesQty} pcs]`,
+        length: Math.max(dSideLen, boxH),
+        width: Math.min(dSideLen, boxH),
+        quantity: sidesQty,
+        material: sidesMat,
+        color: PIECE_COLORS.drawers,
+        drawerIndex: dIdx,
+        drawerSideLength: dSideLen,
+        maxDrawerSideLength: maxAllowedSlideLen,
+      });
+    });
+
     boxGroups.forEach(({ count: n, isCustomHeight }, boxH) => {
-      const sidesQty = 2 * n * cabinetCount;
       const frontBackQty = 2 * n * cabinetCount;
       const hNote = isCustomHeight
         ? ' (hauteur tiroir choisie)'
@@ -941,20 +988,6 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         50,
         Math.round((drawerOuterW - drawerSidesTotalTh) * 10) / 10
       );
-
-      // Côtés de tiroir
-      pieces.push({
-        partKey: 'drawers',
-        partId: sidesPartId,
-        role: `Côtés de tiroir (${n} tiroir${n > 1 ? 's' : ''}, H ${boxH} mm, coulisses ${slideLen} mm)`,
-        description: `${config.name} - Côtés tiroir`,
-        formula: `Coulisse ${slideLen} mm × H ${boxH} mm${hNote} [2 × ${n} × ${cabinetCount} = ${sidesQty} pcs]`,
-        length: Math.max(slideLen, boxH),
-        width: Math.min(slideLen, boxH),
-        quantity: sidesQty,
-        material: sidesMat,
-        color: PIECE_COLORS.drawers,
-      });
 
       const widthFormulaDesc =
         partitionsCount > 0
@@ -980,8 +1013,9 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     });
 
     // Résolution de la matière et de l'épaisseur des parois du tiroir pour le calcul du fond (rainure = 1/3 épaisseur)
-    const anySidesPartId = Array.from(boxGroups.keys())
-      .map((h) => `drawer_sides_${h}`)
+    const anySidesPartId = perDrawerSpecs
+      .map((s) => (dCount === 1 ? `drawer_sides_${s.boxH}` : `drawer_sides_${s.index}`))
+      .concat(Array.from(boxGroups.keys()).map((h) => `drawer_sides_${h}`))
       .find((id) => config.partMaterials?.[id]);
     const refSidesMat =
       (anySidesPartId ? config.partMaterials?.[anySidesPartId] : '') ||
@@ -1009,40 +1043,50 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
         ? config.drawerGrooveDepth
         : autoGrooveDepth;
 
-    let bottomW: number;
-    let bottomD: number;
-    let bottomRole: string;
-    let bottomFormula: string;
+    // Grouper les fonds de tiroir par longueur de côté (si tous identiques -> 1 seule ligne, sinon 1 ligne par longueur distincte)
+    const bottomGroups = new Map<number, number>();
+    perDrawerSpecs.forEach((s) => {
+      bottomGroups.set(s.sideLen, (bottomGroups.get(s.sideLen) || 0) + 1);
+    });
 
-    if (drawerBottomType === 'applique') {
-      // Fond de tiroir posé en applique : dimensions extérieures du tiroir diminuées de 1 mm de chaque côté (droit/gauche, avant/arrière -> -2 mm sur chaque axe)
-      bottomW = Math.max(50, Math.round((drawerOuterW - 2) * 10) / 10);
-      bottomD = Math.max(50, Math.round((slideLen - 2) * 10) / 10);
-      bottomRole = `Fond de tiroir en applique (${dCount} tiroir${dCount > 1 ? 's' : ''}, -1 mm/côté)`;
-      bottomFormula = `Applique (-1 mm/côté) : (${drawerOuterW} - 2 = ${bottomW} mm) × (${slideLen} - 2 = ${bottomD} mm) [1 × ${dCount} × ${cabinetCount} = ${bottomQty} pcs]`;
-    } else {
-      // Fond de tiroir encastré en rainure : cote intérieure + 2 × profondeur de rainure (1/3 ép.) - 1 mm de chaque côté (-2 mm sur chaque axe)
-      const groove2 = Math.round(2 * grooveDepth * 10) / 10;
-      const fb2 = Math.round(2 * refFBTh * 10) / 10;
-      const innerDepth = Math.round((slideLen - fb2) * 10) / 10;
-      bottomW = Math.max(50, Math.round((refDrawerInnerW + groove2 - 2) * 10) / 10);
-      bottomD = Math.max(50, Math.round((innerDepth + groove2 - 2) * 10) / 10);
-      bottomRole = `Fond de tiroir encastré (${dCount} tiroir${dCount > 1 ? 's' : ''}, rainure ${grooveDepth} mm = 1/3 ép. ${refSidesTh} mm, -1 mm/côté)`;
-      bottomFormula = `Encastré rainure ${grooveDepth} mm (-1 mm/côté) : (${refDrawerInnerW} + 2×${grooveDepth} - 2 = ${bottomW} mm) × (${slideLen} - ${fb2} + 2×${grooveDepth} - 2 = ${bottomD} mm) [1 × ${dCount} × ${cabinetCount} = ${bottomQty} pcs]`;
-    }
+    bottomGroups.forEach((groupDrawerCount, groupSideLen) => {
+      const groupBottomQty = groupDrawerCount * cabinetCount;
+      let bottomW: number;
+      let bottomD: number;
+      let bottomRole: string;
+      let bottomFormula: string;
 
-    // Fond de tiroir
-    pieces.push({
-      partKey: 'drawers',
-      partId: 'drawer_bottom',
-      role: bottomRole,
-      description: `${config.name} - Fond tiroir`,
-      formula: bottomFormula,
-      length: Math.max(bottomW, bottomD),
-      width: Math.min(bottomW, bottomD),
-      quantity: bottomQty,
-      material: getPartMat('drawer_bottom', getPartMat('drawers', resolvedDrawerMaterial)),
-      color: PIECE_COLORS.drawers,
+      if (drawerBottomType === 'applique') {
+        bottomW = Math.max(50, Math.round((drawerOuterW - 2) * 10) / 10);
+        bottomD = Math.max(50, Math.round((groupSideLen - 2) * 10) / 10);
+        bottomRole = `Fond de tiroir en applique (${groupDrawerCount} tiroir${groupDrawerCount > 1 ? 's' : ''}, côté ${groupSideLen} mm, -1 mm/côté)`;
+        bottomFormula = `Applique (-1 mm/côté) : (${drawerOuterW} - 2 = ${bottomW} mm) × (${groupSideLen} - 2 = ${bottomD} mm) [1 × ${groupDrawerCount} × ${cabinetCount} = ${groupBottomQty} pcs]`;
+      } else {
+        const groove2 = Math.round(2 * grooveDepth * 10) / 10;
+        const fb2 = Math.round(2 * refFBTh * 10) / 10;
+        const innerDepth = Math.round((groupSideLen - fb2) * 10) / 10;
+        bottomW = Math.max(50, Math.round((refDrawerInnerW + groove2 - 2) * 10) / 10);
+        bottomD = Math.max(50, Math.round((innerDepth + groove2 - 2) * 10) / 10);
+        bottomRole = `Fond de tiroir encastré (${groupDrawerCount} tiroir${groupDrawerCount > 1 ? 's' : ''}, côté ${groupSideLen} mm, rainure ${grooveDepth} mm = 1/3 ép. ${refSidesTh} mm)`;
+        bottomFormula = `Encastré rainure ${grooveDepth} mm (-1 mm/côté) : (${refDrawerInnerW} + 2×${grooveDepth} - 2 = ${bottomW} mm) × (${groupSideLen} - ${fb2} + 2×${grooveDepth} - 2 = ${bottomD} mm) [1 × ${groupDrawerCount} × ${cabinetCount} = ${groupBottomQty} pcs]`;
+      }
+
+      const bottomPartId = bottomGroups.size === 1 ? 'drawer_bottom' : `drawer_bottom_${groupSideLen}`;
+      pieces.push({
+        partKey: 'drawers',
+        partId: bottomPartId,
+        role: bottomRole,
+        description: `${config.name} - Fond tiroir`,
+        formula: bottomFormula,
+        length: Math.max(bottomW, bottomD),
+        width: Math.min(bottomW, bottomD),
+        quantity: groupBottomQty,
+        material: getPartMat(
+          bottomPartId,
+          getPartMat('drawer_bottom', getPartMat('drawers', resolvedDrawerMaterial))
+        ),
+        color: PIECE_COLORS.drawers,
+      });
     });
   }
 
