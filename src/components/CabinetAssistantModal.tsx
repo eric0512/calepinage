@@ -4284,6 +4284,124 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                 </div>
               </div>
 
+              {/* Longueur des coulisses de tiroir (si le caisson contient au moins un tiroir) */}
+              {((config.drawersCount && config.drawersCount > 0) ||
+                compositionState.hasDrawers ||
+                facadeDrawerCount > 0) &&
+                (() => {
+                  const dVal = config.depth || parseInt(guidedFields.depth, 10) || 0;
+                  const bType = config.backType || (guidedFields.backType as BackType) || 'none';
+                  const chosenBackMat = config.partMaterials?.['back'] || config.backMaterial || '';
+                  const bTh =
+                    bType === 'groove'
+                      ? extractThicknessFromMaterialName(chosenBackMat) ||
+                        config.backThickness ||
+                        8
+                      : 0;
+                  const interiorD = Math.max(0, dVal - bTh);
+                  const maxSlide = dVal > 0 ? Math.max(100, interiorD - 10) : 1000;
+                  const currentSlideLen =
+                    compositionState.drawerSlideLength || config.drawerSlideLength || 0;
+                  const standardSlideLengths = [250, 300, 350, 400, 450, 500, 550, 600];
+
+                  const updateSlideLength = (val: number) => {
+                    const clamped = Math.max(100, Math.min(maxSlide, val));
+                    setCompositionState((prev) => ({
+                      ...prev,
+                      drawerSlideLength: clamped,
+                      hasDrawers: true,
+                    }));
+                    setConfig((prev) => ({
+                      ...prev,
+                      drawerSlideLength: clamped,
+                    }));
+                  };
+
+                  return (
+                    <div className="p-2.5 rounded-xl bg-slate-950/70 border border-amber-500/30 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <Ruler className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span className="text-[11px] font-bold text-amber-300">
+                            Longueur des coulisses (détermine la longueur des côtés de tiroir) :
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-400 font-semibold">
+                          Max possible : {maxSlide} mm (Prof. {dVal} mm
+                          {bType === 'groove'
+                            ? ` - Fond encastré ${bTh} mm`
+                            : bType === 'applique'
+                            ? ' - Fond en applique'
+                            : ' - Sans fond'}
+                          {' - 10 mm jeu)'}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex items-center gap-1 bg-slate-900 border border-amber-500/50 rounded-lg px-2 py-1">
+                          <input
+                            type="number"
+                            min="100"
+                            max={maxSlide}
+                            step="10"
+                            value={currentSlideLen > 0 ? currentSlideLen : ''}
+                            placeholder={String(Math.min(maxSlide, 400))}
+                            onChange={(e) => {
+                              const raw = parseInt(e.target.value, 10);
+                              if (isNaN(raw)) {
+                                setCompositionState((prev) => ({ ...prev, drawerSlideLength: 0 }));
+                                setConfig((prev) => ({ ...prev, drawerSlideLength: 0 }));
+                                return;
+                              }
+                              const clamped = Math.min(maxSlide, raw);
+                              setCompositionState((prev) => ({
+                                ...prev,
+                                drawerSlideLength: clamped,
+                                hasDrawers: true,
+                              }));
+                              setConfig((prev) => ({
+                                ...prev,
+                                drawerSlideLength: clamped,
+                              }));
+                            }}
+                            className="w-16 bg-transparent text-xs font-mono font-bold text-amber-300 text-center focus:outline-none"
+                          />
+                          <span className="text-[10px] font-mono text-slate-400">mm</span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1">
+                          {standardSlideLengths.map((sl) => {
+                            const disabled = dVal > 0 && sl > maxSlide;
+                            const isSelected = currentSlideLen === sl;
+                            return (
+                              <button
+                                key={`sum-sl-${sl}`}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => updateSlideLength(sl)}
+                                title={
+                                  disabled
+                                    ? `Trop long (max ${maxSlide} mm)`
+                                    : `Choisir des coulisses de ${sl} mm`
+                                }
+                                className={`px-2 py-1 rounded-md text-[10px] font-mono font-bold transition-colors ${
+                                  disabled
+                                    ? 'opacity-30 line-through cursor-not-allowed bg-slate-900 text-slate-600'
+                                    : isSelected
+                                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                                }`}
+                              >
+                                {sl} mm
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
               {/* Formulaire d'ajout rapide d'une nouvelle matière à la boîte */}
               {showAddMaterialInput && (
                 <div className="p-3 bg-slate-850 rounded-xl border border-amber-500/40 space-y-2 animate-in fade-in duration-150">
