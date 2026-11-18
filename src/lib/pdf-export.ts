@@ -1,6 +1,72 @@
 import { getDistinctCabinets, getPieceCabinet, getPiecePart } from '@/lib/piece-labels';
+import { getDisplayEdges } from '@/lib/edge-banding';
 import jsPDF from 'jspdf';
 import { PanelResult } from '@/types/cutting';
+
+/**
+ * Dessine une petite flèche noire sur le PDF pointant vers un chant à plaquer.
+ */
+function drawEdgeBandingArrow(
+  doc: jsPDF,
+  direction: 'top' | 'bottom' | 'left' | 'right',
+  tipX: number,
+  tipY: number,
+  scaleFactor: number = 1
+) {
+  const headLen = 1.35 * scaleFactor;
+  const halfW = 0.75 * scaleFactor;
+  const stemLen = 1.6 * scaleFactor;
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(0, 0, 0);
+  doc.setLineWidth(Math.max(0.25, 0.35 * scaleFactor));
+
+  if (direction === 'top') {
+    doc.line(tipX, tipY + headLen + stemLen, tipX, tipY + headLen * 0.7);
+    doc.triangle(
+      tipX,
+      tipY,
+      tipX - halfW,
+      tipY + headLen,
+      tipX + halfW,
+      tipY + headLen,
+      'F'
+    );
+  } else if (direction === 'bottom') {
+    doc.line(tipX, tipY - headLen - stemLen, tipX, tipY - headLen * 0.7);
+    doc.triangle(
+      tipX,
+      tipY,
+      tipX - halfW,
+      tipY - headLen,
+      tipX + halfW,
+      tipY - headLen,
+      'F'
+    );
+  } else if (direction === 'left') {
+    doc.line(tipX + headLen + stemLen, tipY, tipX + headLen * 0.7, tipY);
+    doc.triangle(
+      tipX,
+      tipY,
+      tipX + headLen,
+      tipY - halfW,
+      tipX + headLen,
+      tipY + halfW,
+      'F'
+    );
+  } else if (direction === 'right') {
+    doc.line(tipX - headLen - stemLen, tipY, tipX - headLen * 0.7, tipY);
+    doc.triangle(
+      tipX,
+      tipY,
+      tipX - headLen,
+      tipY - halfW,
+      tipX - headLen,
+      tipY + halfW,
+      'F'
+    );
+  }
+}
 
 /**
  * Convertit n'importe quelle couleur hexadécimale en teinte très claire (mélange à 82% de blanc)
@@ -220,6 +286,51 @@ export function exportCuttingPlansToPdf(
       doc.setDrawColor(30, 41, 59); // contour sombre net
       doc.setLineWidth(0.35);
       doc.rect(bx, by, bw, bh, 'FD');
+
+      // Petites flèches noires sur les chants avec bande de champs (PDF uniquement)
+      const displayEdges = getDisplayEdges(
+        piece.edgeBandingEdges,
+        piece.rotated,
+        isSwapped
+      );
+      const arrowScale = Math.min(1, Math.max(0.45, Math.min(bw, bh) / 14));
+      const arrowInset = 0.45;
+      if (displayEdges.top) {
+        drawEdgeBandingArrow(
+          doc,
+          'top',
+          bw >= 12 ? bx + bw * 0.2 : bx + bw / 2,
+          by + arrowInset,
+          arrowScale
+        );
+      }
+      if (displayEdges.bottom) {
+        drawEdgeBandingArrow(
+          doc,
+          'bottom',
+          bx + bw / 2,
+          by + bh - arrowInset,
+          arrowScale
+        );
+      }
+      if (displayEdges.left) {
+        drawEdgeBandingArrow(
+          doc,
+          'left',
+          bx + arrowInset,
+          bh >= 12 ? by + bh * 0.2 : by + bh / 2,
+          arrowScale
+        );
+      }
+      if (displayEdges.right) {
+        drawEdgeBandingArrow(
+          doc,
+          'right',
+          bx + bw - arrowInset,
+          by + bh / 2,
+          arrowScale
+        );
+      }
 
       // Cotations sur les arêtes haute et gauche, et désignation au centre
       const topDim = Math.round(isSwapped ? piece.width : piece.length);
