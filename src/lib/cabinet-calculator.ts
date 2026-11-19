@@ -14,6 +14,7 @@ export type CabinetPartKey =
   | 'sides'
   | 'top'
   | 'bottom'
+  | 'topBottom'
   | 'partitions'
   | 'shelves'
   | 'back'
@@ -409,6 +410,28 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   const boxHeight = feetHeight > 0 ? Math.max(50, height - feetHeight) : height;
   const feetBadge = feetHeight > 0 ? ` [Pieds: ${feetHeight} mm]` : '';
 
+  // Résolution anticipée du fond et des épaisseurs de structure (pour annoter la rainure sur côtés et plateaux)
+  const chosenBackMat = getPartMat('back', resolvedBackMaterial);
+  const effectiveBackThickness =
+    extractThicknessFromMaterialName(chosenBackMat) ||
+    (backThickness && backThickness > 0 ? backThickness : 8);
+  const chosenSidesMat = getPartMat('sides', resolvedSidesMaterial);
+  const chosenTopBottomMat = getPartMat('topBottom', '');
+  const chosenTopMat = chosenTopBottomMat || getPartMat('top', resolvedTopMaterial);
+  const chosenBottomMat = chosenTopBottomMat || getPartMat('bottom', resolvedBottomMaterial);
+  const sideTh = extractThicknessFromMaterialName(chosenSidesMat) || thickness;
+  const topTh = extractThicknessFromMaterialName(chosenTopMat) || thickness;
+  const bottomTh = extractThicknessFromMaterialName(chosenBottomMat) || thickness;
+  const grooveDepthSides = Math.ceil(sideTh / 2 + 1);
+  const grooveDepthTop = Math.ceil(topTh / 2 + 1);
+  const grooveDepthBottom = Math.ceil(bottomTh / 2 + 1);
+  const sidesGrooveBadge =
+    backType === 'groove' ? ` (Rainure ${effectiveBackThickness}×${grooveDepthSides} mm)` : '';
+  const topGrooveBadge =
+    backType === 'groove' ? ` (Rainure ${effectiveBackThickness}×${grooveDepthTop} mm)` : '';
+  const bottomGrooveBadge =
+    backType === 'groove' ? ` (Rainure ${effectiveBackThickness}×${grooveDepthBottom} mm)` : '';
+
   // 1. Côtés (Montants gauche et droit)
   let sideHeight = boxHeight;
   let sideFormula =
@@ -436,24 +459,24 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     partId: 'sides',
     role:
       cabinetCount > 1
-        ? `Côtés (${sidesQty} pcs pour ${cabinetCount} caissons)${feetBadge}`
-        : `Côtés (Gauche & Droit)${feetBadge}`,
-    description: `${config.name} - Côtés`,
-    formula: cabinetCount > 1 ? `${sideFormula} [2 × ${cabinetCount} = ${sidesQty} pcs]` : sideFormula,
+        ? `Côtés (${sidesQty} pcs pour ${cabinetCount} caissons)${feetBadge}${sidesGrooveBadge}`
+        : `Côtés (Gauche & Droit)${feetBadge}${sidesGrooveBadge}`,
+    description: `${config.name} - Côtés${sidesGrooveBadge}`,
+    formula: `${cabinetCount > 1 ? `${sideFormula} [2 × ${cabinetCount} = ${sidesQty} pcs]` : sideFormula}${backType === 'groove' ? ` • Rainure ${effectiveBackThickness}×${grooveDepthSides} mm` : ''}`,
     length: Math.max(sideHeight, structuralDepth),
     width: Math.min(sideHeight, structuralDepth),
     quantity: sidesQty,
-    material: getPartMat('sides', resolvedSidesMaterial),
+    material: chosenSidesMat,
     color: PIECE_COLORS.sides,
   });
 
-  // 2. Haut et Bas (Plateau Dessus et Plateau Dessous - Calculés distinctement)
+  // 2. Haut et Bas (Plateau Dessus et Plateau Dessous)
   const overhangSides = config.topOverhangSides || 0;
   const overhangFront = config.topOverhangFront || 0;
   const overhangBack = config.topOverhangBack || 0;
 
   if (assemblyType === 'bottom_inside_top_over') {
-    // Plateau du haut posé sur les côtés avec éventuels débords
+    // Plateau du haut posé sur les côtés avec éventuels débords (dimensions différentes du bas)
     const topWidth = width + 2 * overhangSides;
     const topDepth = depth + overhangFront + overhangBack;
     const topQty = 1 * cabinetCount;
@@ -465,9 +488,9 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     pieces.push({
       partKey: 'top',
       partId: 'top',
-      role: cabinetCount > 1 ? `Plateau haut (${topQty} pcs pour ${cabinetCount} caissons)` : 'Plateau haut (Dessus posé)',
-      description: `${config.name} - Plateau du haut`,
-      formula: cabinetCount > 1 ? `${topFormula} [1 × ${cabinetCount} = ${topQty} pcs]` : topFormula,
+      role: cabinetCount > 1 ? `Plateau haut (${topQty} pcs pour ${cabinetCount} caissons)${topGrooveBadge}` : `Plateau haut (Dessus posé)${topGrooveBadge}`,
+      description: `${config.name} - Plateau du haut${topGrooveBadge}`,
+      formula: `${cabinetCount > 1 ? `${topFormula} [1 × ${cabinetCount} = ${topQty} pcs]` : topFormula}${backType === 'groove' ? ` • Rainure ${effectiveBackThickness}×${grooveDepthTop} mm` : ''}`,
       length: Math.max(topWidth, topDepth),
       width: Math.min(topWidth, topDepth),
       quantity: topQty,
@@ -484,9 +507,9 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     pieces.push({
       partKey: 'bottom',
       partId: 'bottom',
-      role: cabinetCount > 1 ? `Plateau bas (${bottomQty} pcs pour ${cabinetCount} caissons)` : 'Plateau bas (Dessous encastré)',
-      description: `${config.name} - Plateau du bas`,
-      formula: cabinetCount > 1 ? `${bottomFormula} [1 × ${cabinetCount} = ${bottomQty} pcs]` : bottomFormula,
+      role: cabinetCount > 1 ? `Plateau bas (${bottomQty} pcs pour ${cabinetCount} caissons)${bottomGrooveBadge}` : `Plateau bas (Dessous encastré)${bottomGrooveBadge}`,
+      description: `${config.name} - Plateau du bas${bottomGrooveBadge}`,
+      formula: `${cabinetCount > 1 ? `${bottomFormula} [1 × ${cabinetCount} = ${bottomQty} pcs]` : bottomFormula}${backType === 'groove' ? ` • Rainure ${effectiveBackThickness}×${grooveDepthBottom} mm` : ''}`,
       length: Math.max(bottomWidth, bottomDepth),
       width: Math.min(bottomWidth, bottomDepth),
       quantity: bottomQty,
@@ -494,7 +517,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       color: PIECE_COLORS.topBottom,
     });
   } else {
-    // Cas standards : 'sides_full' ou 'top_bottom_full'
+    // Cas standards ('sides_full' ou 'top_bottom_full') : Plateau haut et Plateau bas identiques -> regroupés (Qté 2)
     let topBottomWidth = width;
     let topBottomFormula = `${width} mm (Pleine largeur extérieure)`;
 
@@ -503,39 +526,25 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       topBottomFormula = `${width} - (2 × ${thickness}) = ${topBottomWidth} mm (Encastré intérieur)`;
     }
 
-    const singleQty = 1 * cabinetCount;
+    const topBottomQty = 2 * cabinetCount;
     pieces.push({
-      partKey: 'top',
-      partId: 'top',
-      role: cabinetCount > 1 ? `Plateau haut (${singleQty} pcs pour ${cabinetCount} caissons)` : 'Plateau haut (Dessus)',
-      description: `${config.name} - Plateau du haut`,
-      formula: cabinetCount > 1 ? `${topBottomFormula} [1 × ${cabinetCount} = ${singleQty} pcs]` : topBottomFormula,
+      partKey: 'topBottom',
+      partId: 'topBottom',
+      role:
+        cabinetCount > 1
+          ? `Plateaux haut et bas (${topBottomQty} pcs pour ${cabinetCount} caissons)${topGrooveBadge}`
+          : `Plateaux haut et bas (Dessus & Dessous)${topGrooveBadge}`,
+      description: `${config.name} - Plateaux haut et bas${topGrooveBadge}`,
+      formula: `${cabinetCount > 1 ? `${topBottomFormula} [2 × ${cabinetCount} = ${topBottomQty} pcs]` : `${topBottomFormula} [2 pcs]`}${backType === 'groove' ? ` • Rainure ${effectiveBackThickness}×${grooveDepthTop} mm` : ''}`,
       length: Math.max(topBottomWidth, structuralDepth),
       width: Math.min(topBottomWidth, structuralDepth),
-      quantity: singleQty,
-      material: getPartMat('top', resolvedTopMaterial),
-      color: PIECE_COLORS.topBottom,
-    });
-
-    pieces.push({
-      partKey: 'bottom',
-      partId: 'bottom',
-      role: cabinetCount > 1 ? `Plateau bas (${singleQty} pcs pour ${cabinetCount} caissons)` : 'Plateau bas (Dessous)',
-      description: `${config.name} - Plateau du bas`,
-      formula: cabinetCount > 1 ? `${topBottomFormula} [1 × ${cabinetCount} = ${singleQty} pcs]` : topBottomFormula,
-      length: Math.max(topBottomWidth, structuralDepth),
-      width: Math.min(topBottomWidth, structuralDepth),
-      quantity: singleQty,
-      material: getPartMat('bottom', resolvedBottomMaterial),
+      quantity: topBottomQty,
+      material: getPartMat('topBottom', getPartMat('top', resolvedTopMaterial)),
       color: PIECE_COLORS.topBottom,
     });
   }
 
   // Dimensions intérieures brutes
-  const chosenBackMat = getPartMat('back', resolvedBackMaterial);
-  const effectiveBackThickness =
-    extractThicknessFromMaterialName(chosenBackMat) ||
-    (backThickness && backThickness > 0 ? backThickness : 8);
   const interiorWidth = width - 2 * thickness;
   const interiorHeight = boxHeight - 2 * thickness;
   const interiorDepth = backType === 'groove' ? depth - effectiveBackThickness : depth;
@@ -647,17 +656,6 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     // Largeur de rainure = épaisseur du fond à encastrer (effectiveBackThickness)
     // Profondeur de rainure = 1/2 épaisseur des côtés (haut, bas, gauche, droite) + 1 mm de jeu, arrondi au nombre plein supérieur
     // Dimensions du fond = cote intérieure + profondeurs de rainure - 1 mm par côté (-2 mm par axe)
-    const chosenSidesMat = getPartMat('sides', resolvedSidesMaterial);
-    const chosenTopMat = getPartMat('top', resolvedTopMaterial);
-    const chosenBottomMat = getPartMat('bottom', resolvedBottomMaterial);
-    const sideTh = extractThicknessFromMaterialName(chosenSidesMat) || thickness;
-    const topTh = extractThicknessFromMaterialName(chosenTopMat) || thickness;
-    const bottomTh = extractThicknessFromMaterialName(chosenBottomMat) || thickness;
-
-    const grooveDepthSides = Math.ceil(sideTh / 2 + 1);
-    const grooveDepthTop = Math.ceil(topTh / 2 + 1);
-    const grooveDepthBottom = Math.ceil(bottomTh / 2 + 1);
-
     const backH = interiorHeight + grooveDepthTop + grooveDepthBottom - 2;
     const backW = interiorWidth + 2 * grooveDepthSides - 2;
 
@@ -1119,6 +1117,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     const partEdges =
       (p.partId && config.partEdgeBanding?.[p.partId]) ||
       (p.partKey && config.partEdgeBanding?.[p.partKey]) ||
+      (p.partId === 'topBottom' &&
+        (config.partEdgeBanding?.['top'] || config.partEdgeBanding?.['bottom'])) ||
       undefined;
     return {
       id: `cabinet-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,

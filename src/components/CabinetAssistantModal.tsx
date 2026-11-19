@@ -1209,6 +1209,10 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       if (partKey === 'sides') {
         next.sidesMaterial = newMat;
         if (detectedThickness) next.thickness = detectedThickness;
+      } else if (partKey === 'topBottom') {
+        next.topMaterial = newMat;
+        next.bottomMaterial = newMat;
+        if (detectedThickness && !next.thickness) next.thickness = detectedThickness;
       } else if (partKey === 'top') {
         next.topMaterial = newMat;
         if (detectedThickness && !next.thickness) next.thickness = detectedThickness;
