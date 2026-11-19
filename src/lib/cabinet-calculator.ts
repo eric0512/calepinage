@@ -643,10 +643,28 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       color: PIECE_COLORS.back,
     });
   } else if (backType === 'groove') {
-    // Fond dans une rainure (profondeur de rainure typique : 8 mm par côté)
-    const grooveDepth = 8;
-    const backH = interiorHeight + 2 * grooveDepth;
-    const backW = interiorWidth + 2 * grooveDepth;
+    // Fond dans une rainure :
+    // Largeur de rainure = épaisseur du fond à encastrer (effectiveBackThickness)
+    // Profondeur de rainure = 1/2 épaisseur des côtés (haut, bas, gauche, droite) + 1 mm de jeu, arrondi au nombre plein supérieur
+    // Dimensions du fond = cote intérieure + profondeurs de rainure - 1 mm par côté (-2 mm par axe)
+    const chosenSidesMat = getPartMat('sides', resolvedSidesMaterial);
+    const chosenTopMat = getPartMat('top', resolvedTopMaterial);
+    const chosenBottomMat = getPartMat('bottom', resolvedBottomMaterial);
+    const sideTh = extractThicknessFromMaterialName(chosenSidesMat) || thickness;
+    const topTh = extractThicknessFromMaterialName(chosenTopMat) || thickness;
+    const bottomTh = extractThicknessFromMaterialName(chosenBottomMat) || thickness;
+
+    const grooveDepthSides = Math.ceil(sideTh / 2 + 1);
+    const grooveDepthTop = Math.ceil(topTh / 2 + 1);
+    const grooveDepthBottom = Math.ceil(bottomTh / 2 + 1);
+
+    const backH = interiorHeight + grooveDepthTop + grooveDepthBottom - 2;
+    const backW = interiorWidth + 2 * grooveDepthSides - 2;
+
+    const grooveSpecText =
+      grooveDepthSides === grooveDepthTop && grooveDepthTop === grooveDepthBottom
+        ? `Rainure ${effectiveBackThickness}×${grooveDepthSides} mm (-1 mm/côté)`
+        : `Rainure larg. ${effectiveBackThickness} mm, prof. H:${grooveDepthTop}/B:${grooveDepthBottom}/C:${grooveDepthSides} mm (-1 mm/côté)`;
 
     pieces.push({
       partKey: 'back',
@@ -654,8 +672,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       role: `Fond (rainure encastrée)${feetBadge}${chosenBackMat ? ` [${chosenBackMat}]` : ''}`,
       description: `${config.name} - Fond encastré`,
       formula: cabinetCount > 1
-        ? `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}) [1 × ${cabinetCount} = ${backQty} pcs]`
-        : `Rainure (+2×${grooveDepth}mm) : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
+        ? `${grooveSpecText} : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}) [1 × ${cabinetCount} = ${backQty} pcs]`
+        : `${grooveSpecText} : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
       length: Math.max(backH, backW),
       width: Math.min(backH, backW),
       quantity: backQty,
