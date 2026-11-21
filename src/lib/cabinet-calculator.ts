@@ -549,7 +549,8 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
   // Dimensions intérieures brutes
   const interiorWidth = width - 2 * thickness;
   const interiorHeight = boxHeight - 2 * thickness;
-  const interiorDepth = backType === 'groove' ? depth - effectiveBackThickness : depth;
+  const interiorDepth =
+    backType === 'groove' || backType === 'inset' ? depth - effectiveBackThickness : depth;
 
   // 3. Séparations verticales (Montants intermédiaires, de 1 à 4)
   if (partitionsCount > 0) {
@@ -598,7 +599,7 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
     }
 
     const shelfMargin = 5;
-    const isBackGrooved = backType === 'groove';
+    const isBackGrooved = backType === 'groove' || backType === 'inset';
     const baseShelfDepth = isBackGrooved
       ? structuralDepth - effectiveBackThickness
       : structuralDepth;
@@ -674,6 +675,25 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       formula: cabinetCount > 1
         ? `${grooveSpecText} : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}) [1 × ${cabinetCount} = ${backQty} pcs]`
         : `${grooveSpecText} : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
+      length: Math.max(backH, backW),
+      width: Math.min(backH, backW),
+      quantity: backQty,
+      material: chosenBackMat,
+      color: PIECE_COLORS.back,
+    });
+  } else if (backType === 'inset') {
+    // Fond encastré sans rainure (entre côtés, dessus et dessous)
+    const backH = interiorHeight;
+    const backW = interiorWidth;
+
+    pieces.push({
+      partKey: 'back',
+      partId: 'back',
+      role: `Fond (encastré sans rainure)${feetBadge}${chosenBackMat ? ` [${chosenBackMat}]` : ''}`,
+      description: `${config.name} - Fond encastré`,
+      formula: cabinetCount > 1
+        ? `Encastré sans rainure : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}) [1 × ${cabinetCount} = ${backQty} pcs]`
+        : `Encastré sans rainure : ${backH} × ${backW} mm (Ép. ${effectiveBackThickness} mm${feetHeight > 0 ? `, H. caisson : ${boxHeight} mm` : ''}${chosenBackMat ? ` - Matière : ${chosenBackMat}` : ''})`,
       length: Math.max(backH, backW),
       width: Math.min(backH, backW),
       quantity: backQty,
@@ -1239,6 +1259,7 @@ export function repairSavedCabinetDrawers(items: CutItem[]): {
       (cfg.backThickness && cfg.backThickness > 0 ? cfg.backThickness : 8);
     const isGrooveBack =
       cfg.backType === 'groove' ||
+      cfg.backType === 'inset' ||
       Boolean(cabBackItem && cabBackItem.name.toLowerCase().includes('encastr'));
 
     const backTh = isGrooveBack ? effectiveBackTh : 0;

@@ -636,6 +636,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       if (!boolVal) {
         nextGf.feetHeight = '';
       }
+    } else if (field === 'hasCheeks') {
+      const valStr = String(value) as '' | 'sans' | 'avec';
+      nextGf.hasCheeks = valStr;
+      if (valStr === 'avec') {
+        nextGf.backType = 'inset';
+      }
     } else {
       (nextGf[field] as unknown as string) = String(value);
     }
@@ -2362,6 +2368,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                         >
                           <option value="">-- Sélectionner --</option>
                           <option value="groove">Encastré (rainure)</option>
+                          <option value="inset">Encastré (sans rainure)</option>
                           <option value="applique">En applique arrière</option>
                           <option value="none">Sans fond</option>
                         </select>
@@ -3762,7 +3769,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     <div className="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
                       <span>Profondeur étagère :</span>
                       <span className="font-mono font-bold text-amber-300">
-                        {config.backType === 'groove'
+                        {config.backType === 'groove' || config.backType === 'inset'
                           ? `P - ép. fond - 5 mm`
                           : `P - 5 mm`}
                       </span>
@@ -3776,7 +3783,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     <label className="block text-xs font-bold text-white">
                       Fond de caisson :
                     </label>
-                    {(config.backType === 'applique' || config.backType === 'groove') && (
+                    {(config.backType === 'applique' ||
+                      config.backType === 'groove' ||
+                      config.backType === 'inset') && (
                       <span className="text-[10px] text-amber-400 font-medium">
                         Panneau séparé
                       </span>
@@ -3795,9 +3804,12 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                     <option value="none">Sans fond</option>
                     <option value="applique">Fond en applique arrière</option>
                     <option value="groove">Fond en rainure encastrée</option>
+                    <option value="inset">Encastré (sans rainure)</option>
                   </select>
 
-                  {(config.backType === 'applique' || config.backType === 'groove') && (
+                  {(config.backType === 'applique' ||
+                    config.backType === 'groove' ||
+                    config.backType === 'inset') && (
                     <div className="space-y-2 pt-2 border-t border-slate-800">
                       <div className="text-[10px] text-slate-400 flex items-center justify-between">
                         <span>Épaisseur fond :</span>
@@ -4037,7 +4049,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       })}
 
                     {/* Fond arrière représenté par trame */}
-                    {(config.backType === 'applique' || config.backType === 'groove') && (
+                    {(config.backType === 'applique' ||
+                      config.backType === 'groove' ||
+                      config.backType === 'inset') && (
                       <rect
                         x="37"
                         y="27"
@@ -4102,7 +4116,9 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                       <span>Étagères</span>
                     </span>
                   )}
-                  {(config.backType === 'applique' || config.backType === 'groove') && (
+                  {(config.backType === 'applique' ||
+                    config.backType === 'groove' ||
+                    config.backType === 'inset') && (
                     <span className="flex items-center gap-1">
                       <span className="w-2.5 h-2.5 rounded bg-pink-500" />
                       <span>Fond</span>
@@ -4451,7 +4467,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                           const chosenBackMat =
                             config.partMaterials?.['back'] || config.backMaterial || '';
                           const bTh =
-                            bType === 'groove'
+                            bType === 'groove' || bType === 'inset'
                               ? extractThicknessFromMaterialName(chosenBackMat) ||
                                 config.backThickness ||
                                 8

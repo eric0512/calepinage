@@ -38,7 +38,7 @@ export type AssemblyType =
   | 'sides_full' // Montants continus (Haut et Bas intérieurs)
   | 'top_bottom_full' // Dessus et Dessous filants (Côtés intérieurs)
   | 'bottom_inside_top_over'; // Bas encastré entre côtés, Dessus posé sur côtés (avec ou sans débord)
-export type BackType = 'none' | 'applique' | 'groove';
+export type BackType = 'none' | 'applique' | 'groove' | 'inset';
 export type DoorsType = 'none' | 'one_door' | 'two_doors';
 export type FacadePlacement = 'applique' | 'interieur';
 export type FacadeDirection = 'vertical' | 'horizontal';
