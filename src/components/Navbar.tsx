@@ -92,6 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onSwitchUser={onSwitchUser}
                 onAddUser={onAddUser}
                 compact
+                align="right"
               />
             )}
 

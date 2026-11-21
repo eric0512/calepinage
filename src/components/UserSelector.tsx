@@ -10,6 +10,7 @@ interface UserSelectorProps {
   onSwitchUser: (userName: string) => void;
   onAddUser: (userName: string) => void;
   compact?: boolean;
+  align?: 'left' | 'right';
 }
 
 export const UserSelector: React.FC<UserSelectorProps> = ({
@@ -18,6 +19,7 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
   onSwitchUser,
   onAddUser,
   compact = false,
+  align = 'left',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -63,7 +65,11 @@ export const UserSelector: React.FC<UserSelectorProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 sm:right-0 sm:left-auto mt-1.5 w-56 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-1.5 z-50 animate-in fade-in duration-100">
+        <div
+          className={`absolute ${
+            align === 'right' ? 'right-0' : 'left-0'
+          } mt-1.5 w-56 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-1.5 z-50 animate-in fade-in duration-100`}
+        >
           <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
             Espace utilisateur
           </div>
