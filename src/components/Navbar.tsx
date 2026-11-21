@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { PRESETS, ProjectPreset } from '@/lib/presets';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { UserSelector } from '@/components/UserSelector';
 
 interface NavbarProps {
   projectName?: string;
@@ -24,6 +25,10 @@ interface NavbarProps {
   onReset: () => void;
   onPrint: () => void;
   isSaved?: boolean;
+  activeUser?: string;
+  usersList?: string[];
+  onSwitchUser?: (userName: string) => void;
+  onAddUser?: (userName: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -35,6 +40,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onReset,
   onPrint,
   isSaved = false,
+  activeUser,
+  usersList,
+  onSwitchUser,
+  onAddUser,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-slate-900 border-b border-slate-800 text-white shadow-md print:hidden">
@@ -75,6 +84,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Actions & Presets */}
           <div className="flex items-center space-x-1.5 sm:space-x-3">
+            {/* Sélecteur d'utilisateur */}
+            {activeUser && usersList && onSwitchUser && onAddUser && (
+              <UserSelector
+                activeUser={activeUser}
+                usersList={usersList}
+                onSwitchUser={onSwitchUser}
+                onAddUser={onAddUser}
+                compact
+              />
+            )}
+
             {/* Bouton Thème Clair / Sombre */}
             <ThemeToggle />
 

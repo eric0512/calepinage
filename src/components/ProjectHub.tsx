@@ -18,6 +18,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { UserSelector } from '@/components/UserSelector';
 
 const PRESET_KERFS = [2.4, 3.0, 3.2, 4.0];
 const BASE_EDGE_BANDINGS = ['Sans', '1mm', '2mm', '3mm'];
@@ -33,6 +34,10 @@ interface ProjectHubProps {
   ) => void;
   onDeleteProject: (projectId: string) => void;
   isCloudConnected?: boolean;
+  activeUser: string;
+  usersList: string[];
+  onSwitchUser: (userName: string) => void;
+  onAddUser: (userName: string) => void;
 }
 
 export const ProjectHub: React.FC<ProjectHubProps> = ({
@@ -40,6 +45,10 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
   onOpenProject,
   onCreateNewProject,
   onDeleteProject,
+  activeUser,
+  usersList,
+  onSwitchUser,
+  onAddUser,
 }) => {
   const [activeTab, setActiveTab] = useState<'hub' | 'existing'>('hub');
   const [newProjectName, setNewProjectName] = useState('');
@@ -175,7 +184,15 @@ export const ProjectHub: React.FC<ProjectHubProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative">
-      {/* Bouton de bascule de Thème Clair / Sombre en haut à droite */}
+      {/* Sélecteur d'utilisateur en haut à gauche + Thème en haut à droite */}
+      <div className="absolute top-4 left-4 z-20">
+        <UserSelector
+          activeUser={activeUser}
+          usersList={usersList}
+          onSwitchUser={onSwitchUser}
+          onAddUser={onAddUser}
+        />
+      </div>
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle showLabel />
       </div>

@@ -2,6 +2,7 @@ export interface SavedProject {
   id: string;
   name: string;
   description?: string;
+  owner?: string;
   updatedAt: string;
   settings: CutSettings;
   stockPanels: StockPanel[];
@@ -13,6 +14,7 @@ export interface CutSettings {
   minOffcutWidth: number; // Largeur min pour chute réutilisable en mm (ex: 200)
   minOffcutLength: number; // Longueur min pour chute réutilisable en mm (ex: 200)
   edgeBanding?: string; // Bande de chant / champs (ex: "Sans", "1mm", "2mm", "3mm", "0.8mm")
+  owner?: string; // Propriétaire du projet (ex: "Éric", "Christophe")
 }
 
 export interface StockPanel {

@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { SavedProject, CutSettings, StockPanel, CutItem } from '@/types/cutting';
+import { SavedProject, CutSettings, StockPanel, CutItem, WorkshopItem } from '@/types/cutting';
+import { normalizeUserKey } from '@/lib/users';
 
 export const SUPABASE_PROJECT_ID = 'iahzaogwukljmhjdxguv';
 export const SUPABASE_URL =
@@ -59,6 +60,7 @@ function mapDbToProject(row: DbCuttingProject): SavedProject {
     id: row.id,
     name: row.name,
     description: row.description,
+    owner: row.settings?.owner,
     updatedAt: row.updated_at,
     settings: row.settings,
     stockPanels: row.stock_panels,
@@ -67,16 +69,19 @@ function mapDbToProject(row: DbCuttingProject): SavedProject {
 }
 
 function mapProjectToDb(p: SavedProject): DbCuttingProject {
+  const owner = p.owner || p.settings?.owner;
   return {
     id: p.id,
     name: p.name,
     description: p.description,
-    settings: p.settings,
+    settings: owner ? { ...p.settings, owner } : p.settings,
     stock_panels: p.stockPanels,
     cut_items: p.cutItems,
     updated_at: new Date().toISOString(),
   };
 }
+
+const STOCK_ROW_PREFIX = '__workshop_stock__';
 
 /**
  * Récupérer tous les projets depuis Supabase (avec secours sur localStorage)
@@ -94,7 +99,9 @@ export async function getProjects(): Promise<{
         .order('updated_at', { ascending: false });
 
       if (!error && data) {
-        const mapped = data.map(mapDbToProject);
+        const mapped = (data as DbCuttingProject[])
+          .filter((row) => !row.id.startsWith(STOCK_ROW_PREFIX))
+          .map(mapDbToProject);
         if (typeof window !== 'undefined') {
           localStorage.setItem('calepinage_saved_projects', JSON.stringify(mapped));
         }
@@ -112,7 +119,11 @@ export async function getProjects(): Promise<{
     try {
       const cached = localStorage.getItem('calepinage_saved_projects');
       if (cached) {
-        return { projects: JSON.parse(cached), source: 'local' };
+        const parsed = JSON.parse(cached) as SavedProject[];
+        return {
+          projects: parsed.filter((p) => !p.id.startsWith(STOCK_ROW_PREFIX)),
+          source: 'local',
+        };
       }
     } catch {}
   }
@@ -189,4 +200,103 @@ export async function deleteProjectFromCloud(projectId: string): Promise<boolean
   }
 
   return cloudSuccess;
+}
+
+/**
+ * Récupérer le stock atelier d'un utilisateur (Supabase Cloud + localStorage)
+ */
+export async function getWorkshopStockForUser(userName: string): Promise<WorkshopItem[]> {
+  const keySuffix = normalizeUserKey(userName);
+  const localKey = `calepinage_workshop_stock_${keySuffix}`;
+  const stockRowId = `${STOCK_ROW_PREFIX}${keySuffix}`;
+
+  const client = getSupabase();
+  if (client) {
+    try {
+      const { data, error } = await client
+        .from('cutting_projects')
+        .select('stock_panels')
+        .eq('id', stockRowId)
+        .maybeSingle();
+
+      if (!error && data && Array.isArray(data.stock_panels)) {
+        const items = data.stock_panels as unknown as WorkshopItem[];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(localKey, JSON.stringify(items));
+        }
+        return items;
+      }
+    } catch (err) {
+      console.warn('Erreur lecture stock utilisateur Supabase:', err);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(localKey);
+      if (stored) {
+        return JSON.parse(stored) as WorkshopItem[];
+      }
+      // Migration douce de l'ancien stock global vers Éric
+      if (keySuffix === 'eric') {
+        const legacy = localStorage.getItem('calepinage_workshop_stock');
+        if (legacy) {
+          const parsed = JSON.parse(legacy) as WorkshopItem[];
+          localStorage.setItem(localKey, JSON.stringify(parsed));
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return [];
+}
+
+/**
+ * Sauvegarder le stock atelier d'un utilisateur (localStorage + Supabase Cloud)
+ */
+export async function saveWorkshopStockForUser(
+  userName: string,
+  items: WorkshopItem[]
+): Promise<boolean> {
+  const keySuffix = normalizeUserKey(userName);
+  const localKey = `calepinage_workshop_stock_${keySuffix}`;
+  const stockRowId = `${STOCK_ROW_PREFIX}${keySuffix}`;
+
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(localKey, JSON.stringify(items));
+    } catch {
+      // ignore
+    }
+  }
+
+  const client = getSupabase();
+  if (client) {
+    try {
+      const payload: DbCuttingProject = {
+        id: stockRowId,
+        name: `__STOCK__${userName}`,
+        settings: {
+          kerf: 3.2,
+          minOffcutWidth: 200,
+          minOffcutLength: 200,
+          owner: userName,
+        },
+        stock_panels: items as unknown as StockPanel[],
+        cut_items: [],
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await client
+        .from('cutting_projects')
+        .upsert(payload, { onConflict: 'id' });
+      return !error;
+    } catch (e) {
+      console.warn('Erreur sauvegarde stock utilisateur Supabase:', e);
+    }
+  }
+
+  return false;
 }

@@ -17,7 +17,17 @@ import {
   getProjects,
   saveProjectToCloud,
   deleteProjectFromCloud,
+  getWorkshopStockForUser,
+  saveWorkshopStockForUser,
 } from '@/lib/supabase';
+import {
+  getActiveUser,
+  setActiveUserStorage,
+  getUsersList,
+  saveUsersList,
+  normalizeUserKey,
+  getProjectOwner,
+} from '@/lib/users';
 import { Navbar } from '@/components/Navbar';
 import { SettingsBar } from '@/components/SettingsBar';
 import { StockManager } from '@/components/StockManager';
@@ -67,32 +77,70 @@ export default function Home() {
   const [showMissingStockModal, setShowMissingStockModal] = useState<boolean>(false);
   const [missingStockData, setMissingStockData] = useState<MissingMaterialInfo[]>([]);
 
-  // Stock Atelier (inventaire persistant des chutes >= 500x500mm)
-  const [workshopStock, setWorkshopStock] = useState<WorkshopItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('calepinage_workshop_stock');
-        return stored ? JSON.parse(stored) : [];
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
+  // Gestion multi-utilisateurs (Option 1 : profils rapides sans mot de passe)
+  const [usersList, setUsersList] = useState<string[]>(() => getUsersList());
+  const [activeUser, setActiveUser] = useState<string>(() => getActiveUser());
+  const workshopLoadedForUserRef = useRef<string | null>(null);
 
-  // Sauvegarder le stock atelier dans le localStorage
+  // Stock Atelier (inventaire persistant des chutes >= 500x500mm, dissocié par utilisateur)
+  const [workshopStock, setWorkshopStock] = useState<WorkshopItem[]>([]);
+
+  // Charger le stock atelier de l'utilisateur actif (Supabase + localStorage)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(
-          'calepinage_workshop_stock',
-          JSON.stringify(workshopStock)
-        );
-      } catch (e) {
-        console.error(e);
+    let cancelled = false;
+    workshopLoadedForUserRef.current = null;
+    getWorkshopStockForUser(activeUser).then((items) => {
+      if (cancelled) return;
+      workshopLoadedForUserRef.current = activeUser;
+      setWorkshopStock(items);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUser]);
+
+  // Sauvegarder le stock atelier de l'utilisateur actif
+  useEffect(() => {
+    if (workshopLoadedForUserRef.current !== activeUser) return;
+    saveWorkshopStockForUser(activeUser, workshopStock);
+  }, [workshopStock, activeUser]);
+
+  const handleSwitchUser = useCallback(
+    (nextUser: string) => {
+      if (normalizeUserKey(nextUser) === normalizeUserKey(activeUser)) return;
+      setActiveUserStorage(nextUser);
+      setActiveUser(nextUser);
+      // Revenir au Hub et fermer le projet ouvert si on change d'utilisateur depuis l'éditeur
+      if (currentView === 'editor') {
+        setCurrentView('hub');
+        setCurrentProjectId('');
+        setProjectName('Nouveau Projet');
+        setStockPanels([]);
+        setCutItems([]);
+        setOptimizationResult(null);
       }
-    }
-  }, [workshopStock]);
+    },
+    [activeUser, currentView]
+  );
+
+  const handleAddUser = useCallback(
+    (newUserName: string) => {
+      const trimmed = newUserName.trim();
+      if (!trimmed) return;
+      const existing = usersList.find(
+        (u) => normalizeUserKey(u) === normalizeUserKey(trimmed)
+      );
+      if (existing) {
+        handleSwitchUser(existing);
+        return;
+      }
+      const nextList = [...usersList, trimmed];
+      setUsersList(nextList);
+      saveUsersList(nextList);
+      handleSwitchUser(trimmed);
+    },
+    [usersList, handleSwitchUser]
+  );
 
   // Réintégrer un panneau au Stock Atelier (si non utilisé ou supprimé du projet)
   const reintegrateToWorkshop = useCallback(
@@ -277,8 +325,9 @@ export default function Home() {
       const projectToSave: SavedProject = {
         id: currentProjectId || `project-${Date.now()}`,
         name: projectName,
+        owner: activeUser,
         updatedAt: new Date().toISOString(),
-        settings,
+        settings: { ...settings, owner: activeUser },
         stockPanels,
         cutItems,
       };
@@ -295,7 +344,7 @@ export default function Home() {
         setTimeout(() => setIsSaved(false), 2000);
       }
     },
-    [currentProjectId, currentView, projectName, settings, stockPanels, cutItems]
+    [currentProjectId, currentView, projectName, settings, stockPanels, cutItems, activeUser]
   );
 
   // Auto-Save avec debounce quand on est dans l'éditeur
@@ -324,10 +373,11 @@ export default function Home() {
     setCurrentProjectId(newId);
     setProjectName(name);
 
-    // Initialisation avec les paramètres saisis (épaisseur lame & bande de champs)
+    // Initialisation avec les paramètres saisis (épaisseur lame & bande de champs + propriétaire)
     setSettings({
       ...DEFAULT_SETTINGS,
       ...(initialSettings || {}),
+      owner: activeUser,
     });
     setStockPanels([]);
     setCutItems([]);
@@ -706,15 +756,27 @@ export default function Home() {
     }
   };
 
+  // Projets filtrés pour l'utilisateur actif
+  const userProjects = useMemo(() => {
+    const activeKey = normalizeUserKey(activeUser);
+    return savedProjects.filter(
+      (p) => normalizeUserKey(getProjectOwner(p)) === activeKey
+    );
+  }, [savedProjects, activeUser]);
+
   // SI LA VUE ACTIVE EST LE HUB (ACCUEIL)
   if (currentView === 'hub') {
     return (
       <>
         <ProjectHub
-          savedProjects={savedProjects}
+          savedProjects={userProjects}
           onOpenProject={handleOpenProject}
           onCreateNewProject={handleCreateNewProject}
           onDeleteProject={handleDeleteProject}
+          activeUser={activeUser}
+          usersList={usersList}
+          onSwitchUser={handleSwitchUser}
+          onAddUser={handleAddUser}
         />
         {/* L'invitation à installer l'application n'est proposée QUE sur la page d'accueil */}
         <PwaInstallPrompt />
@@ -737,6 +799,10 @@ export default function Home() {
           projectName={projectName}
           onOpenHub={() => setCurrentView('hub')}
           onSaveProject={handleManualSave}
+          activeUser={activeUser}
+          usersList={usersList}
+          onSwitchUser={handleSwitchUser}
+          onAddUser={handleAddUser}
           onDeleteCurrentProject={
             currentProjectId
               ? () => {
