@@ -201,6 +201,7 @@ interface GuidedTemplateFields {
   material: string; // Matière qui va constituer le corps du caisson (ex: "Mela 19mm")
   hasFeet: boolean; // Présence de pieds sur le caisson
   feetHeight: string; // Hauteur du pied en mm (ex: "100")
+  hasCheeks: '' | 'sans' | 'avec'; // Présence de joues latérales (obligatoire)
   height: string;
   width: string;
   depth: string;
@@ -219,6 +220,7 @@ const EMPTY_GUIDED_FIELDS: GuidedTemplateFields = {
   material: 'Mela 19mm',
   hasFeet: false,
   feetHeight: '',
+  hasCheeks: '',
   height: '',
   width: '',
   depth: '',
@@ -487,6 +489,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         material: c.material || 'Mela 19mm',
         hasFeet: Boolean(c.hasFeet),
         feetHeight: c.feetHeight ? String(c.feetHeight) : '',
+        hasCheeks: c.hasCheeks ? 'avec' : 'sans',
         height: c.height ? String(c.height) : '',
         width: c.width ? String(c.width) : '',
         depth: c.depth ? String(c.depth) : '',
@@ -597,6 +600,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       if (!gf.feetHeight.trim() || isNaN(fh) || fh <= 0) return false;
       if (!isNaN(h) && fh >= h) return false;
     }
+    if (!gf.hasCheeks) return false;
     if (gf.partitionsCount === '') return false;
     if (gf.shelvesCount.trim() === '' || isNaN(sh) || sh < 0) return false;
     if (!gf.assemblyType) return false;
@@ -716,6 +720,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
         next.hasFeet = false;
         next.feetHeight = undefined;
       }
+      next.hasCheeks = nextGf.hasCheeks === 'avec';
       return next;
     });
   };
@@ -1330,6 +1335,7 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
       material: preset.config.material || 'Mela 19mm',
       hasFeet: Boolean(preset.config.hasFeet),
       feetHeight: preset.config.feetHeight ? String(preset.config.feetHeight) : '',
+      hasCheeks: preset.config.hasCheeks ? 'avec' : 'sans',
       height: preset.config.height ? String(preset.config.height) : '',
       width: preset.config.width ? String(preset.config.width) : '',
       depth: preset.config.depth ? String(preset.config.depth) : '',
@@ -2064,6 +2070,34 @@ export const CabinetAssistantModal: React.FC<CabinetAssistantModalProps> = ({
                               />
                             </div>
                           )}
+
+                          <div className="w-24 sm:w-28 shrink-0">
+                            <label
+                              className="text-[11px] text-slate-300 block mb-1 truncate"
+                              title="Joues latérales sur ce caisson ?"
+                            >
+                              Joues <span className="text-amber-400">*</span> :
+                            </label>
+                            <select
+                              required
+                              value={guidedFields.hasCheeks}
+                              onChange={(e) =>
+                                handleGuidedFieldChange(
+                                  'hasCheeks',
+                                  e.target.value as '' | 'sans' | 'avec'
+                                )
+                              }
+                              className={`w-full bg-slate-800 border rounded px-2 py-1.5 text-white text-xs font-semibold focus:outline-none focus:border-amber-500 ${
+                                guidedValidationError && !guidedFields.hasCheeks
+                                  ? 'border-red-500'
+                                  : 'border-slate-700'
+                              }`}
+                            >
+                              <option value="">-- Choisir --</option>
+                              <option value="sans">Sans</option>
+                              <option value="avec">Avec</option>
+                            </select>
+                          </div>
                         </div>
 
                         {/* LIGNE 1 : Hauteur, Largeur et Profondeur toujours sur la même ligne */}

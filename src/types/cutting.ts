@@ -61,6 +61,7 @@ export interface CabinetConfig {
   depth: number; // Profondeur extérieure (mm)
   hasFeet?: boolean; // Présence de pieds sur le caisson
   feetHeight?: number; // Hauteur des pieds (mm) déduite de la hauteur des montants
+  hasCheeks?: boolean; // Présence de joues latérales (false = sans, true = avec)
   thickness: number; // Épaisseur des panneaux principaux (mm, ex: 18 ou 19)
   assemblyType: AssemblyType; // Type d'assemblage
   topOverhangSides?: number; // Débord latéral du plateau haut (gauche et droite, en mm, ex: 20)

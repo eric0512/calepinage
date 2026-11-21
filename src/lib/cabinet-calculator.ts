@@ -12,6 +12,7 @@ export type { AssemblyType, BackType, DoorsType, DrawerBottomType, CabinetConfig
 
 export type CabinetPartKey =
   | 'sides'
+  | 'cheeks'
   | 'top'
   | 'bottom'
   | 'topBottom'
@@ -85,6 +86,7 @@ const PIECE_COLORS = {
   back: '#fce7f3', // Rose très clair (pastel)
   door: '#cffafe', // Cyan très clair (pastel)
   drawers: '#fed7aa', // Orange très clair (pastel)
+  cheeks: '#e0e7ff', // Indigo très clair (pastel)
 };
 
 /** Jeu périphérique appliqué autour de la façade (2 mm en haut + 2 mm en bas, idem en largeur) */
@@ -689,6 +691,48 @@ export function calculateCabinetPieces(config: CabinetConfig): CalculatedCabinet
       : doors === 'one_door'
         ? 1
         : 0;
+
+  // 5b. Joues latérales (si sélectionnées) :
+  // Hauteur = hauteur des côtés (sideHeight)
+  // Largeur = largeur des côtés (structuralDepth) + épaisseur façade en applique + 1 mm (bande de chant incluse)
+  if (config.hasCheeks) {
+    const hasOverlayFacade =
+      activeFacadesCount > 0 && config.facadePlacement !== 'interieur';
+    const facadeMatForCheeks =
+      config.partMaterials?.['doors'] ||
+      config.partMaterials?.['porte'] ||
+      config.partMaterials?.['facade_tiroir'] ||
+      config.facadeItems?.find((it) => it.material?.trim())?.material ||
+      resolvedDoorMaterial;
+    const facadeThForCheeks =
+      extractThicknessFromMaterialName(facadeMatForCheeks) || thickness;
+    const cheekDepth = hasOverlayFacade
+      ? structuralDepth + facadeThForCheeks + 1
+      : structuralDepth;
+    const cheeksQty = 2 * cabinetCount;
+    const cheekDepthFormula = hasOverlayFacade
+      ? `${structuralDepth} + ${facadeThForCheeks} (façade) + 1 (jeu) = ${cheekDepth} mm (chant compris)`
+      : `${structuralDepth} mm (sans façade en applique)`;
+
+    pieces.push({
+      partKey: 'cheeks',
+      partId: 'cheeks',
+      role:
+        cabinetCount > 1
+          ? `Joues (${cheeksQty} pcs pour ${cabinetCount} caissons)${feetBadge}`
+          : `Joues (Gauche & Droit)${feetBadge}`,
+      description: `${config.name} - Joues`,
+      formula:
+        cabinetCount > 1
+          ? `H ${sideHeight} × ${cheekDepthFormula} [2 × ${cabinetCount} = ${cheeksQty} pcs]`
+          : `H ${sideHeight} × ${cheekDepthFormula}`,
+      length: Math.max(sideHeight, cheekDepth),
+      width: Math.min(sideHeight, cheekDepth),
+      quantity: cheeksQty,
+      material: getPartMat('cheeks', chosenSidesMat),
+      color: PIECE_COLORS.cheeks,
+    });
+  }
 
   // Spécifications des tiroirs issues de la composition détaillée de la façade (hauteur façade + hauteur tiroir choisie)
   let drawerSpecsFromFacade: { frontHeight: number; drawerHeight: number | null }[] = [];
