@@ -485,49 +485,68 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
             </button>
 
             {showPdfMenu && (
-              <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-2 z-50 space-y-1.5 animate-in fade-in duration-100">
-                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Choisir l&apos;export PDF
-                </div>
-                <button
-                  type="button"
-                  disabled={isExportingLabelsPdf}
-                  onClick={() => {
-                    setShowPdfMenu(false);
-                    handleExportLabelsPDF();
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-left transition-colors disabled:opacity-50"
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-4 animate-in fade-in duration-100"
+                onClick={() => setShowPdfMenu(false)}
+              >
+                <div
+                  className="w-full max-w-xs rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-4 space-y-2.5"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <Tag className="w-4 h-4 text-amber-400 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-amber-300">
-                      Étiquettes
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      Planche A4 (70 × 36 mm)
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                      Choisir l&apos;export PDF
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowPdfMenu(false)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                      title="Fermer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-                </button>
 
-                <button
-                  type="button"
-                  disabled={isExportingPdf}
-                  onClick={() => {
-                    setShowPdfMenu(false);
-                    handleExportPDF();
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-left transition-colors disabled:opacity-50"
-                >
-                  <FileDown className="w-4 h-4 text-rose-400 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-rose-300">
-                      Projet
+                  <button
+                    type="button"
+                    disabled={isExportingLabelsPdf}
+                    onClick={() => {
+                      setShowPdfMenu(false);
+                      handleExportLabelsPDF();
+                    }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-left transition-colors disabled:opacity-50"
+                  >
+                    <Tag className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-amber-300">
+                        Étiquettes
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Planche A4 (70 × 36 mm)
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-400">
-                      Plans de coupe complets (A4)
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isExportingPdf}
+                    onClick={() => {
+                      setShowPdfMenu(false);
+                      handleExportPDF();
+                    }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-left transition-colors disabled:opacity-50"
+                  >
+                    <FileDown className="w-4 h-4 text-rose-400 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-rose-300">
+                        Projet
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Plans de coupe complets (A4)
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                </div>
               </div>
             )}
           </div>
