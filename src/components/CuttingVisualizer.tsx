@@ -46,7 +46,19 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
 }) => {
   const [hoveredPiece, setHoveredPiece] = useState<PlacedPiece | null>(null);
   const [hoveredOffcut, setHoveredOffcut] = useState<OffcutArea | null>(null);
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [showPdfMenu, setShowPdfMenu] = useState<boolean>(false);
+  const pdfMenuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!showPdfMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pdfMenuRef.current && !pdfMenuRef.current.contains(e.target as Node)) {
+        setShowPdfMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPdfMenu]);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportingLabelsPdf, setIsExportingLabelsPdf] = useState<boolean>(false);
   const [fullscreenPanelIdx, setFullscreenPanelIdx] = useState<number | null>(null);
@@ -435,157 +447,157 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const edgeBandingSummary = computeProjectEdgeBandingLength(panels);
 
   return (
-    <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-5 shadow-sm space-y-4">
-      {/* Barre d'outils du visualiseur */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-700/80">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-sm font-bold text-white tracking-wide">
+    <div className="bg-slate-800/80 backdrop-blur border border-slate-700 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+      {/* En-tête condensé du visualiseur */}
+      <div className="pb-3 border-b border-slate-700/80 space-y-2">
+        {/* Ligne 1 : Titre + Trait de scie + Récap panneaux + Bouton PDF à droite */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+            <h3 className="text-sm font-bold text-white tracking-wide mr-1">
               Plans de Coupe Graphiques Interactifs
             </h3>
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-300">
+              Scie : <strong className="text-amber-400">{kerf.toFixed(1)} mm</strong>
+            </span>
             {panelSummaryByMaterial.map((group, idx) => (
               <span
                 key={idx}
-                className="text-xs font-mono font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20"
               >
                 {group.count} panneau{group.count > 1 ? 'x' : ''} {group.material} {group.length}/{group.width}
               </span>
             ))}
           </div>
 
-          {/* Boutons Étiquettes & Export PDF (placé à droite des étiquettes avec titre "Export PDF") */}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          {/* Bouton PDF ouvrant une fenêtre flottante (Étiquettes ou Projet) */}
+          <div ref={pdfMenuRef} className="relative shrink-0">
             <button
               type="button"
-              onClick={handleExportLabelsPDF}
-              disabled={isExportingLabelsPdf}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-xs shadow-md shadow-amber-900/30 transition-all active:scale-95 disabled:opacity-50"
-              title="Créer un PDF d'étiquettes au format A4 (3 × 7 étiquettes de 70 × 36 mm)"
+              onClick={() => setShowPdfMenu((prev) => !prev)}
+              disabled={isExportingPdf || isExportingLabelsPdf}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs shadow-md shadow-rose-900/30 transition-all active:scale-95 disabled:opacity-50"
+              title="Exporter en PDF (Étiquettes ou Projet)"
             >
-              <Tag className="w-4 h-4 text-slate-950" />
-              <span>{isExportingLabelsPdf ? 'Création du PDF...' : 'Étiquettes PDF (A4 - 70×36 mm)'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportPDF}
-              disabled={isExportingPdf}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs shadow-md shadow-rose-900/30 transition-all active:scale-95 disabled:opacity-50"
-              title="Exporter tous les plans de coupe dans un fichier PDF (1 panneau par feuille A4)"
-            >
-              <FileDown className="w-4 h-4 text-white" />
-              <span>{isExportingPdf ? 'Génération du PDF...' : 'Export PDF'}</span>
-            </button>
-          </div>
-
-          <p className="text-xs text-slate-400 mt-1.5">
-            Trait de scie appliqué :{' '}
-            <span className="font-mono text-amber-400 font-semibold">
-              {kerf.toFixed(1)} mm
-            </span>
-          </p>
-        </div>
-
-        {/* Contrôles d'affichage & Navigation */}
-        <div className="flex items-center gap-2">
-          {/* Boutons pour tourner tous les panneaux par tranche de 90° */}
-          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
-            <button
-              type="button"
-              onClick={() => handleRotateAllPanels(-90)}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors"
-              title="Tourner tous les panneaux de -90° (sens anti-horaire)"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-              <span>-90°</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleRotateAllPanels(90)}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors border-l border-slate-800"
-              title="Tourner tous les panneaux de +90° (sens horaire)"
-            >
-              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-              <span>+90°</span>
-            </button>
-          </div>
-
-          {/* Zoom controls */}
-          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
-            <button
-              type="button"
-              onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.2))}
-              className="p-1 text-slate-400 hover:text-white transition-colors"
-              title="Zoom arrière"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="px-1.5 text-[11px] font-mono text-slate-300">
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={() => setZoomLevel((z) => Math.min(2.0, z + 0.2))}
-              className="p-1 text-slate-400 hover:text-white transition-colors"
-              title="Zoom avant"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoomLevel(1)}
-              className="p-1 text-slate-400 hover:text-white transition-colors border-l border-slate-800 ml-0.5"
-              title="Réinitialiser zoom"
-            >
-              <RotateCcw className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Récapitulatif de la longueur totale de bande de champs nécessaire pour tout le projet */}
-      <div className="bg-slate-900/80 border border-orange-500/30 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
-            <span className="w-3.5 h-1 bg-orange-500 rounded-full" />
-          </div>
-          <div>
-            <div className="font-bold text-orange-300 flex items-center gap-1.5 flex-wrap">
+              <FileDown className="w-3.5 h-3.5 text-white" />
               <span>
-                Bande de champs nécessaire pour le projet
-                {edgeBanding ? ` (${edgeBanding})` : ''} :
+                {isExportingPdf || isExportingLabelsPdf ? 'PDF...' : 'PDF'}
               </span>
-              <span className="font-mono text-white text-sm">
-                {edgeBandingSummary.totalMeters.toFixed(2).replace('.', ',')} m
-              </span>
-              {edgeBandingSummary.totalMm > 0 && (
-                <span className="text-[11px] font-mono text-slate-400 font-normal">
-                  ({edgeBandingSummary.totalMm} mm • {edgeBandingSummary.totalEdgesCount} chant
-                  {edgeBandingSummary.totalEdgesCount > 1 ? 's' : ''})
-                </span>
-              )}
-            </div>
-            {edgeBandingSummary.totalMm === 0 && (
-              <div className="text-[11px] text-slate-400">
-                Aucun chant sélectionné dans la liste de débit (cliquez sur H, B, G, D sur vos pièces).
+            </button>
+
+            {showPdfMenu && (
+              <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-2 z-50 space-y-1.5 animate-in fade-in duration-100">
+                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Choisir l&apos;export PDF
+                </div>
+                <button
+                  type="button"
+                  disabled={isExportingLabelsPdf}
+                  onClick={() => {
+                    setShowPdfMenu(false);
+                    handleExportLabelsPDF();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-left transition-colors disabled:opacity-50"
+                >
+                  <Tag className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-amber-300">
+                      Étiquettes
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Planche A4 (70 × 36 mm)
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isExportingPdf}
+                  onClick={() => {
+                    setShowPdfMenu(false);
+                    handleExportPDF();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-left transition-colors disabled:opacity-50"
+                >
+                  <FileDown className="w-4 h-4 text-rose-400 shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-rose-300">
+                      Projet
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Plans de coupe complets (A4)
+                    </div>
+                  </div>
+                </button>
               </div>
             )}
           </div>
         </div>
 
-        {edgeBandingSummary.byMaterial.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {edgeBandingSummary.byMaterial.map((m) => (
-              <span
-                key={m.material}
-                className="px-2 py-0.5 rounded-md bg-slate-950 border border-orange-500/30 text-[11px] font-mono text-orange-200"
-              >
-                <strong className="text-white">{m.material}</strong> :{' '}
-                {m.totalMeters.toFixed(2).replace('.', ',')} m ({m.edgesCount} ch.)
+        {/* Ligne 2 condensée : Bande de champs nécessaire pour le projet */}
+        <div className="bg-slate-900/70 border border-orange-500/30 rounded-xl px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-orange-500/15 border border-orange-500/30 shrink-0">
+              <span className="w-2.5 h-0.5 bg-orange-500 rounded-full" />
+            </span>
+            <span className="font-bold text-orange-300">
+              Bande de champs{edgeBanding ? ` (${edgeBanding})` : ''} :
+            </span>
+            <span className="font-mono font-bold text-white text-xs">
+              {edgeBandingSummary.totalMeters.toFixed(2).replace('.', ',')} m
+            </span>
+            {edgeBandingSummary.totalMm > 0 ? (
+              <span className="text-[10px] font-mono text-slate-400">
+                ({edgeBandingSummary.totalMm} mm • {edgeBandingSummary.totalEdgesCount} chant
+                {edgeBandingSummary.totalEdgesCount > 1 ? 's' : ''})
               </span>
-            ))}
+            ) : (
+              <span className="text-[10px] text-slate-400">
+                Aucun chant sélectionné (H, B, G, D)
+              </span>
+            )}
           </div>
-        )}
+
+          {edgeBandingSummary.byMaterial.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1">
+              {edgeBandingSummary.byMaterial.map((m) => (
+                <span
+                  key={m.material}
+                  className="px-1.5 py-0.5 rounded bg-slate-950 border border-orange-500/30 text-[10px] font-mono text-orange-200"
+                >
+                  <strong className="text-white">{m.material}</strong> :{' '}
+                  {m.totalMeters.toFixed(2).replace('.', ',')} m ({m.edgesCount} ch.)
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Rotation globale placée juste au-dessus du premier panneau */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-[11px] font-semibold text-slate-300">
+          Rotation de tous les panneaux :
+        </span>
+        <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
+          <button
+            type="button"
+            onClick={() => handleRotateAllPanels(-90)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors"
+            title="Tourner tous les panneaux de -90° (sens anti-horaire)"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+            <span>-90°</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRotateAllPanels(90)}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors border-l border-slate-800"
+            title="Tourner tous les panneaux de +90° (sens horaire)"
+          >
+            <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+            <span>+90°</span>
+          </button>
+        </div>
       </div>
 
       {/* Affichage de tous les panneaux */}
@@ -597,7 +609,7 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
                 key={panel.panelId + panelIdx}
                 panel={panel}
                 kerf={kerf}
-                zoomLevel={zoomLevel}
+                zoomLevel={1}
                 hoveredPiece={hoveredPiece}
                 setHoveredPiece={setHoveredPiece}
                 hoveredOffcut={hoveredOffcut}
