@@ -842,9 +842,11 @@ export const CutListManager: React.FC<CutListManagerProps> = ({
                 {/* En-tête du meuble : Nom du caisson + Dimensions en dessous avec logo de modification à droite */}
                 <div className="px-1 pb-2 border-b border-slate-700/60 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-bold text-amber-400 tracking-wide flex items-center gap-1.5 min-w-0">
-                      <Tag className="w-3.5 h-3.5 shrink-0" />
-                      <span className="truncate">{cab.cabinet}</span>
+                    <h3 className="text-sm font-black tracking-wide flex items-center gap-1.5 min-w-0">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-amber-400 text-slate-950 shadow-sm shadow-amber-500/20 max-w-full">
+                        <Tag className="w-3.5 h-3.5 shrink-0 text-slate-950" />
+                        <span className="truncate">{cab.cabinet}</span>
+                      </span>
                     </h3>
                     <div className="flex items-center gap-2 shrink-0">
                       {cab.cabinet !== UNASSIGNED_CABINET_LABEL && (
