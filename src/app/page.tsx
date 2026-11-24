@@ -931,6 +931,14 @@ export default function Home() {
               onDeleteWorkshopItem={handleDeleteWorkshopItem}
               onClearWorkshopStock={handleClearWorkshopStock}
               onAddManualWorkshopItem={handleAddManualWorkshopItem}
+              minOffcutLength={settings.minOffcutLength}
+              onChangeMinOffcut={(val) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  minOffcutLength: val,
+                  minOffcutWidth: val,
+                }))
+              }
             />
 
             {/* Saisie de la liste de débit (alimentée exclusivement par les matières en stock) */}

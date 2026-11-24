@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { CutSettings } from '@/types/cutting';
-import { Disc, Ruler, Layers, Check, Plus } from 'lucide-react';
+import { Disc, Layers, Check, Plus } from 'lucide-react';
 
 interface SettingsBarProps {
   settings: CutSettings;
@@ -128,111 +128,83 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
           </div>
         </div>
 
-        {/* Section Contrôles organisée en 2 lignes */}
-        <div className="flex flex-col gap-3">
-          {/* LIGNE 1 : Trait de scie et Seuil stock atelier SUR LA MÊME LIGNE */}
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-            {/* Épaisseur Trait de scie */}
-            <div className="flex items-center gap-3 bg-slate-900/80 px-3.5 py-2 rounded-xl border border-slate-700/80 shadow-inner">
-              <div className="text-xs font-medium text-slate-300 flex items-center gap-1.5 shrink-0">
-                <span>Trait de scie :</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => updateKerf(settings.kerf - 0.1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold transition-colors"
-                  title="-0.1 mm"
-                >
-                  -
-                </button>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="15"
-                    value={settings.kerf}
-                    onChange={(e) => updateKerf(parseFloat(e.target.value) || 0)}
-                    className="w-16 text-center bg-slate-950 text-amber-400 font-mono font-bold text-sm px-2 py-1 rounded-lg border border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  />
-                </div>
-                <span className="text-xs font-mono text-slate-400">mm</span>
-                <button
-                  type="button"
-                  onClick={() => updateKerf(settings.kerf + 0.1)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-bold transition-colors"
-                  title="+0.1 mm"
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Boutons rapides pour standards courants */}
-              <div className="hidden sm:flex items-center gap-1 pl-2 border-l border-slate-700/60">
-                {PRESET_KERFS.map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => updateKerf(k)}
-                    className={`text-[11px] px-2 py-0.5 rounded font-mono transition-colors ${
-                      settings.kerf === k
-                        ? 'bg-amber-500 text-slate-950 font-bold'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                    }`}
-                  >
-                    {k.toFixed(1)}
-                  </button>
-                ))}
-              </div>
+        {/* Section Contrôles : Trait de scie et Bande de champs côte à côte (même sur téléphone) */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 sm:gap-3">
+          {/* Épaisseur Trait de scie */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 bg-slate-900/80 px-2.5 sm:px-3.5 py-2 rounded-xl border border-slate-700/80 shadow-inner min-w-0">
+            <div className="text-[11px] sm:text-xs font-medium text-slate-300 flex items-center gap-1 shrink-0">
+              <span className="truncate">Trait de scie :</span>
             </div>
-
-            {/* Seuil Chute Atelier (sur la même ligne) */}
-            <div className="flex items-center gap-2 bg-slate-900/80 px-3.5 py-2 rounded-xl border border-slate-700/80 shadow-inner">
-              <Ruler className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-xs text-slate-300 shrink-0">Seuil stock atelier :</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => updateKerf(settings.kerf - 0.1)}
+                className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-bold transition-colors shrink-0"
+                title="-0.1 mm"
+              >
+                -
+              </button>
               <input
                 type="number"
-                step="50"
-                min="100"
-                max="2000"
-                value={settings.minOffcutLength}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value) || 500;
-                  onChange({
-                    ...settings,
-                    minOffcutLength: val,
-                    minOffcutWidth: val,
-                  });
-                }}
-                className="w-16 text-center bg-slate-950 text-emerald-400 font-mono font-semibold text-xs px-2 py-1 rounded-lg border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                step="0.1"
+                min="0"
+                max="15"
+                value={settings.kerf}
+                onChange={(e) => updateKerf(parseFloat(e.target.value) || 0)}
+                className="w-11 sm:w-14 text-center bg-slate-950 text-amber-400 font-mono font-bold text-xs sm:text-sm px-1 sm:px-2 py-1 rounded-lg border border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500 min-w-0"
               />
-              <span className="text-xs font-mono text-slate-400">mm</span>
+              <span className="text-[10px] sm:text-xs font-mono text-slate-400 shrink-0">mm</span>
+              <button
+                type="button"
+                onClick={() => updateKerf(settings.kerf + 0.1)}
+                className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-bold transition-colors shrink-0"
+                title="+0.1 mm"
+              >
+                +
+              </button>
+            </div>
+
+            {/* Boutons rapides pour standards courants */}
+            <div className="hidden md:flex items-center gap-1 pl-2 border-l border-slate-700/60">
+              {PRESET_KERFS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => updateKerf(k)}
+                  className={`text-[11px] px-2 py-0.5 rounded font-mono transition-colors ${
+                    settings.kerf === k
+                      ? 'bg-amber-500 text-slate-950 font-bold'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  {k.toFixed(1)}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* LIGNE 2 (DESSOUS) : Bande de champs (obligatoire avec sélection & saisie manuelle) */}
+          {/* Bande de champs (obligatoire avec sélection & saisie manuelle) */}
           <div
-            className={`flex flex-wrap items-center gap-3 px-3.5 py-2 rounded-xl border transition-all ${
+            className={`flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 px-2.5 sm:px-3.5 py-2 rounded-xl border transition-all min-w-0 ${
               isEdgeBandingEmpty
                 ? 'bg-amber-500/10 border-amber-500/70 shadow-sm ring-1 ring-amber-500/30'
                 : 'bg-slate-900/80 border-slate-700/80 shadow-inner'
             }`}
           >
             {/* Label avec astérisque obligatoire */}
-            <div className="text-xs font-medium text-slate-300 flex items-center gap-1.5 shrink-0">
-              <Layers className="w-3.5 h-3.5 text-amber-400" />
-              <span>Bande de champs</span>
-              <span className="text-amber-400 font-bold" title="Champ obligatoire">*</span>
+            <div className="text-[11px] sm:text-xs font-medium text-slate-300 flex items-center gap-1 shrink-0 min-w-0">
+              <Layers className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" />
+              <span className="truncate">Bande de champs</span>
+              <span className="text-amber-400 font-bold shrink-0" title="Champ obligatoire">*</span>
               <span>:</span>
             </div>
 
             {/* Liste de choix déroulante */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
               <select
                 value={selectValue}
                 onChange={(e) => handleSelectEdgeBanding(e.target.value)}
-                className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border focus:outline-none transition-colors ${
+                className={`w-full sm:w-auto min-w-0 text-[11px] sm:text-xs font-medium px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg border focus:outline-none transition-colors ${
                   isEdgeBandingEmpty
                     ? 'bg-slate-950 text-amber-300 border-amber-500/80 focus:border-amber-400 ring-1 ring-amber-500/40'
                     : 'bg-slate-950 text-white border-slate-700 focus:border-amber-500'
@@ -240,42 +212,41 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
                 required
               >
                 <option value="" disabled>
-                  -- Choisir l&apos;épaisseur * --
+                  -- Choisir * --
                 </option>
                 {allEdgeBandingOptions.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
                 ))}
-                <option value="__manual__">Autre épaisseur (saisie manuelle)...</option>
+                <option value="__manual__">Autre...</option>
               </select>
 
               {/* Saisie manuelle si sélectionné ou valeur personnalisée */}
               {(isManualInput || (!allEdgeBandingOptions.includes(settings.edgeBanding || '') && !isEdgeBandingEmpty)) && (
-                <div className="flex items-center gap-1 bg-slate-950 border border-amber-500/70 rounded-lg px-2 py-1">
+                <div className="flex items-center gap-1 bg-slate-950 border border-amber-500/70 rounded-lg px-1.5 py-1 shrink-0">
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder="Ex: 0.8"
+                    placeholder="0.8"
                     value={
                       manualValue !== ''
                         ? manualValue
                         : (settings.edgeBanding || '').replace('mm', '')
                     }
                     onChange={(e) => handleManualValueChange(e.target.value)}
-                    className="w-14 bg-transparent text-xs font-mono font-bold text-amber-300 focus:outline-none placeholder:text-slate-600"
+                    className="w-10 sm:w-12 bg-transparent text-xs font-mono font-bold text-amber-300 focus:outline-none placeholder:text-slate-600"
                     autoFocus
                   />
-                  <span className="text-[11px] font-mono text-slate-400">mm</span>
+                  <span className="text-[10px] font-mono text-slate-400">mm</span>
                   {manualValue.trim() !== '' && (
                     <button
                       type="button"
                       onClick={handleSaveManualChoice}
-                      className="ml-1 px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition-colors flex items-center gap-0.5"
+                      className="ml-0.5 px-1 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition-colors flex items-center gap-0.5"
                       title="Enregistrer cette épaisseur dans la liste de choix"
                     >
                       <Plus className="w-2.5 h-2.5" />
-                      <span>Mémoriser</span>
                     </button>
                   )}
                 </div>
@@ -283,7 +254,7 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
             </div>
 
             {/* Boutons rapides pour choix fréquents */}
-            <div className="hidden sm:flex items-center gap-1 pl-2 border-l border-slate-700/60">
+            <div className="hidden md:flex items-center gap-1 pl-2 border-l border-slate-700/60">
               {BASE_EDGE_BANDINGS.map((preset) => (
                 <button
                   key={`preset-band-${preset}`}
@@ -305,11 +276,11 @@ export const SettingsBar: React.FC<SettingsBarProps> = ({
 
             {/* Statut / Indication obligatoire */}
             {isEdgeBandingEmpty ? (
-              <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full animate-pulse">
-                Saisie obligatoire *
+              <span className="hidden sm:inline-flex text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-0.5 rounded-full animate-pulse">
+                Obligatoire *
               </span>
             ) : (
-              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 hidden md:inline-flex">
+              <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full items-center gap-1 hidden md:inline-flex">
                 <Check className="w-3 h-3 text-emerald-400" />
                 <span>{settings.edgeBanding}</span>
               </span>

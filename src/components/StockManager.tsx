@@ -12,6 +12,7 @@ import {
   Warehouse,
   Check,
   Undo2,
+  Ruler,
 } from 'lucide-react';
 
 interface StockManagerProps {
@@ -24,6 +25,8 @@ interface StockManagerProps {
   onDeleteWorkshopItem: (id: string) => void;
   onClearWorkshopStock?: () => void;
   onAddManualWorkshopItem: (item: WorkshopItem) => void;
+  minOffcutLength?: number;
+  onChangeMinOffcut?: (val: number) => void;
 }
 
 const COMMON_PANEL_SIZES = [
@@ -43,6 +46,8 @@ export const StockManager: React.FC<StockManagerProps> = ({
   onDeleteWorkshopItem,
   onClearWorkshopStock,
   onAddManualWorkshopItem,
+  minOffcutLength = 500,
+  onChangeMinOffcut,
 }) => {
   // Liste ordonnée alphabétiquement de toutes les matières disponibles et suggestions
   const sortedAllMaterials = React.useMemo(() => {
@@ -386,6 +391,28 @@ export const StockManager: React.FC<StockManagerProps> = ({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Seuil stock atelier déplacé sous Stock de panneaux bruts */}
+      {onChangeMinOffcut && (
+        <div className="mt-3 pt-3 border-t border-slate-700/70 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs text-slate-300">
+            <Ruler className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>Seuil stock atelier (chutes conservées) :</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-slate-700/80">
+            <input
+              type="number"
+              step="50"
+              min="100"
+              max="2000"
+              value={minOffcutLength}
+              onChange={(e) => onChangeMinOffcut(parseInt(e.target.value, 10) || 500)}
+              className="w-16 text-center bg-slate-950 text-emerald-400 font-mono font-semibold text-xs px-1.5 py-0.5 rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <span className="text-xs font-mono text-slate-400">mm</span>
+          </div>
         </div>
       )}
 
