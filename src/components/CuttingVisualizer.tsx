@@ -44,10 +44,8 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   onPanelOrientationsChange,
   edgeBanding,
 }) => {
-  const [selectedPanelIdx, setSelectedPanelIdx] = useState(0);
   const [hoveredPiece, setHoveredPiece] = useState<PlacedPiece | null>(null);
   const [hoveredOffcut, setHoveredOffcut] = useState<OffcutArea | null>(null);
-  const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportingLabelsPdf, setIsExportingLabelsPdf] = useState<boolean>(false);
@@ -434,7 +432,6 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
     );
   }
 
-  const currentPanel = panels[selectedPanelIdx] || panels[0];
   const edgeBandingSummary = computeProjectEdgeBandingLength(panels);
 
   return (
@@ -491,30 +488,6 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
 
         {/* Contrôles d'affichage & Navigation */}
         <div className="flex items-center gap-2">
-          {/* Bascule Mode Unitaire / Tous */}
-          <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
-            <button
-              type="button"
-              onClick={() => setViewMode('single')}
-              className={`px-2.5 py-1 rounded-md font-medium transition-colors ${viewMode === 'single'
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-400 hover:text-white'
-                }`}
-            >
-              Vue Panneau
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('all')}
-              className={`px-2.5 py-1 rounded-md font-medium transition-colors ${viewMode === 'all'
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-400 hover:text-white'
-                }`}
-            >
-              Tous les panneaux
-            </button>
-          </div>
-
           {/* Boutons pour tourner tous les panneaux par tranche de 90° */}
           <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
             <button
@@ -615,60 +588,11 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
         )}
       </div>
 
-      {/* Navigation par onglets de panneaux si vue unitaire */}
-      {viewMode === 'single' && panels.length > 1 && (
-        <div className="flex items-center justify-between bg-slate-900/60 p-2 rounded-xl border border-slate-700/60">
-          <button
-            type="button"
-            disabled={selectedPanelIdx === 0}
-            onClick={() => setSelectedPanelIdx((i) => Math.max(0, i - 1))}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800 text-slate-200 transition-colors"
-            title="Panneau précédent"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          {/* Liste déroulante / Badges */}
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-[70vw] px-2 py-1">
-            {panels.map((p, idx) => (
-              <button
-                key={p.panelId + idx}
-                type="button"
-                onClick={() => setSelectedPanelIdx(idx)}
-                className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${selectedPanelIdx === idx
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                  }`}
-              >
-                <span>Panneau {p.panelIndex}</span>
-                <span className="text-[10px] opacity-75">
-                  ({p.material} - {p.efficiencyPercentage}%)
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            disabled={selectedPanelIdx === panels.length - 1}
-            onClick={() =>
-              setSelectedPanelIdx((i) => Math.min(panels.length - 1, i + 1))
-            }
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800 text-slate-200 transition-colors"
-            title="Panneau suivant"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Affichage des panneaux (soit le panneau actif, soit tous) */}
+      {/* Affichage de tous les panneaux */}
       <div className="space-y-6">
-        {(viewMode === 'single' ? [currentPanel] : panels).map(
-          (panel, panelIdx) => {
-            const actualPanelIdx =
-              viewMode === 'single' ? selectedPanelIdx : panelIdx;
-            return (
+        {panels.map((panel, panelIdx) => {
+          const actualPanelIdx = panelIdx;
+          return (
               <SinglePanelSVG
                 key={panel.panelId + panelIdx}
                 panel={panel}
