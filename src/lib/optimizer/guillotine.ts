@@ -148,17 +148,30 @@ export function optimizeCutting(
     const defaultLength = 2800;
     const defaultWidth = 2070;
 
-    // Tester plusieurs heuristiques de tri pour trouver la plus compacte
+    // Tester plusieurs heuristiques de tri, d'ordre de placement et de découpe pour trouver la plus compacte
+    // et maximiser la surface de chutes réutilisables (Stock Atelier)
     const sortHeuristics = [
       // 1. Par surface décroissante
       (a: PieceToPlace, b: PieceToPlace) =>
-        b.length * b.width - a.length * a.width || b.length - a.length,
+        b.length * b.width - a.length * a.width || Math.max(b.length, b.width) - Math.max(a.length, a.width),
       // 2. Par plus grande dimension décroissante
       (a: PieceToPlace, b: PieceToPlace) =>
-        b.length - a.length || b.width - a.width,
-      // 3. Par périmètre décroissant
+        Math.max(b.length, b.width) - Math.max(a.length, a.width) ||
+        Math.min(b.length, b.width) - Math.min(a.length, a.width),
+      // 3. Par petit côté décroissant (évite qu'une pièce étroite bloque une bande plus large)
+      (a: PieceToPlace, b: PieceToPlace) =>
+        Math.min(b.length, b.width) - Math.min(a.length, a.width) ||
+        Math.max(b.length, b.width) - Math.max(a.length, a.width),
+      // 4. Par périmètre décroissant
       (a: PieceToPlace, b: PieceToPlace) =>
         b.length + b.width - (a.length + a.width),
+    ];
+
+    const strategies: { pieceFirst: boolean; splitMode: 'slas' | 'maxArea' }[] = [
+      { pieceFirst: false, splitMode: 'slas' },
+      { pieceFirst: true, splitMode: 'slas' },
+      { pieceFirst: true, splitMode: 'maxArea' },
+      { pieceFirst: false, splitMode: 'maxArea' },
     ];
 
     let bestSolution: {
@@ -167,83 +180,107 @@ export function optimizeCutting(
     } | null = null;
 
     for (const sortFn of sortHeuristics) {
-      const sortedPieces = [...piecesToPlace].sort(sortFn);
-      const remainingPieces = [...sortedPieces];
-      const panelsResult: PanelResult[] = [];
-      const stockQueue = [...availablePanels];
+      for (const strategy of strategies) {
+        const sortedPieces = [...piecesToPlace].sort(sortFn);
+        const remainingPieces = [...sortedPieces];
+        const panelsResult: PanelResult[] = [];
+        const stockQueue = [...availablePanels];
 
-      let currentPanelNum = globalPanelIndex;
+        let currentPanelNum = globalPanelIndex;
 
-      while (remainingPieces.length > 0) {
-        let currentStock = stockQueue.shift();
+        while (remainingPieces.length > 0) {
+          let currentStock = stockQueue.shift();
 
-        if (!currentStock) {
-          // Si le stock réel est épuisé ou inexistant
-          if (hasOriginalStock) {
-            // Le stock était spécifié mais insuffisant
+          if (!currentStock) {
+            // Si le stock réel est épuisé ou inexistant
+            if (hasOriginalStock) {
+              // Le stock était spécifié mais insuffisant
+              break;
+            } else {
+              // Créer un panneau standard par défaut
+              currentStock = {
+                stockId: `default-${currentPanelNum}`,
+                length: defaultLength,
+                width: defaultWidth,
+                material,
+              };
+            }
+          }
+
+          // Tenter de remplir ce panneau avec l'algorithme guillotine
+          const packResult = packSinglePanel(
+            currentStock,
+            remainingPieces,
+            kerf,
+            minOffcutLength,
+            minOffcutWidth,
+            currentPanelNum,
+            strategy.pieceFirst,
+            strategy.splitMode
+          );
+
+          if (packResult.placedPieces.length === 0) {
+            // Si aucune pièce n'a pu rentrer sur ce panneau (trop petit),
+            // on passe au panneau suivant de la file s'il en reste (ex: panneau plein format après une chute)
+            if (stockQueue.length > 0) {
+              continue;
+            }
             break;
-          } else {
-            // Créer un panneau standard par défaut
-            currentStock = {
-              stockId: `default-${currentPanelNum}`,
-              length: defaultLength,
-              width: defaultWidth,
-              material,
-            };
           }
-        }
 
-        // Tenter de remplir ce panneau avec l'algorithme guillotine
-        const packResult = packSinglePanel(
-          currentStock,
-          remainingPieces,
-          kerf,
-          minOffcutLength,
-          minOffcutWidth,
-          currentPanelNum
-        );
+          panelsResult.push(packResult);
+          currentPanelNum++;
 
-        if (packResult.placedPieces.length === 0) {
-          // Si aucune pièce n'a pu rentrer sur ce panneau (trop petit),
-          // on passe au panneau suivant de la file s'il en reste (ex: panneau plein format après une chute)
-          if (stockQueue.length > 0) {
-            continue;
+          // Retirer les pièces placées de la liste restante
+          const placedIds = new Set(packResult.placedPieces.map((p) => p.id));
+          const nextRemaining = remainingPieces.filter(
+            (p) => !placedIds.has(p.pieceId)
+          );
+
+          // Sécurité anti-boucle infinie
+          if (nextRemaining.length === remainingPieces.length) {
+            break;
           }
-          break;
+
+          remainingPieces.length = 0;
+          remainingPieces.push(...nextRemaining);
         }
 
-        panelsResult.push(packResult);
-        currentPanelNum++;
+        // Évaluer la solution :
+        // 1) moins de pièces non placées
+        // 2) moins de panneaux utilisés
+        // 3) meilleur rendement surfacique moyen
+        // 4) plus grande surface de chutes réutilisables (Stock Atelier) puis plus grande chute unique
+        const isBetter = (() => {
+          if (!bestSolution) return true;
+          if (remainingPieces.length !== bestSolution.unplaced.length) {
+            return remainingPieces.length < bestSolution.unplaced.length;
+          }
+          if (panelsResult.length !== bestSolution.panels.length) {
+            return panelsResult.length < bestSolution.panels.length;
+          }
+          const curEff = computeAvgEfficiency(panelsResult);
+          const bestEff = computeAvgEfficiency(bestSolution.panels);
+          if (Math.abs(curEff - bestEff) > 0.01) {
+            return curEff > bestEff;
+          }
+          const curReusable = computeTotalReusableOffcutArea(panelsResult);
+          const bestReusable = computeTotalReusableOffcutArea(bestSolution.panels);
+          if (Math.abs(curReusable - bestReusable) > 0.001) {
+            return curReusable > bestReusable;
+          }
+          return (
+            computeMaxReusableOffcutArea(panelsResult) >
+            computeMaxReusableOffcutArea(bestSolution.panels)
+          );
+        })();
 
-        // Retirer les pièces placées de la liste restante
-        const placedIds = new Set(packResult.placedPieces.map((p) => p.id));
-        const nextRemaining = remainingPieces.filter(
-          (p) => !placedIds.has(p.pieceId)
-        );
-
-        // Sécurité anti-boucle infinie
-        if (nextRemaining.length === remainingPieces.length) {
-          break;
+        if (isBetter) {
+          bestSolution = {
+            panels: panelsResult,
+            unplaced: remainingPieces,
+          };
         }
-
-        remainingPieces.length = 0;
-        remainingPieces.push(...nextRemaining);
-      }
-
-      // Évaluer la solution : moins de pièces non placées, puis moins de panneaux, puis meilleur rendement
-      if (
-        !bestSolution ||
-        remainingPieces.length < bestSolution.unplaced.length ||
-        (remainingPieces.length === bestSolution.unplaced.length &&
-          panelsResult.length < bestSolution.panels.length) ||
-        (remainingPieces.length === bestSolution.unplaced.length &&
-          panelsResult.length === bestSolution.panels.length &&
-          computeAvgEfficiency(panelsResult) > computeAvgEfficiency(bestSolution.panels))
-      ) {
-        bestSolution = {
-          panels: panelsResult,
-          unplaced: remainingPieces,
-        };
       }
     }
 
@@ -345,6 +382,29 @@ function computeAvgEfficiency(panels: PanelResult[]): number {
   );
 }
 
+function computeTotalReusableOffcutArea(panels: PanelResult[]): number {
+  return panels.reduce(
+    (sum, p) =>
+      sum +
+      p.offcuts
+        .filter((o) => o.reusable)
+        .reduce((oSum, o) => oSum + o.areaM2, 0),
+    0
+  );
+}
+
+function computeMaxReusableOffcutArea(panels: PanelResult[]): number {
+  let maxArea = 0;
+  panels.forEach((p) => {
+    p.offcuts.forEach((o) => {
+      if (o.reusable && o.areaM2 > maxArea) {
+        maxArea = o.areaM2;
+      }
+    });
+  });
+  return maxArea;
+}
+
 /**
  * Calepinage d'un seul panneau avec découpes guillotines récursives
  */
@@ -361,7 +421,9 @@ function packSinglePanel(
   kerf: number,
   minOffcutLength: number,
   minOffcutWidth: number,
-  panelIndex: number
+  panelIndex: number,
+  pieceFirst: boolean = false,
+  splitMode: 'slas' | 'maxArea' = 'slas'
 ): PanelResult {
   const panelLength = panel.length;
   const panelWidth = panel.width;
@@ -380,8 +442,9 @@ function packSinglePanel(
     let bestRotated = false;
     let bestScore = Number.MAX_VALUE;
 
-    // Heuristique Best Short Side Fit (BSSF) : choisir le rectangle libre
-    // qui laisse le plus petit reste sur le petit côté
+    // Heuristique Best Short Side Fit (BSSF) :
+    // En mode pieceFirst, on place la pièce prioritaire suivante dans son meilleur rectangle libre
+    // avant de passer aux plus petites pièces (évite qu'une pièce étroite bloque une bande plus large).
     for (let pIdx = 0; pIdx < piecesAvailable.length; pIdx++) {
       const piece = piecesAvailable[pIdx];
 
@@ -419,6 +482,10 @@ function packSinglePanel(
             bestRotated = true;
           }
         }
+      }
+
+      if (pieceFirst && bestPieceIdx !== -1) {
+        break;
       }
     }
 
@@ -487,8 +554,12 @@ function packSinglePanel(
     const availRightX = remainingX > kerf ? remainingX - kerf : 0;
     const availBottomY = remainingY > kerf ? remainingY - kerf : 0;
 
-    // Heuristique : SLAS (Shorter Axis Split) pour la rigidité et la coupe de menuiserie
-    const splitHorizontal = targetRect.length <= targetRect.width;
+    // Heuristique de découpe : SLAS (Shorter Axis Split) ou MaxArea (maximiser la plus grande chute)
+    const splitHorizontal =
+      splitMode === 'maxArea'
+        ? Math.max(availBottomY * targetRect.length, availRightX * placedWid) >
+          Math.max(availRightX * targetRect.width, availBottomY * placedLen)
+        : targetRect.length <= targetRect.width;
 
     if (splitHorizontal) {
       // Split horizontal
