@@ -47,6 +47,27 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
   const [hoveredPiece, setHoveredPiece] = useState<PlacedPiece | null>(null);
   const [hoveredOffcut, setHoveredOffcut] = useState<OffcutArea | null>(null);
   const [showPdfMenu, setShowPdfMenu] = useState<boolean>(false);
+  const [selectedMaterialFilter, setSelectedMaterialFilter] = useState<string>('all');
+
+  const availablePanelMaterials = useMemo(() => {
+    const set = new Set<string>();
+    (panels || []).forEach((p) => {
+      const mat = (p.material || '').trim();
+      if (mat) set.add(mat);
+    });
+    return Array.from(set);
+  }, [panels]);
+
+  const activeMaterialFilter =
+    selectedMaterialFilter === 'all' || availablePanelMaterials.includes(selectedMaterialFilter)
+      ? selectedMaterialFilter
+      : 'all';
+
+  const filteredPanels = useMemo(() => {
+    if (!panels) return [];
+    if (activeMaterialFilter === 'all') return panels;
+    return panels.filter((p) => (p.material || '').trim() === activeMaterialFilter);
+  }, [panels, activeMaterialFilter]);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportingLabelsPdf, setIsExportingLabelsPdf] = useState<boolean>(false);
   const [fullscreenPanelIdx, setFullscreenPanelIdx] = useState<number | null>(null);
@@ -583,40 +604,67 @@ export const CuttingVisualizer: React.FC<CuttingVisualizerProps> = ({
         </div>
       </div>
 
-      {/* Rotation globale placée juste au-dessus du premier panneau */}
-      <div className="flex items-center justify-end gap-2">
-        <span className="text-[11px] font-semibold text-slate-300">
-          Rotation de tous les panneaux :
-        </span>
-        <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
-          <button
-            type="button"
-            onClick={() => handleRotateAllPanels(-90)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors"
-            title="Tourner tous les panneaux de -90° (sens anti-horaire)"
+      {/* Filtre matière à gauche + Rotation globale à droite juste au-dessus du premier panneau */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <label
+            htmlFor="panel-material-filter"
+            className="text-[11px] font-semibold text-slate-300"
           >
-            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-            <span>-90°</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleRotateAllPanels(90)}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors border-l border-slate-800"
-            title="Tourner tous les panneaux de +90° (sens horaire)"
+            Sélection panneaux par matière :
+          </label>
+          <select
+            id="panel-material-filter"
+            value={activeMaterialFilter}
+            onChange={(e) => setSelectedMaterialFilter(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-medium text-white focus:outline-none focus:border-amber-500"
           >
-            <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-            <span>+90°</span>
-          </button>
+            <option value="all">Toutes ({panels.length})</option>
+            {availablePanelMaterials.map((mat) => {
+              const count = panels.filter((p) => (p.material || '').trim() === mat).length;
+              return (
+                <option key={mat} value={mat}>
+                  {mat} ({count})
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-slate-300">
+            Rotation de tous les panneaux :
+          </span>
+          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700 text-xs">
+            <button
+              type="button"
+              onClick={() => handleRotateAllPanels(-90)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors"
+              title="Tourner tous les panneaux de -90° (sens anti-horaire)"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span>-90°</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleRotateAllPanels(90)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-slate-300 hover:text-white hover:bg-slate-800 font-medium transition-colors border-l border-slate-800"
+              title="Tourner tous les panneaux de +90° (sens horaire)"
+            >
+              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>+90°</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Affichage de tous les panneaux */}
+      {/* Affichage des panneaux filtrés */}
       <div className="space-y-6">
-        {panels.map((panel, panelIdx) => {
-          const actualPanelIdx = panelIdx;
+        {filteredPanels.map((panel, panelIdx) => {
+          const actualPanelIdx = panels.indexOf(panel);
           return (
               <SinglePanelSVG
-                key={panel.panelId + panelIdx}
+                key={`${panel.panelId}-${panel.panelIndex}-${panelIdx}`}
                 panel={panel}
                 kerf={kerf}
                 zoomLevel={1}
